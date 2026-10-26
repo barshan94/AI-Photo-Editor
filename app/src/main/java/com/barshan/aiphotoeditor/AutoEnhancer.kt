@@ -66,19 +66,24 @@ object AutoEnhancer {
         val width = source.width
         val height = source.height
         val sampleStride = ((width * height) / 20000).coerceAtLeast(1)
-        val allPixels = IntArray(width * height)
-        source.getPixels(allPixels, 0, width, 0, 0, width, height)
+        val row = IntArray(width)
 
+        // First pass: estimate brightness without allocating an image-sized IntArray.
         var lumaSum = 0.0
         var sampleCount = 0
-        var i = 0
-        while (i < allPixels.size) {
-            val p = allPixels[i]
-            lumaSum += 0.2126 * (p shr 16 and 0xFF) +
-                0.7152 * (p shr 8 and 0xFF) +
-                0.0722 * (p and 0xFF)
-            sampleCount++
-            i += sampleStride
+        var globalIndex = 0
+        for (y in 0 until height) {
+            source.getPixels(row, 0, width, 0, y, width, 1)
+            for (x in 0 until width) {
+                if (globalIndex % sampleStride == 0) {
+                    val pixel = row[x]
+                    lumaSum += 0.2126 * (pixel shr 16 and 0xFF) +
+                        0.7152 * (pixel shr 8 and 0xFF) +
+                        0.0722 * (pixel and 0xFF)
+                    sampleCount++
+                }
+                globalIndex++
+            }
         }
         val meanLuma = if (sampleCount == 0) 128.0 else lumaSum / sampleCount
         val autoBrightness = ((128.0 - meanLuma) * 0.20).coerceIn(-10.0, 10.0)
@@ -87,26 +92,30 @@ object AutoEnhancer {
         val saturation = settings.saturation.toDouble().coerceIn(0.0, 1.8)
         val warmth = settings.warmth.toDouble().coerceIn(-24.0, 24.0)
 
-        for (index in allPixels.indices) {
-            val pixel = allPixels[index]
-            val alpha = pixel ushr 24 and 0xFF
-            val originalRed = pixel shr 16 and 0xFF
-            val originalGreen = pixel shr 8 and 0xFF
-            val originalBlue = pixel and 0xFF
+        // Second pass: transform one row at a time to keep peak memory lower on phones.
+        val adjusted = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        for (y in 0 until height) {
+            source.getPixels(row, 0, width, 0, y, width, 1)
+            for (x in 0 until width) {
+                val pixel = row[x]
+                val alpha = pixel ushr 24 and 0xFF
+                val originalRed = pixel shr 16 and 0xFF
+                val originalGreen = pixel shr 8 and 0xFF
+                val originalBlue = pixel and 0xFF
 
-            val red = ((originalRed - 128.0) * contrast + 128.0 + brightnessOffset + warmth)
-            val green = ((originalGreen - 128.0) * contrast + 128.0 + brightnessOffset)
-            val blue = ((originalBlue - 128.0) * contrast + 128.0 + brightnessOffset - warmth)
-            val luma = 0.2126 * red + 0.7152 * green + 0.0722 * blue
+                val red = ((originalRed - 128.0) * contrast + 128.0 + brightnessOffset + warmth)
+                val green = ((originalGreen - 128.0) * contrast + 128.0 + brightnessOffset)
+                val blue = ((originalBlue - 128.0) * contrast + 128.0 + brightnessOffset - warmth)
+                val luma = 0.2126 * red + 0.7152 * green + 0.0722 * blue
 
-            val outRed = (luma + (red - luma) * saturation).toInt().coerceIn(0, 255)
-            val outGreen = (luma + (green - luma) * saturation).toInt().coerceIn(0, 255)
-            val outBlue = (luma + (blue - luma) * saturation).toInt().coerceIn(0, 255)
-            allPixels[index] = (alpha shl 24) or (outRed shl 16) or (outGreen shl 8) or outBlue
+                val outRed = (luma + (red - luma) * saturation).toInt().coerceIn(0, 255)
+                val outGreen = (luma + (green - luma) * saturation).toInt().coerceIn(0, 255)
+                val outBlue = (luma + (blue - luma) * saturation).toInt().coerceIn(0, 255)
+                row[x] = (alpha shl 24) or (outRed shl 16) or (outGreen shl 8) or outBlue
+            }
+            adjusted.setPixels(row, 0, width, 0, y, width, 1)
         }
 
-        val adjusted = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-        adjusted.setPixels(allPixels, 0, width, 0, 0, width, height)
         val ratio = settings.cropRatio ?: return adjusted
         if (ratio <= 0f) return adjusted
 

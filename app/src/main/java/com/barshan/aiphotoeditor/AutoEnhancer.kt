@@ -62,7 +62,7 @@ object AutoEnhancer {
      * Applies a restrained exposure correction, contrast lift and saturation lift.
      * Input bitmap is left unchanged; caller owns both bitmaps.
      */
-    fun enhance(source: Bitmap): Bitmap {
+    fun enhance(source: Bitmap, settings: EditSettings = EditSettings()): Bitmap {
         val width = source.width
         val height = source.height
         val sampleStride = ((width * height) / 20000).coerceAtLeast(1)
@@ -81,9 +81,11 @@ object AutoEnhancer {
             i += sampleStride
         }
         val meanLuma = if (sampleCount == 0) 128.0 else lumaSum / sampleCount
-        val brightnessOffset = ((128.0 - meanLuma) * 0.20).coerceIn(-10.0, 10.0)
-        val contrast = 1.07
-        val saturation = 1.06
+        val autoBrightness = ((128.0 - meanLuma) * 0.20).coerceIn(-10.0, 10.0)
+        val brightnessOffset = autoBrightness + settings.brightness
+        val contrast = settings.contrast.toDouble().coerceIn(0.65, 1.45)
+        val saturation = settings.saturation.toDouble().coerceIn(0.0, 1.8)
+        val warmth = settings.warmth.toDouble().coerceIn(-24.0, 24.0)
 
         for (index in allPixels.indices) {
             val pixel = allPixels[index]
@@ -92,9 +94,9 @@ object AutoEnhancer {
             val originalGreen = pixel shr 8 and 0xFF
             val originalBlue = pixel and 0xFF
 
-            val red = ((originalRed - 128.0) * contrast + 128.0 + brightnessOffset)
+            val red = ((originalRed - 128.0) * contrast + 128.0 + brightnessOffset + warmth)
             val green = ((originalGreen - 128.0) * contrast + 128.0 + brightnessOffset)
-            val blue = ((originalBlue - 128.0) * contrast + 128.0 + brightnessOffset)
+            val blue = ((originalBlue - 128.0) * contrast + 128.0 + brightnessOffset - warmth)
             val luma = 0.2126 * red + 0.7152 * green + 0.0722 * blue
 
             val outRed = (luma + (red - luma) * saturation).toInt().coerceIn(0, 255)
@@ -103,9 +105,26 @@ object AutoEnhancer {
             allPixels[index] = (alpha shl 24) or (outRed shl 16) or (outGreen shl 8) or outBlue
         }
 
-        val output = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-        output.setPixels(allPixels, 0, width, 0, 0, width, height)
-        return output
+        val adjusted = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        adjusted.setPixels(allPixels, 0, width, 0, 0, width, height)
+        val ratio = settings.cropRatio ?: return adjusted
+        if (ratio <= 0f) return adjusted
+
+        val sourceRatio = adjusted.width.toFloat() / adjusted.height.toFloat()
+        val cropWidth: Int
+        val cropHeight: Int
+        if (sourceRatio > ratio) {
+            cropHeight = adjusted.height
+            cropWidth = (cropHeight * ratio).toInt().coerceIn(1, adjusted.width)
+        } else {
+            cropWidth = adjusted.width
+            cropHeight = (cropWidth / ratio).toInt().coerceIn(1, adjusted.height)
+        }
+        val left = (adjusted.width - cropWidth) / 2
+        val top = (adjusted.height - cropHeight) / 2
+        val cropped = Bitmap.createBitmap(adjusted, left, top, cropWidth, cropHeight)
+        if (cropped !== adjusted) adjusted.recycle()
+        return cropped
     }
 
     /** Save a new JPEG in Pictures/FRAME AI using MediaStore. Returns the saved URI. */

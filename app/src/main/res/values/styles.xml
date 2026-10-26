@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.AIPhotoEditor" parent="android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:colorAccent">#78E0D0</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:statusBarColor">#101313</item>
+        <item name="android:navigationBarColor">#101313</item>
+        <item name="android:windowLightNavigationBar">false</item>
+        <item name="android:windowBackground">#101313</item>
+    </style>
+</resources>

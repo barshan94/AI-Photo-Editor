@@ -2,7 +2,15 @@
 
 A native Android photo editor focused on batch workflows. It runs locally on the device; no website, account, backend, or Vercel deployment is required.
 
-## Current milestone: reviewed batch editing and export (Beta 1.7.0)
+## Current milestone: export reliability and regression tests (Beta 1.8.0)
+
+- Batch preset settings, progress labels, and completion summaries are extracted into a testable policy module.
+- Automated unit tests cover supported presets, expected adjustment values, progress bounds, summary counts, and failure-detail limits.
+- GitHub Actions runs `gradle testDebugUnitTest` before assembling and uploading the APK.
+- Coroutine cancellation is rethrown rather than incorrectly reported as a normal export failure.
+- Original photos remain untouched; exported JPEG copies go to Pictures/FRAME AI.
+
+## Previous milestone: reviewed batch editing and export (Beta 1.7.0)
 
 - Choose a batch-wide preset: Current edits, Auto, Natural, Vivid, Warm, Cool, or Mono.
 - Preview a representative eligible photo with the chosen batch preset before exporting.
@@ -92,6 +100,7 @@ The beta uses package `com.barshan.aiphotoeditor.beta`, labelled **FRAME AI Beta
 18. Per-photo Keep / Review / Reject triage, decision filters, batch export skipping rejected items, and score breakdown — implemented in Beta 1.5.0; needs usability testing on-device
 19. Before/after reveal slider, edit undo/redo, and toggleable rule-of-thirds crop guides — implemented in Beta 1.6.0; needs usability testing on-device
 20. Batch-wide preset selection, sample preview, progress and export summary — implemented in Beta 1.7.0; needs real-device usability testing
+21. Regression tests for batch presets/progress/summary and CI test gate — implemented in Beta 1.8.0; device export stress-testing remains
 14. Subject-aware ranking and personalized style learning
 15. Personalized style learning and smarter social export
 

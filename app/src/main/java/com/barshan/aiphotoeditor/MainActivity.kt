@@ -123,6 +123,7 @@ private fun PhotoEditorHome() {
     var exportProgress by remember { mutableIntStateOf(0) }
     var activePhoto by remember { mutableStateOf<PhotoItem?>(null) }
     var showBurstComparison by remember { mutableStateOf(false) }
+    var showBurstGroupPicker by remember { mutableStateOf(false) }
     var comparisonGroupId by remember { mutableStateOf<Long?>(null) }
     var previewBitmap by remember { mutableStateOf<Bitmap?>(null) }
     var previewScale by remember { mutableFloatStateOf(1f) }
@@ -344,13 +345,15 @@ private fun PhotoEditorHome() {
     }
 
     // Android system Back returns to the current batch instead of exiting the editor.
-    BackHandler(enabled = activePhoto != null || showBurstComparison) {
+    BackHandler(enabled = activePhoto != null || showBurstComparison || showBurstGroupPicker) {
         if (activePhoto != null) {
             activePhoto = null
             resetPreviewZoom()
-        } else {
+        } else if (showBurstComparison) {
             showBurstComparison = false
             comparisonGroupId = null
+        } else {
+            showBurstGroupPicker = false
         }
     }
 
@@ -541,16 +544,10 @@ private fun PhotoEditorHome() {
                 ) { Text("Remove " + exactDuplicateCount + " exact duplicate(s)") }
             }
 
-            if (activePhoto == null && burstGroups.isNotEmpty()) {
+            if (activePhoto == null && burstGroups.values.any { it.size >= 2 }) {
                 Button(
                     onClick = {
-                        val group = burstGroups.entries
-                            .filter { it.value.size >= 2 }
-                            .maxByOrNull { it.value.size }
-                        if (group != null) {
-                            comparisonGroupId = group.key
-                            showBurstComparison = true
-                        }
+                        showBurstGroupPicker = true
                     },
                     enabled = !isAnalyzing && !isExporting && burstGroups.values.any { it.size >= 2 },
                     modifier = Modifier.fillMaxWidth().padding(top = 5.dp),
@@ -558,7 +555,7 @@ private fun PhotoEditorHome() {
                     colors = ButtonDefaults.buttonColors(
                         containerColor = Color(0xFF293333), contentColor = Mint
                     )
-                ) { Text("Compare burst candidates side by side") }
+                ) { Text("Choose burst group to compare") }
             }
 
             if (activePhoto == null && burstExtraCount > 0) {
@@ -617,6 +614,72 @@ private fun PhotoEditorHome() {
                 )
                 Text("Exporting " + exportProgress + " / " + selectedPhotos.size,
                     color = SoftText, fontSize = 11.sp, modifier = Modifier.padding(top = 3.dp))
+            }
+
+            if (activePhoto == null && showBurstGroupPicker && !showBurstComparison) {
+                val availableBurstGroups = burstGroups.entries
+                    .filter { it.value.size >= 2 }
+                    .sortedBy { entry -> entry.value.mapNotNull { it.captureTimeMillis }.minOrNull() ?: Long.MAX_VALUE }
+                Spacer(modifier = Modifier.height(12.dp))
+                Card(
+                    modifier = Modifier.fillMaxWidth().weight(1f),
+                    shape = RoundedCornerShape(20.dp),
+                    colors = CardDefaults.cardColors(containerColor = Panel)
+                ) {
+                    Column(
+                        modifier = Modifier.fillMaxSize().padding(12.dp)
+                            .verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(9.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("CHOOSE A BURST GROUP", color = BrightText, fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp)
+                                Text("Pick the moment you want to compare. Nothing is removed.",
+                                    color = SoftText, fontSize = 10.sp, lineHeight = 14.sp)
+                            }
+                            Button(
+                                onClick = { showBurstGroupPicker = false },
+                                shape = RoundedCornerShape(10.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = Color(0xFF293333), contentColor = BrightText
+                                ),
+                                contentPadding = PaddingValues(horizontal = 9.dp, vertical = 1.dp)
+                            ) { Text("Back", fontSize = 10.sp) }
+                        }
+                        availableBurstGroups.forEachIndexed { index, entry ->
+                            val groupPhotos = entry.value.sortedByDescending { it.score ?: -1 }
+                            val bestScore = groupPhotos.firstOrNull()?.score
+                            val captureTime = groupPhotos.mapNotNull { it.captureTimeMillis }.minOrNull()
+                            val timeLabel = if (captureTime != null) {
+                                java.text.SimpleDateFormat("MMM d, HH:mm:ss", java.util.Locale.getDefault())
+                                    .format(java.util.Date(captureTime))
+                            } else {
+                                "Capture time unavailable"
+                            }
+                            Button(
+                                onClick = {
+                                    comparisonGroupId = entry.key
+                                    showBurstGroupPicker = false
+                                    showBurstComparison = true
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = Color(0xFF293333), contentColor = BrightText
+                                ),
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp)
+                            ) {
+                                Column(modifier = Modifier.fillMaxWidth()) {
+                                    Text("Group " + (index + 1) + " · " + groupPhotos.size + " photos",
+                                        color = Mint, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                    Text(timeLabel + "  ·  Best score " + (bestScore ?: "—") + "/100",
+                                        color = SoftText, fontSize = 10.sp)
+                                }
+                            }
+                        }
+                    }
+                }
             }
 
             if (activePhoto == null && showBurstComparison) {
@@ -952,7 +1015,7 @@ private fun PhotoEditorHome() {
                 }
             }
 
-            if (activePhoto == null && !showBurstComparison) {
+            if (activePhoto == null && !showBurstComparison && !showBurstGroupPicker) {
                 Spacer(modifier = Modifier.height(10.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(if (selectedPhotos.isEmpty()) "YOUR WORKSPACE" else "BEST SHOTS FIRST",
@@ -968,7 +1031,7 @@ private fun PhotoEditorHome() {
             )
             }
 
-            if (activePhoto == null && !showBurstComparison && selectedPhotos.isEmpty()) {
+            if (activePhoto == null && !showBurstComparison && !showBurstGroupPicker && selectedPhotos.isEmpty()) {
                 Box(
                     modifier = Modifier.weight(1f).fillMaxWidth()
                         .clip(RoundedCornerShape(20.dp)).background(Color(0xFF151A1A)),
@@ -985,7 +1048,7 @@ private fun PhotoEditorHome() {
                             color = SoftText, fontSize = 12.sp, lineHeight = 18.sp)
                     }
                 }
-            } else if (activePhoto == null && !showBurstComparison) {
+            } else if (activePhoto == null && !showBurstComparison && !showBurstGroupPicker) {
                 LazyVerticalGrid(
                     columns = GridCells.Fixed(3),
                     modifier = Modifier.weight(1f),

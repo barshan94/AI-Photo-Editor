@@ -2,11 +2,11 @@
 
 A native Android photo editor focused on batch workflows. It runs locally on the device; no website, account, backend, or Vercel deployment is required.
 
-## Current milestone: repositionable crops, batch navigation, and full-resolution export (Beta 0.8.0)
+## Current milestone: quality-first similar-shot ranking and repositionable crops (Beta 0.9.0)
 
 - Import multiple images with Android's document picker.
 - Score technical quality using estimated sharpness, exposure, contrast, and clipped highlights/shadows; sort higher scores first.
-- Detect byte-identical duplicate files and visually similar frames in the selected batch; optionally remove either group from the current selection without deleting anything from the phone.
+- Detect byte-identical duplicate files and visually similar frames in the selected batch; similar-shot candidates are now ranked first, so the highest-scoring technical shot is kept as the representative and lower-scoring similar shots are marked for optional removal. No files are deleted from the phone.
 - Tap any photo to open the editing workspace.
 - Use Previous / Next to move through the selected batch without returning to the grid; the position indicator shows the current photo.
 - Use the editor's **All photos** button or Android system Back to return to the existing batch without re-importing it.
@@ -58,7 +58,7 @@ The beta uses package `com.barshan.aiphotoeditor.beta`, labelled **FRAME AI Beta
 9. Validate edits across different phone photos; improve color/exposure algorithms
 10. Exact duplicate file detection and safe removal from the selection — implemented in Beta 0.5.0
 11. Visual-similarity grouping and safe removal from the selection — implemented in Beta 0.6.0; heuristic needs real-world validation
-12. Subject-aware ranking and burst grouping
+12. Capture-time-aware burst grouping and subject-aware ranking
 13. Personalized style learning and smarter social export
 
 The current editor does not claim to have a trained AI model. This milestone builds reliable controls and export behavior first; subject-aware intelligence and personalized learning come later.

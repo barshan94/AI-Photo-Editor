@@ -8,14 +8,14 @@ object SegmentationMaskDecoder {
     fun decode(buffer: ByteBuffer, width: Int, height: Int): FloatArray {
         require(width > 0 && height > 0) { "Mask dimensions must be positive" }
         val count = Math.multiplyExact(width, height)
-        require(buffer.capacity() >= count * Float.SIZE_BYTES) {
+        require(buffer.capacity() >= Math.multiplyExact(count, Float.SIZE_BYTES)) {
             "Mask buffer is smaller than the expected float-confidence data"
         }
 
         val input = buffer.duplicate().order(ByteOrder.nativeOrder())
         input.rewind()
         return FloatArray(count) {
-            val confidence = input.float
+            val confidence = input.getFloat()
             if (confidence.isNaN()) 0f else confidence.coerceIn(0f, 1f)
         }
     }

@@ -329,32 +329,14 @@ private fun PhotoEditorHome() {
                         )
                     }
                 }
-                // Cluster photos whose recorded capture times are within two seconds.
-                // These are burst candidates, not guaranteed camera burst sequences.
-                val chronological = selectedPhotos.mapIndexedNotNull { index, photo ->
-                    photo.captureTimeMillis?.let { timestamp -> index to timestamp }
-                }.sortedBy { it.second }
-                var burstMembers = mutableListOf<Pair<Int, Long>>()
-                fun markBurstMembers() {
-                    if (burstMembers.size >= 2) {
-                        val groupId = burstMembers.first().second
-                        burstMembers.forEach { member ->
-                            val current = selectedPhotos[member.first]
-                            selectedPhotos[member.first] = current.copy(burstGroupId = groupId)
-                        }
-                    }
-                    burstMembers = mutableListOf()
+                // Candidate bursts are bounded by the group's first timestamp, not
+                // adjacent gaps. Missing capture times are intentionally left ungrouped.
+                val burstGroupIds = PhotoGroupingPolicy.burstGroupIds(
+                    selectedPhotos.map { it.captureTimeMillis }
+                )
+                for (index in selectedPhotos.indices) {
+                    selectedPhotos[index] = selectedPhotos[index].copy(burstGroupId = burstGroupIds[index])
                 }
-                for (entry in chronological) {
-                    // Bound the whole candidate group to two seconds, not just each
-                    // adjacent gap; otherwise a long chain can become one false burst.
-                    val firstCaptureTime = burstMembers.firstOrNull()?.second
-                    if (firstCaptureTime != null && entry.second - firstCaptureTime > 2_000L) {
-                        markBurstMembers()
-                    }
-                    burstMembers.add(entry)
-                }
-                markBurstMembers()
 
                 // Rank first, then compare against higher-scoring representatives.
                 // This makes "remove visually similar" keep the strongest technical shot,
@@ -368,7 +350,7 @@ private fun PhotoEditorHome() {
                     val similarToBetterShot = bestRepresentatives.any { representative ->
                         representative.fingerprint != photo.fingerprint &&
                             representative.visualFingerprint?.let { representativeHash ->
-                                java.lang.Long.bitCount(visualHash xor representativeHash) <= 5
+                                PhotoGroupingPolicy.isVisuallySimilar(visualHash, representativeHash)
                             } == true
                     }
                     if (similarToBetterShot) {

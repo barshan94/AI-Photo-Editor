@@ -63,8 +63,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
@@ -138,6 +140,11 @@ private fun PhotoEditorHome() {
     var previewHeightPx by remember { mutableIntStateOf(0) }
     var isPreparingPreview by remember { mutableStateOf(false) }
     var showEnhanced by remember { mutableStateOf(true) }
+    var compareBeforeAfter by remember { mutableStateOf(false) }
+    var comparePosition by remember { mutableFloatStateOf(0.5f) }
+    var showCropGuides by remember { mutableStateOf(true) }
+    val undoHistory = remember { mutableStateListOf<EditSettings>() }
+    val redoHistory = remember { mutableStateListOf<EditSettings>() }
     var brightness by remember { mutableFloatStateOf(0f) }
     var contrast by remember { mutableFloatStateOf(1.07f) }
     var saturation by remember { mutableFloatStateOf(1.06f) }
@@ -184,7 +191,51 @@ private fun PhotoEditorHome() {
         cropOffsetY = cropOffsetY
     )
 
+    fun recordEditChange() {
+        val snapshot = currentSettings()
+        if (undoHistory.lastOrNull() != snapshot) {
+            undoHistory.add(snapshot)
+            if (undoHistory.size > 40) undoHistory.removeAt(0)
+        }
+        redoHistory.clear()
+    }
+
+    fun applyEditSnapshot(settings: EditSettings) {
+        brightness = settings.brightness
+        contrast = settings.contrast
+        saturation = settings.saturation
+        warmth = settings.warmth
+        cropOffsetX = settings.cropOffsetX
+        cropOffsetY = settings.cropOffsetY
+        cropLabel = when (settings.cropRatio) {
+            1f -> "Square"
+            0.8f -> "Portrait 4:5"
+            0.5625f -> "Story 9:16"
+            1.7777778f -> "Landscape 16:9"
+            else -> "Original"
+        }
+        selectedStyle = "Custom"
+        compareBeforeAfter = false
+    }
+
+    fun undoEdit() {
+        if (undoHistory.isNotEmpty()) {
+            redoHistory.add(currentSettings())
+            applyEditSnapshot(undoHistory.removeAt(undoHistory.lastIndex))
+            statusMessage = "Edit undone."
+        }
+    }
+
+    fun redoEdit() {
+        if (redoHistory.isNotEmpty()) {
+            undoHistory.add(currentSettings())
+            applyEditSnapshot(redoHistory.removeAt(redoHistory.lastIndex))
+            statusMessage = "Edit restored."
+        }
+    }
+
     fun setStyle(style: String) {
+        recordEditChange()
         selectedStyle = style
         when (style) {
             "Natural" -> { brightness = 0f; contrast = 1.03f; saturation = 1.02f; warmth = 0f }
@@ -352,6 +403,7 @@ private fun PhotoEditorHome() {
     fun openEditor(photo: PhotoItem) {
         resetPreviewZoom()
         activePhoto = photo
+        compareBeforeAfter = false
         previewBitmap?.let { if (!it.isRecycled) it.recycle() }
         previewBitmap = null
         showEnhanced = true
@@ -846,7 +898,22 @@ private fun PhotoEditorHome() {
                         ) {
                             val active = activePhoto
                             if (active != null) {
-                                if (showEnhanced && previewBitmap != null) {
+                                if (compareBeforeAfter && previewBitmap != null) {
+                                    AsyncImage(model = previewBitmap, contentDescription = "After edit comparison",
+                                        modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
+                                    AsyncImage(model = active.uri, contentDescription = "Before edit comparison",
+                                        modifier = Modifier.fillMaxSize().drawWithContent {
+                                            clipRect(right = size.width * comparePosition) { this@drawWithContent.drawContent() }
+                                        }, contentScale = ContentScale.Fit)
+                                    Box(modifier = Modifier.fillMaxWidth(comparePosition).height(2.dp)
+                                        .align(Alignment.CenterStart).background(Mint))
+                                    Text("BEFORE", color = BrightText, fontSize = 9.sp, fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.align(Alignment.TopStart).padding(8.dp)
+                                            .background(Ink.copy(alpha = 0.8f), RoundedCornerShape(5.dp)).padding(5.dp))
+                                    Text("AFTER", color = BrightText, fontSize = 9.sp, fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.align(Alignment.TopEnd).padding(8.dp)
+                                            .background(Ink.copy(alpha = 0.8f), RoundedCornerShape(5.dp)).padding(5.dp))
+                                } else if (showEnhanced && previewBitmap != null) {
                                     AsyncImage(model = previewBitmap, contentDescription = "Enhanced preview",
                                         modifier = Modifier.fillMaxSize().graphicsLayer {
                                             scaleX = previewScale
@@ -864,7 +931,25 @@ private fun PhotoEditorHome() {
                                         }, contentScale = ContentScale.Fit)
                                 }
                             }
+                            if (showCropGuides && cropLabel != "Original" && !compareBeforeAfter) {
+                                androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxSize()) {
+                                    val thirdW = size.width / 3f
+                                    val thirdH = size.height / 3f
+                                    val guideColor = Color.White.copy(alpha = 0.65f)
+                                    for (i in 1..2) {
+                                        drawLine(guideColor, androidx.compose.ui.geometry.Offset(thirdW * i, 0f),
+                                            androidx.compose.ui.geometry.Offset(thirdW * i, size.height), strokeWidth = 1.dp.toPx())
+                                        drawLine(guideColor, androidx.compose.ui.geometry.Offset(0f, thirdH * i),
+                                            androidx.compose.ui.geometry.Offset(size.width, thirdH * i), strokeWidth = 1.dp.toPx())
+                                    }
+                                }
+                            }
                             if (isPreparingPreview) CircularProgressIndicator(color = Mint)
+                        }
+                        if (compareBeforeAfter) {
+                            Text("COMPARISON POSITION  " + (comparePosition * 100).toInt() + "%",
+                                color = SoftText, fontSize = 10.sp, modifier = Modifier.padding(top = 5.dp))
+                            Slider(value = comparePosition, onValueChange = { comparePosition = it }, valueRange = 0.05f..0.95f)
                         }
                         Row(
                             modifier = Modifier.fillMaxWidth().padding(top = 5.dp),
@@ -956,9 +1041,27 @@ private fun PhotoEditorHome() {
                             ) { Text("Next →", fontSize = 11.sp) }
                         }
                         Spacer(modifier = Modifier.height(9.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                            Button(onClick = { undoEdit() }, enabled = undoHistory.isNotEmpty() && !isExporting,
+                                modifier = Modifier.weight(0.65f), shape = RoundedCornerShape(10.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = BrightText),
+                                contentPadding = PaddingValues(horizontal = 3.dp, vertical = 2.dp)
+                            ) { Text("Undo", fontSize = 10.sp) }
+                            Button(onClick = { redoEdit() }, enabled = redoHistory.isNotEmpty() && !isExporting,
+                                modifier = Modifier.weight(0.65f), shape = RoundedCornerShape(10.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = BrightText),
+                                contentPadding = PaddingValues(horizontal = 3.dp, vertical = 2.dp)
+                            ) { Text("Redo", fontSize = 10.sp) }
+                            Button(onClick = { compareBeforeAfter = !compareBeforeAfter; showEnhanced = true },
+                                enabled = previewBitmap != null, modifier = Modifier.weight(0.85f),
+                                shape = RoundedCornerShape(10.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = if (compareBeforeAfter) Mint else Color(0xFF293333),
+                                    contentColor = if (compareBeforeAfter) Ink else BrightText),
+                                contentPadding = PaddingValues(horizontal = 3.dp, vertical = 2.dp)
+                            ) { Text(if (compareBeforeAfter) "Close compare" else "Compare", fontSize = 10.sp) }
                             Button(
-                                onClick = { showEnhanced = !showEnhanced },
+                                onClick = { showEnhanced = !showEnhanced; compareBeforeAfter = false },
                                 enabled = previewBitmap != null,
                                 modifier = Modifier.weight(1f),
                                 shape = RoundedCornerShape(12.dp),
@@ -987,7 +1090,12 @@ private fun PhotoEditorHome() {
                         Column(
                             modifier = Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState())
                         ) {
-                        Text("STYLE PRESETS", color = BrightText, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("STYLE PRESETS", color = BrightText, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            Spacer(modifier = Modifier.weight(1f))
+                            Text(if (showCropGuides) "Guides on" else "Guides off", color = Mint, fontSize = 10.sp,
+                                modifier = Modifier.clickable { showCropGuides = !showCropGuides }.padding(4.dp))
+                        }
                         Row(
                             modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                             horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -1006,23 +1114,27 @@ private fun PhotoEditorHome() {
                         }
                         Text("BRIGHTNESS  " + brightness.toInt(), color = SoftText, fontSize = 11.sp)
                         Slider(value = brightness, onValueChange = {
+                            recordEditChange()
                             brightness = it
                             selectedStyle = "Custom"
                         }, valueRange = -25f..25f)
                         Text("CONTRAST  " + String.format(java.util.Locale.US, "%.2f", contrast),
                             color = SoftText, fontSize = 11.sp)
                         Slider(value = contrast, onValueChange = {
+                            recordEditChange()
                             contrast = it
                             selectedStyle = "Custom"
                         }, valueRange = 0.75f..1.40f)
                         Text("SATURATION  " + String.format(java.util.Locale.US, "%.2f", saturation),
                             color = SoftText, fontSize = 11.sp)
                         Slider(value = saturation, onValueChange = {
+                            recordEditChange()
                             saturation = it
                             selectedStyle = "Custom"
                         }, valueRange = 0f..1.65f)
                         Text("WARMTH  " + warmth.toInt(), color = SoftText, fontSize = 11.sp)
                         Slider(value = warmth, onValueChange = {
+                            recordEditChange()
                             warmth = it
                             selectedStyle = "Custom"
                         }, valueRange = -24f..24f)
@@ -1034,7 +1146,7 @@ private fun PhotoEditorHome() {
                         ) {
                             listOf("Original", "Square", "Portrait 4:5", "Story 9:16", "Landscape 16:9").forEach { crop ->
                                 Button(
-                                    onClick = { cropLabel = crop },
+                                    onClick = { recordEditChange(); cropLabel = crop },
                                     shape = RoundedCornerShape(10.dp),
                                     colors = ButtonDefaults.buttonColors(
                                         containerColor = if (cropLabel == crop) Mint else Color(0xFF293333),
@@ -1048,13 +1160,13 @@ private fun PhotoEditorHome() {
                             Text("CROP HORIZONTAL  " + (cropOffsetX * 100).toInt() + "%", color = SoftText, fontSize = 11.sp)
                             Slider(
                                 value = cropOffsetX,
-                                onValueChange = { cropOffsetX = it },
+                                onValueChange = { recordEditChange(); cropOffsetX = it },
                                 valueRange = -1f..1f
                             )
                             Text("CROP VERTICAL  " + (cropOffsetY * 100).toInt() + "%", color = SoftText, fontSize = 11.sp)
                             Slider(
                                 value = cropOffsetY,
-                                onValueChange = { cropOffsetY = it },
+                                onValueChange = { recordEditChange(); cropOffsetY = it },
                                 valueRange = -1f..1f
                             )
                             Text("Move the crop window to keep your subject in frame.", color = SoftText, fontSize = 10.sp)
@@ -1068,6 +1180,7 @@ private fun PhotoEditorHome() {
                         ) {
                             Button(
                                 onClick = {
+                                    recordEditChange()
                                     setStyle("Auto")
                                     cropLabel = "Original"
                                     cropOffsetX = 0f

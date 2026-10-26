@@ -132,7 +132,7 @@ object PhotoQualityAnalyzer {
                 val mean = luminances.average()
                 var hash = 0L
                 for (luma in luminances) {
-                    hash = (hash shl 1) or if (luma >= mean) 1L else 0L
+                    hash = (hash shl 1) or (if (luma >= mean) 1L else 0L)
                 }
                 return hash
             } finally {

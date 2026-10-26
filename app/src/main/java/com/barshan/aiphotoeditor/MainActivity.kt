@@ -156,6 +156,8 @@ private fun PhotoEditorHome() {
     var cropOffsetY by remember { mutableFloatStateOf(0f) }
     var selectedStyle by remember { mutableStateOf("Auto") }
     var statusMessage by remember { mutableStateOf("Choose photos to begin. Analysis and edits run on this device.") }
+    var photoAnalysisResult by remember { mutableStateOf<PhotoAnalysisResult?>(null) }
+    var isRunningPhotoAnalysis by remember { mutableStateOf(false) }
 
     val previewTransformState = rememberTransformableState { zoomChange, panChange, _ ->
         val nextScale = (previewScale * zoomChange).coerceIn(1f, 5f)
@@ -397,6 +399,7 @@ private fun PhotoEditorHome() {
 
     LaunchedEffect(activePhoto?.uri) {
         resetPreviewZoom()
+        photoAnalysisResult = null
     }
 
     // Android system Back returns to the current batch instead of exiting the editor.
@@ -1169,6 +1172,92 @@ private fun PhotoEditorHome() {
                         Column(
                             modifier = Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState())
                         ) {
+                        Button(
+                            onClick = {
+                                val photo = activePhoto
+                                if (photo != null && !isRunningPhotoAnalysis && !isExporting) {
+                                    isRunningPhotoAnalysis = true
+                                    photoAnalysisResult = null
+                                    statusMessage = "Inspecting subjects, scene labels, and lighting on this device…"
+                                    scope.launch {
+                                        var analysisBitmap: Bitmap? = null
+                                        try {
+                                            analysisBitmap = withContext(Dispatchers.IO) {
+                                                AutoEnhancer.decodeForEditing(
+                                                    context.contentResolver, photo.uri, maxDimension = 1400
+                                                )
+                                            }
+                                            val result = PhotoAnalysisEngine.analyze(analysisBitmap!!)
+                                            photoAnalysisResult = result
+                                            statusMessage = "AI analysis complete. Review the findings before choosing edits."
+                                        } catch (error: CancellationException) {
+                                            throw error
+                                        } catch (error: Exception) {
+                                            statusMessage = "AI analysis failed: " + (error.message ?: "could not inspect this image")
+                                        } finally {
+                                            analysisBitmap?.let { if (!it.isRecycled) it.recycle() }
+                                            isRunningPhotoAnalysis = false
+                                        }
+                                    }
+                                }
+                            },
+                            enabled = activePhoto != null && !isRunningPhotoAnalysis && !isExporting,
+                            modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (photoAnalysisResult != null) Color(0xFF293333) else Mint,
+                                contentColor = if (photoAnalysisResult != null) Mint else Ink
+                            )
+                        ) {
+                            if (isRunningPhotoAnalysis) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(16.dp),
+                                    strokeWidth = 2.dp,
+                                    color = Mint
+                                )
+                                Text("  Analysing photo…", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            } else {
+                                androidx.compose.material3.Icon(Icons.Rounded.ImageSearch, contentDescription = null)
+                                Text(
+                                    if (photoAnalysisResult == null) "  Analyse this photo with AI" else "  Analyse again",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                        photoAnalysisResult?.let { result ->
+                            Card(
+                                modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                                colors = CardDefaults.cardColors(containerColor = Color(0xFF202929)),
+                                shape = RoundedCornerShape(14.dp)
+                            ) {
+                                Column(
+                                    modifier = Modifier.fillMaxWidth().padding(12.dp),
+                                    verticalArrangement = Arrangement.spacedBy(7.dp)
+                                ) {
+                                    Text("AI PHOTO ANALYSIS", color = Mint, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                    Text("${result.width} × ${result.height} px · ${result.faceCount} detected face(s)",
+                                        color = BrightText, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                                    Text(result.subjectSummary, color = BrightText, fontSize = 12.sp, lineHeight = 17.sp)
+                                    Text("SCENE LABELS", color = Mint, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                    Text(
+                                        result.labels.takeIf { it.isNotEmpty() }?.joinToString(" · ")
+                                            ?: "No confident scene labels returned. This is not proof that the image has no subject.",
+                                        color = SoftText, fontSize = 11.sp, lineHeight = 16.sp
+                                    )
+                                    Text("LIGHTING CHECK", color = Mint, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                    Text(result.lightingSummary, color = SoftText, fontSize = 11.sp, lineHeight = 16.sp)
+                                    Text("SUGGESTED NEXT STEPS", color = Mint, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                    result.recommendations.forEach { recommendation ->
+                                        Text("• $recommendation", color = BrightText, fontSize = 11.sp, lineHeight = 16.sp)
+                                    }
+                                    Text(
+                                        "Guidance only: labels and face detection can be wrong. Nothing was changed or exported.",
+                                        color = SoftText, fontSize = 10.sp, lineHeight = 14.sp
+                                    )
+                                }
+                            }
+                        }
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text("STYLE PRESETS", color = BrightText, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                             Spacer(modifier = Modifier.weight(1f))

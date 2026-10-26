@@ -148,7 +148,9 @@ private fun PhotoEditorHome() {
     fun applyCurrentSettings() {
         val photo = activePhoto ?: return
         isPreparingPreview = true
-        statusMessage = "Applying " + selectedStyle + " adjustments…"
+        val settingsForPreview = currentSettings()
+        val styleForPreview = selectedStyle
+        statusMessage = "Applying " + styleForPreview + " adjustments…"
         scope.launch {
             var original: Bitmap? = null
             try {
@@ -156,7 +158,7 @@ private fun PhotoEditorHome() {
                     AutoEnhancer.decodeForEditing(context.contentResolver, photo.uri)
                 }
                 val adjusted = withContext(Dispatchers.Default) {
-                    AutoEnhancer.enhance(original!!, currentSettings())
+                    AutoEnhancer.enhance(original!!, settingsForPreview)
                 }
                 previewBitmap?.let { if (!it.isRecycled) it.recycle() }
                 previewBitmap = adjusted
@@ -237,12 +239,13 @@ private fun PhotoEditorHome() {
         showEnhanced = true
         isPreparingPreview = true
         statusMessage = "Preparing a preview…"
+        val settingsForPreview = currentSettings()
         scope.launch {
             try {
                 val original = withContext(Dispatchers.IO) {
                     AutoEnhancer.decodeForEditing(context.contentResolver, photo.uri)
                 }
-                val enhanced = withContext(Dispatchers.Default) { AutoEnhancer.enhance(original, currentSettings()) }
+                val enhanced = withContext(Dispatchers.Default) { AutoEnhancer.enhance(original, settingsForPreview) }
                 original.recycle()
                 previewBitmap?.let { if (!it.isRecycled) it.recycle() }
                 previewBitmap = enhanced
@@ -326,6 +329,7 @@ private fun PhotoEditorHome() {
                             isExporting = true
                             exportProgress = 0
                             statusMessage = "Enhancing and exporting the batch…"
+                            val settingsForBatch = currentSettings()
                             scope.launch {
                                 var succeeded = 0
                                 var failed = 0
@@ -336,7 +340,7 @@ private fun PhotoEditorHome() {
                                             AutoEnhancer.decodeForEditing(context.contentResolver, photo.uri)
                                         }
                                         val enhanced = withContext(Dispatchers.Default) {
-                                            AutoEnhancer.enhance(original, currentSettings())
+                                            AutoEnhancer.enhance(original, settingsForBatch)
                                         }
                                         original.recycle()
                                         withContext(Dispatchers.IO) {
@@ -402,6 +406,16 @@ private fun PhotoEditorHome() {
                             Spacer(modifier = Modifier.weight(1f))
                             Text(if (showEnhanced) "ENHANCED" else "ORIGINAL",
                                 color = Mint, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            Button(
+                                onClick = {
+                                    activePhoto = null
+                                    previewBitmap?.let { if (!it.isRecycled) it.recycle() }
+                                    previewBitmap = null
+                                },
+                                shape = RoundedCornerShape(10.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = BrightText),
+                                contentPadding = PaddingValues(horizontal = 9.dp, vertical = 1.dp)
+                            ) { Text("All photos", fontSize = 10.sp) }
                         }
                         Spacer(modifier = Modifier.height(8.dp))
                         Box(

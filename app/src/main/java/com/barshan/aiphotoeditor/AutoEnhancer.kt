@@ -13,7 +13,6 @@ import androidx.exifinterface.media.ExifInterface
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import kotlin.math.abs
 
 /** Non-destructive, on-device auto enhancement. Original files are never edited. */
 object AutoEnhancer {
@@ -66,7 +65,6 @@ object AutoEnhancer {
         val width = source.width
         val height = source.height
         val sampleStride = ((width * height) / 20000).coerceAtLeast(1)
-        val samplePixels = IntArray((width * height + sampleStride - 1) / sampleStride)
         val allPixels = IntArray(width * height)
         source.getPixels(allPixels, 0, width, 0, 0, width, height)
 

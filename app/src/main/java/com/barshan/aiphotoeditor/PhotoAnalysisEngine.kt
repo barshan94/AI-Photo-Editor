@@ -2,7 +2,6 @@ package com.barshan.aiphotoeditor
 
 import android.graphics.Bitmap
 import com.google.mlkit.vision.common.InputImage
-import com.google.mlkit.vision.face.Face
 import com.google.mlkit.vision.face.FaceDetection
 import com.google.mlkit.vision.face.FaceDetectorOptions
 import com.google.mlkit.vision.label.ImageLabeling
@@ -28,19 +27,19 @@ internal data class PhotoAnalysisResult(
 )
 
 internal object PhotoAnalysisEngine {
-    private val faceOptions = FaceDetectorOptions.Builder()
-        .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_ACCURATE)
-        .setLandmarkMode(FaceDetectorOptions.LANDMARK_MODE_NONE)
-        .setClassificationMode(FaceDetectorOptions.CLASSIFICATION_MODE_NONE)
-        .setMinFaceSize(0.06f)
-        .build()
-
     suspend fun analyze(bitmap: Bitmap): PhotoAnalysisResult {
         require(bitmap.width > 0 && bitmap.height > 0) { "The selected image is empty." }
 
         val input = InputImage.fromBitmap(bitmap, 0)
         val labeler = ImageLabeling.getClient(ImageLabelerOptions.DEFAULT_OPTIONS)
-        val detector = FaceDetection.getClient(faceOptions)
+        val detector = FaceDetection.getClient(
+            FaceDetectorOptions.Builder()
+                .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_ACCURATE)
+                .setLandmarkMode(FaceDetectorOptions.LANDMARK_MODE_NONE)
+                .setClassificationMode(FaceDetectorOptions.CLASSIFICATION_MODE_NONE)
+                .setMinFaceSize(0.06f)
+                .build()
+        )
 
         try {
             val labels = labeler.process(input).awaitResult()

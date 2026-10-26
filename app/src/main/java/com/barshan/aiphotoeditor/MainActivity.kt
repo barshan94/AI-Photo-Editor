@@ -229,7 +229,7 @@ private fun PhotoEditorHome() {
             var adjusted: Bitmap? = null
             try {
                 original = withContext(Dispatchers.IO) {
-                    AutoEnhancer.decodeForEditing(context.contentResolver, photo.uri)
+                    AutoEnhancer.decodeForEditing(context.contentResolver, photo.uri, maxDimension = Int.MAX_VALUE)
                 }
                 adjusted = withContext(Dispatchers.Default) {
                     AutoEnhancer.enhance(original!!, settings)
@@ -251,19 +251,32 @@ private fun PhotoEditorHome() {
         }
     }
 
-    fun exportOne(photo: PhotoItem, bitmap: Bitmap) {
+    fun exportOne(photo: PhotoItem, settings: EditSettings) {
         if (isExporting) return
         isExporting = true
-        statusMessage = "Saving enhanced copy…"
+        statusMessage = "Rendering full-resolution export…"
         scope.launch {
+            var original: Bitmap? = null
+            var enhanced: Bitmap? = null
             try {
-                withContext(Dispatchers.IO) {
-                    AutoEnhancer.saveJpeg(context.contentResolver, bitmap)
+                original = withContext(Dispatchers.IO) {
+                    AutoEnhancer.decodeForEditing(context.contentResolver, photo.uri, maxDimension = Int.MAX_VALUE)
                 }
-                statusMessage = "Saved to Pictures/FRAME AI. Your original is untouched."
+                enhanced = withContext(Dispatchers.Default) {
+                    AutoEnhancer.enhance(original!!, settings)
+                }
+                val width = enhanced!!.width
+                val height = enhanced!!.height
+                withContext(Dispatchers.IO) {
+                    AutoEnhancer.saveJpeg(context.contentResolver, enhanced!!)
+                }
+                statusMessage = "Saved full-resolution " + width + "x" + height +
+                    " copy to Pictures/FRAME AI. Original untouched."
             } catch (error: Exception) {
                 statusMessage = "Export failed: " + (error.message ?: "unknown error")
             } finally {
+                enhanced?.let { if (!it.isRecycled) it.recycle() }
+                original?.let { if (!it.isRecycled) it.recycle() }
                 isExporting = false
             }
         }
@@ -292,7 +305,7 @@ private fun PhotoEditorHome() {
                         fontSize = 9.sp, letterSpacing = 1.1.sp)
                 }
                 Spacer(modifier = Modifier.weight(1f))
-                Text("BETA 0.4", color = Mint, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                Text("BETA 0.5", color = Mint, fontSize = 10.sp, fontWeight = FontWeight.Bold)
             }
 
             Spacer(modifier = Modifier.height(18.dp))
@@ -335,12 +348,15 @@ private fun PhotoEditorHome() {
                                         val enhanced = withContext(Dispatchers.Default) {
                                             AutoEnhancer.enhance(original, settingsForBatch)
                                         }
-                                        original.recycle()
-                                        withContext(Dispatchers.IO) {
-                                            AutoEnhancer.saveJpeg(context.contentResolver, enhanced)
+                                        try {
+                                            withContext(Dispatchers.IO) {
+                                                AutoEnhancer.saveJpeg(context.contentResolver, enhanced)
+                                            }
+                                            succeeded++
+                                        } finally {
+                                            if (!enhanced.isRecycled) enhanced.recycle()
+                                            if (!original.isRecycled) original.recycle()
                                         }
-                                        enhanced.recycle()
-                                        succeeded++
                                     } catch (_: Exception) {
                                         failed++
                                     }
@@ -451,8 +467,7 @@ private fun PhotoEditorHome() {
                             Button(
                                 onClick = {
                                     val photo = activePhoto
-                                    val bitmap = previewBitmap
-                                    if (photo != null && bitmap != null) exportOne(photo, bitmap)
+                                    if (photo != null) exportOne(photo, currentSettings())
                                 },
                                 enabled = previewBitmap != null && !isExporting,
                                 modifier = Modifier.weight(1f),

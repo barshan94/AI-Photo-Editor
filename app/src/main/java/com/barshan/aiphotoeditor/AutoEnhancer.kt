@@ -18,8 +18,9 @@ import java.util.Locale
 object AutoEnhancer {
     fun decodeForEditing(resolver: ContentResolver, uri: Uri, maxDimension: Int = 1800): Bitmap {
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        resolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
+        val boundsStream = resolver.openInputStream(uri)
             ?: throw IllegalArgumentException("Could not open this photo")
+        boundsStream.use { BitmapFactory.decodeStream(it, null, bounds) }
         if (bounds.outWidth <= 0 || bounds.outHeight <= 0) {
             throw IllegalArgumentException("This image format could not be read")
         }

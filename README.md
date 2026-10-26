@@ -2,7 +2,16 @@
 
 A native Android photo editor focused on batch workflows. It runs locally on the device; no website, account, backend, or Vercel deployment is required.
 
-## Current milestone: AI Portrait reliability (Beta 2.1.0)
+## Current milestone: on-device AI photo analysis (Beta 2.2.0)
+
+- Add an **Analyse this photo with AI** panel inside the existing editor; it is optional and does not replace ordinary editing.
+- Run on-device ML Kit image labeling and face detection to report likely scene labels, detected face count, a basic brightness check, and cautious next-edit suggestions.
+- Give portrait, two-person, and group-photo guidance without assuming that two people are a couple or that a missing face means the photo has no subject.
+- Surface practical suggestions for exposure, white balance review, crop safety, skin-detail preservation, and resolution expectations.
+- Analysis is advisory only: it never changes pixels, exports files, identifies an unwanted person with certainty, or removes objects. The user chooses whether to edit.
+- Unit tests cover subject-count interpretation; CI must pass before this milestone is considered validated. Real-device checks are still required for model availability, runtime, memory, and representative photos.
+
+## Previous milestone: AI Portrait reliability (Beta 2.1.0)
 
 - Decode ML Kit segmentation masks as floating-point confidence values rather than treating each byte as a separate pixel. This is essential for correct subject-mask interpretation.
 - Validate expected mask dimensions and buffer length, clamp confidence to the 0–1 range, and safely handle NaN values.
@@ -85,6 +94,8 @@ A native Android photo editor focused on batch workflows. It runs locally on the
 
 ## Important limitations
 
+- AI photo analysis uses on-device ML Kit image labels and face detection plus a simple average-brightness estimate. It is not a multimodal reasoning model, cannot reliably infer relationships, intentions, or which person is unwanted, and may miss faces or mislabel scenes.
+- AI analysis gives recommendations only. It does not yet implement generative object removal, unwanted-person removal, makeup/skin retouching, super-resolution, or automatic background replacement; these remain separate future editing capabilities.
 - Ranking scores remain technical heuristics, not a semantic understanding of photo meaning. Intentional blur and artistic lighting may score poorly. The AI Portrait preset uses a separate on-device person-segmentation model.
 - Burst candidates are inferred from recorded capture timestamps, not definitive camera burst metadata. The whole group is limited to a two-second timestamp span, but photos taken close together may still not belong to the same camera burst; photos without readable capture time cannot be grouped.
 - Style presets and sliders are conventional on-device pixel adjustments, not generative editing.
@@ -132,6 +143,7 @@ The beta uses package `com.barshan.aiphotoeditor.beta`, labelled **FRAME AI Beta
 23. Regression tests for photo quality scoring, burst grouping, and visual similarity — implemented in Beta 1.10.0; compare rankings against real photo sets
 24. On-device ML Kit person segmentation and AI Portrait look for preview/single/batch export — implemented in Beta 2.0.0; verify segmentation and fallback behavior on-device
 25. AI segmentation confidence-mask decoding and validation — implemented in Beta 2.1.0; test subject edges, multiple people, low light, and memory on the Pixel 6a
+26. Optional on-device AI photo analysis with scene labels, face-count interpretation, brightness guidance, and edit recommendations — implemented in Beta 2.2.0; validate on real-world photo types on the Pixel 6a
 14. Subject-aware ranking and personalized style learning
 15. Personalized style learning and smarter social export
 

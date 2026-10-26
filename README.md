@@ -2,11 +2,12 @@
 
 A native Android photo editor focused on batch workflows. It runs locally on the device; no website, account, backend, or Vercel deployment is required.
 
-## Current milestone: quality-first similar-shot ranking and repositionable crops (Beta 0.9.0)
+## Current milestone: capture-time burst candidates and quality-first ranking (Beta 1.0.0)
 
 - Import multiple images with Android's document picker.
 - Score technical quality using estimated sharpness, exposure, contrast, and clipped highlights/shadows; sort higher scores first.
-- Detect byte-identical duplicate files and visually similar frames in the selected batch; similar-shot candidates are now ranked first, so the highest-scoring technical shot is kept as the representative and lower-scoring similar shots are marked for optional removal. No files are deleted from the phone.
+- Detect byte-identical duplicate files and visually similar frames in the selected batch; similar-shot candidates are ranked by technical score. The highest-scoring representative is retained by the optional cleanup action. No files are deleted from the phone.
+- Read capture time from MediaStore or EXIF when available; photos recorded within two seconds of one another are marked as **burst candidates**. An optional action keeps the highest technical score per candidate group and removes the rest from the current selection only.
 - Tap any photo to open the editing workspace.
 - Use Previous / Next to move through the selected batch without returning to the grid; the position indicator shows the current photo.
 - Use the editor's **All photos** button or Android system Back to return to the existing batch without re-importing it.
@@ -25,6 +26,7 @@ A native Android photo editor focused on batch workflows. It runs locally on the
 ## Important limitations
 
 - Ranking scores are heuristics, not a trained AI model or an understanding of the photo's meaning. Intentional blur and artistic lighting may score poorly.
+- Burst candidates are inferred from recorded capture timestamps, not definitive camera burst metadata. Photos without readable capture time cannot be grouped; two photos taken close together may not belong to the same burst.
 - Style presets and sliders are conventional on-device pixel adjustments, not generative editing.
 - Crop positioning is controlled with horizontal and vertical sliders; direct drag-to-position crop gestures are not implemented yet.
 - The on-screen live preview uses a working size of up to about 1800 pixels for responsiveness; pinch-to-zoom magnifies this preview, not the exported source. Exports are rendered from the full-resolution source. Crop ratios intentionally reduce dimensions to the chosen framing.
@@ -58,7 +60,8 @@ The beta uses package `com.barshan.aiphotoeditor.beta`, labelled **FRAME AI Beta
 9. Validate edits across different phone photos; improve color/exposure algorithms
 10. Exact duplicate file detection and safe removal from the selection — implemented in Beta 0.5.0
 11. Visual-similarity grouping and safe removal from the selection — implemented in Beta 0.6.0; heuristic needs real-world validation
-12. Capture-time-aware burst grouping and subject-aware ranking
+12. Capture-time-based burst candidate grouping and safe keep-best action — implemented in Beta 1.0.0; needs validation across device metadata formats
+13. Subject-aware ranking and personalized style learning
 13. Personalized style learning and smarter social export
 
 The current editor does not claim to have a trained AI model. This milestone builds reliable controls and export behavior first; subject-aware intelligence and personalized learning come later.

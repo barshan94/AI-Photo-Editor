@@ -259,23 +259,27 @@ private fun PhotoEditorHome() {
                         )
                     }
                 }
+                // Rank first, then compare against higher-scoring representatives.
+                // This makes "remove visually similar" keep the strongest technical shot,
+                // rather than whichever file happened to be selected first.
+                selectedPhotos.sortByDescending { it.score ?: -1 }
+                val bestRepresentatives = mutableListOf<PhotoItem>()
                 for (index in selectedPhotos.indices) {
                     val photo = selectedPhotos[index]
                     val visualHash = photo.visualFingerprint
-                    if (!photo.isExactDuplicate && visualHash != null) {
-                        val similarToEarlier = selectedPhotos.take(index).any { earlier ->
-                            !earlier.isExactDuplicate &&
-                                earlier.fingerprint != photo.fingerprint &&
-                                earlier.visualFingerprint?.let { otherHash ->
-                                    java.lang.Long.bitCount(visualHash xor otherHash) <= 5
-                                } == true
-                        }
-                        if (similarToEarlier) {
-                            selectedPhotos[index] = photo.copy(isNearDuplicate = true)
-                        }
+                    if (photo.isExactDuplicate || visualHash == null) continue
+                    val similarToBetterShot = bestRepresentatives.any { representative ->
+                        representative.fingerprint != photo.fingerprint &&
+                            representative.visualFingerprint?.let { representativeHash ->
+                                java.lang.Long.bitCount(visualHash xor representativeHash) <= 5
+                            } == true
+                    }
+                    if (similarToBetterShot) {
+                        selectedPhotos[index] = photo.copy(isNearDuplicate = true)
+                    } else {
+                        bestRepresentatives.add(photo)
                     }
                 }
-                selectedPhotos.sortByDescending { it.score ?: -1 }
                 isAnalyzing = false
                 val best = selectedPhotos.firstOrNull()?.score
                 statusMessage = if (best != null && selectedPhotos.isNotEmpty()) {
@@ -394,7 +398,7 @@ private fun PhotoEditorHome() {
                         fontSize = 9.sp, letterSpacing = 1.1.sp)
                 }
                 Spacer(modifier = Modifier.weight(1f))
-                Text("BETA 0.8", color = Mint, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                Text("BETA 0.9", color = Mint, fontSize = 10.sp, fontWeight = FontWeight.Bold)
             }
 
             Spacer(modifier = Modifier.height(18.dp))
@@ -843,7 +847,7 @@ private fun PhotoEditorHome() {
                                     modifier = Modifier.padding(top = 3.dp, start = 2.dp))
                             }
                             if (photo.isNearDuplicate) {
-                                Text("VISUALLY SIMILAR", color = Color(0xFF9CC8FF),
+                                Text("SIMILAR · LOWER SCORE", color = Color(0xFF9CC8FF),
                                     fontSize = 8.sp, fontWeight = FontWeight.Bold,
                                     modifier = Modifier.padding(top = 3.dp, start = 2.dp))
                             }

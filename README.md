@@ -2,12 +2,14 @@
 
 A native Android photo editor focused on batch workflows. It runs locally on the device; no website, account, backend, or Vercel deployment is required.
 
-## Current milestone: pinch-to-zoom preview, live editing, and full-resolution export (Beta 0.6.0)
+## Current milestone: batch-preserving navigation, pinch-to-zoom, and full-resolution export (Beta 0.7.0)
 
 - Import multiple images with Android's document picker.
 - Score technical quality using estimated sharpness, exposure, contrast, and clipped highlights/shadows; sort higher scores first.
 - Detect byte-identical duplicate files and visually similar frames in the selected batch; optionally remove either group from the current selection without deleting anything from the phone.
 - Tap any photo to open the editing workspace.
+- Use Previous / Next to move through the selected batch without returning to the grid; the position indicator shows the current photo.
+- Use the editor's **All photos** button or Android system Back to return to the existing batch without re-importing it.
 - Apply style presets: Auto, Natural, Vivid, Warm, Cool, and Mono; the preview updates automatically after a short debounce.
 - Adjust brightness, contrast, saturation, and warmth using sliders; changes appear live without tapping Apply.
 - Center-crop to Original, Square (1:1), Portrait (4:5), Story (9:16), or Landscape (16:9), with immediate preview updates.
@@ -51,10 +53,11 @@ The beta uses package `com.barshan.aiphotoeditor.beta`, labelled **FRAME AI Beta
 4. Manual sliders, creative presets, and social crop ratios — implemented in this milestone
 5. Full-resolution export and maximum-quality JPEG output — implemented in Beta 0.5.0
 6. Pinch-to-zoom and pan in the editor preview — implemented in Beta 0.6.0
-7. Validate edits across different phone photos; improve color/exposure algorithms
-8. Exact duplicate file detection and safe removal from the selection — implemented in Beta 0.5.0
-9. Visual-similarity grouping and safe removal from the selection — implemented in Beta 0.6.0; heuristic needs real-world validation
-10. Subject-aware ranking and burst grouping
-11. Personalized style learning and smarter social export
+7. Preserve selected batch when using Android Back; previous/next photo navigation — implemented in Beta 0.7.0
+8. Validate edits across different phone photos; improve color/exposure algorithms
+9. Exact duplicate file detection and safe removal from the selection — implemented in Beta 0.5.0
+10. Visual-similarity grouping and safe removal from the selection — implemented in Beta 0.6.0; heuristic needs real-world validation
+11. Subject-aware ranking and burst grouping
+12. Personalized style learning and smarter social export
 
 The current editor does not claim to have a trained AI model. This milestone builds reliable controls and export behavior first; subject-aware intelligence and personalized learning come later.

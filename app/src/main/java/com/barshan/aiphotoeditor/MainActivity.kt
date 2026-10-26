@@ -279,7 +279,6 @@ private fun PhotoEditorHome() {
                     photo.captureTimeMillis?.let { timestamp -> index to timestamp }
                 }.sortedBy { it.second }
                 var burstMembers = mutableListOf<Pair<Int, Long>>()
-                var previousCaptureTime: Long? = null
                 fun markBurstMembers() {
                     if (burstMembers.size >= 2) {
                         val groupId = burstMembers.first().second
@@ -291,12 +290,13 @@ private fun PhotoEditorHome() {
                     burstMembers = mutableListOf()
                 }
                 for (entry in chronological) {
-                    val previous = previousCaptureTime
-                    if (previous != null && entry.second - previous > 2_000L) {
+                    // Bound the whole candidate group to two seconds, not just each
+                    // adjacent gap; otherwise a long chain can become one false burst.
+                    val firstCaptureTime = burstMembers.firstOrNull()?.second
+                    if (firstCaptureTime != null && entry.second - firstCaptureTime > 2_000L) {
                         markBurstMembers()
                     }
                     burstMembers.add(entry)
-                    previousCaptureTime = entry.second
                 }
                 markBurstMembers()
 

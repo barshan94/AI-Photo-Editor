@@ -127,6 +127,8 @@ private fun PhotoEditorHome() {
     var analysisProgress by remember { mutableIntStateOf(0) }
     var isExporting by remember { mutableStateOf(false) }
     var exportProgress by remember { mutableIntStateOf(0) }
+    var batchPreset by remember { mutableStateOf("Current edits") }
+    var batchSummary by remember { mutableStateOf<String?>(null) }
     var activePhoto by remember { mutableStateOf<PhotoItem?>(null) }
     var showBurstComparison by remember { mutableStateOf(false) }
     var showBurstGroupPicker by remember { mutableStateOf(false) }
@@ -232,6 +234,15 @@ private fun PhotoEditorHome() {
             applyEditSnapshot(redoHistory.removeAt(redoHistory.lastIndex))
             statusMessage = "Edit restored."
         }
+    }
+
+    fun settingsForBatchPreset(style: String): EditSettings = when (style) {
+        "Natural" -> EditSettings(brightness = 0f, contrast = 1.03f, saturation = 1.02f, warmth = 0f)
+        "Vivid" -> EditSettings(brightness = 0f, contrast = 1.13f, saturation = 1.28f, warmth = 0f)
+        "Warm" -> EditSettings(brightness = 2f, contrast = 1.06f, saturation = 1.08f, warmth = 12f)
+        "Cool" -> EditSettings(brightness = 0f, contrast = 1.05f, saturation = 1.04f, warmth = -10f)
+        "Mono" -> EditSettings(brightness = 0f, contrast = 1.10f, saturation = 0f, warmth = 0f)
+        else -> EditSettings()
     }
 
     fun setStyle(style: String) {
@@ -515,7 +526,7 @@ private fun PhotoEditorHome() {
                         fontSize = 9.sp, letterSpacing = 1.1.sp)
                 }
                 Spacer(modifier = Modifier.weight(1f))
-                Text("BETA 1.5", color = Mint, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                Text("BETA 1.7", color = Mint, fontSize = 10.sp, fontWeight = FontWeight.Bold)
             }
 
             Spacer(modifier = Modifier.height(18.dp))
@@ -545,11 +556,14 @@ private fun PhotoEditorHome() {
                             isExporting = true
                             exportProgress = 0
                             statusMessage = "Enhancing and exporting the batch…"
-                            val settingsForBatch = currentSettings()
+                            val settingsForBatch = if (batchPreset == "Current edits") currentSettings() else settingsForBatchPreset(batchPreset)
                             scope.launch {
                                 var succeeded = 0
                                 var failed = 0
+                                val failedNames = mutableListOf<String>()
                                 val batch = selectedPhotos.filter { it.decision != "Reject" }
+                                val skipped = selectedPhotos.size - batch.size
+                                batchSummary = null
                                 for ((index, photo) in batch.withIndex()) {
                                     try {
                                         val original = withContext(Dispatchers.IO) {
@@ -569,14 +583,17 @@ private fun PhotoEditorHome() {
                                             if (!enhanced.isRecycled) enhanced.recycle()
                                             if (!original.isRecycled) original.recycle()
                                         }
-                                    } catch (_: Exception) {
+                                    } catch (error: Exception) {
                                         failed++
+                                        failedNames.add(photo.uri.lastPathSegment ?: "Photo " + (index + 1))
                                     }
                                     exportProgress = index + 1
+                                    statusMessage = "Exporting " + (index + 1) + "/" + batch.size + " · " + succeeded + " saved · " + failed + " failed"
                                 }
                                 isExporting = false
-                                statusMessage = "Batch complete: " + succeeded + " saved to Pictures/FRAME AI" +
-                                    if (failed > 0) (", " + failed + " failed") else ". Originals are untouched."
+                                batchSummary = "Batch export summary: " + succeeded + " saved, " + failed + " failed, " + skipped + " rejected/skipped. Preset: " + batchPreset + ". Destination: Pictures/FRAME AI." +
+                                    if (failedNames.isNotEmpty()) "\nFailed items: " + failedNames.take(5).joinToString(", ") + if (failedNames.size > 5) " and " + (failedNames.size - 5) + " more." else "" else ""
+                                statusMessage = (batchSummary ?: "Batch export finished.") + " Originals are untouched."
                             }
                         }
                     },
@@ -591,6 +608,55 @@ private fun PhotoEditorHome() {
                 ) {
                     androidx.compose.material3.Icon(Icons.Rounded.AutoAwesome, contentDescription = null)
                     Text("  Enhance all", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                }
+            }
+
+            if (activePhoto == null && selectedPhotos.isNotEmpty()) {
+                Text("BATCH PRESET", color = BrightText, fontSize = 11.sp, fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(top = 8.dp, bottom = 4.dp))
+                Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf("Current edits", "Auto", "Natural", "Vivid", "Warm", "Cool", "Mono").forEach { preset ->
+                        Button(onClick = { batchPreset = preset; batchSummary = null },
+                            enabled = !isExporting && !isAnalyzing,
+                            shape = RoundedCornerShape(10.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (batchPreset == preset) Mint else Color(0xFF293333),
+                                contentColor = if (batchPreset == preset) Ink else BrightText
+                            ), contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp)
+                        ) { Text(preset, fontSize = 10.sp) }
+                    }
+                }
+                Row(modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(selectedPhotos.count { it.decision != "Reject" }.toString() + " photos to export · " +
+                            selectedPhotos.count { it.decision == "Reject" } + " rejected will be skipped",
+                            color = SoftText, fontSize = 10.sp)
+                        Text(if (batchPreset == "Current edits") "Uses the settings currently open in the editor." else
+                            "Applies " + batchPreset + " consistently to every eligible photo.",
+                            color = SoftText, fontSize = 10.sp)
+                    }
+                    Button(onClick = {
+                        val sample = selectedPhotos.firstOrNull { it.decision != "Reject" }
+                        if (sample != null) {
+                            openEditor(sample)
+                            if (batchPreset != "Current edits") {
+                                applyEditSnapshot(settingsForBatchPreset(batchPreset))
+                                selectedStyle = batchPreset
+                            }
+                            statusMessage = "Batch preview sample: " + batchPreset + ". Return to the grid to export the reviewed batch."
+                        }
+                    }, enabled = !isExporting && !isAnalyzing && selectedPhotos.any { it.decision != "Reject" },
+                        shape = RoundedCornerShape(10.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = Mint),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 3.dp)
+                    ) { Text("Preview sample", fontSize = 10.sp) }
+                }
+                if (batchSummary != null) {
+                    Text(batchSummary!!, color = Mint, fontSize = 10.sp, lineHeight = 14.sp,
+                        modifier = Modifier.fillMaxWidth().padding(top = 5.dp))
                 }
             }
 

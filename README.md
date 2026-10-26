@@ -2,14 +2,15 @@
 
 A native Android photo editor focused on batch workflows. It runs locally on the device; no website, account, backend, or Vercel deployment is required.
 
-## Current milestone: manual edits and social crops
+## Current milestone: live editing and fixed preview (Beta 0.4.0)
 
 - Import multiple images with Android's document picker.
 - Score technical quality using estimated sharpness, exposure, contrast, and clipped highlights/shadows; sort higher scores first.
 - Tap any photo to open the editing workspace.
-- Apply style presets: Auto, Natural, Vivid, Warm, Cool, and Mono.
-- Adjust brightness, contrast, saturation, and warmth using sliders.
-- Center-crop to Original, Square (1:1), Portrait (4:5), Story (9:16), or Landscape (16:9).
+- Apply style presets: Auto, Natural, Vivid, Warm, Cool, and Mono; the preview updates automatically after a short debounce.
+- Adjust brightness, contrast, saturation, and warmth using sliders; changes appear live without tapping Apply.
+- Center-crop to Original, Square (1:1), Portrait (4:5), Story (9:16), or Landscape (16:9), with immediate preview updates.
+- Keep the preview image and main actions fixed while only the editing controls scroll; Reset edits restores Auto and Original crop.
 - Preview enhanced output, switch to the original, and export one edited copy.
 - Apply the chosen controls to the whole selected batch with **Enhance all**.
 - Save new JPEGs under **Pictures/FRAME AI** on modern Android.

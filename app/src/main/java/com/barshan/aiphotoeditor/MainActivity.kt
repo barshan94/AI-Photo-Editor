@@ -47,6 +47,7 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableFloatStateOf
@@ -65,7 +66,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalContext
 import coil.compose.AsyncImage
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -145,33 +148,6 @@ private fun PhotoEditorHome() {
         }
     }
 
-    fun applyCurrentSettings() {
-        val photo = activePhoto ?: return
-        isPreparingPreview = true
-        val settingsForPreview = currentSettings()
-        val styleForPreview = selectedStyle
-        statusMessage = "Applying " + styleForPreview + " adjustments…"
-        scope.launch {
-            var original: Bitmap? = null
-            try {
-                original = withContext(Dispatchers.IO) {
-                    AutoEnhancer.decodeForEditing(context.contentResolver, photo.uri)
-                }
-                val adjusted = withContext(Dispatchers.Default) {
-                    AutoEnhancer.enhance(original!!, settingsForPreview)
-                }
-                previewBitmap?.let { if (!it.isRecycled) it.recycle() }
-                previewBitmap = adjusted
-                showEnhanced = true
-                statusMessage = "Edits applied. Export a copy or adjust more."
-            } catch (error: Exception) {
-                statusMessage = "Edit failed: " + (error.message ?: "unknown error")
-            } finally {
-                original?.let { if (!it.isRecycled) it.recycle() }
-                isPreparingPreview = false
-            }
-        }
-    }
 
     val photoPicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenMultipleDocuments()
@@ -235,25 +211,42 @@ private fun PhotoEditorHome() {
 
     fun openEditor(photo: PhotoItem) {
         activePhoto = photo
+        previewBitmap?.let { if (!it.isRecycled) it.recycle() }
         previewBitmap = null
         showEnhanced = true
         isPreparingPreview = true
-        statusMessage = "Preparing a preview…"
-        val settingsForPreview = currentSettings()
-        scope.launch {
+        statusMessage = "Preparing live preview…"
+    }
+
+    // Debounced live preview: controls update the image without an Apply button.
+    LaunchedEffect(activePhoto?.uri, brightness, contrast, saturation, warmth, cropLabel) {
+        val photo = activePhoto
+        if (photo != null) {
+            delay(220)
+            isPreparingPreview = true
+            val settings = currentSettings()
+            var original: Bitmap? = null
+            var adjusted: Bitmap? = null
             try {
-                val original = withContext(Dispatchers.IO) {
+                original = withContext(Dispatchers.IO) {
                     AutoEnhancer.decodeForEditing(context.contentResolver, photo.uri)
                 }
-                val enhanced = withContext(Dispatchers.Default) { AutoEnhancer.enhance(original, settingsForPreview) }
-                original.recycle()
+                adjusted = withContext(Dispatchers.Default) {
+                    AutoEnhancer.enhance(original!!, settings)
+                }
                 previewBitmap?.let { if (!it.isRecycled) it.recycle() }
-                previewBitmap = enhanced
-                isPreparingPreview = false
-                statusMessage = "Preview ready. The original photo has not been changed."
+                previewBitmap = adjusted
+                adjusted = null
+                showEnhanced = true
+                statusMessage = "Live preview updated. Export a copy when you're happy."
+            } catch (error: CancellationException) {
+                throw error
             } catch (error: Exception) {
-                isPreparingPreview = false
                 statusMessage = "Preview failed: " + (error.message ?: "unsupported image")
+            } finally {
+                original?.let { if (!it.isRecycled) it.recycle() }
+                adjusted?.let { if (!it.isRecycled) it.recycle() }
+                isPreparingPreview = false
             }
         }
     }
@@ -299,7 +292,7 @@ private fun PhotoEditorHome() {
                         fontSize = 9.sp, letterSpacing = 1.1.sp)
                 }
                 Spacer(modifier = Modifier.weight(1f))
-                Text("BETA 0.3", color = Mint, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                Text("BETA 0.4", color = Mint, fontSize = 10.sp, fontWeight = FontWeight.Bold)
             }
 
             Spacer(modifier = Modifier.height(18.dp))
@@ -399,7 +392,7 @@ private fun PhotoEditorHome() {
                     shape = RoundedCornerShape(20.dp),
                     colors = CardDefaults.cardColors(containerColor = Panel)
                 ) {
-                    Column(modifier = Modifier.padding(12.dp).verticalScroll(rememberScrollState())) {
+                    Column(modifier = Modifier.fillMaxSize().padding(12.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text("EDIT PREVIEW", color = BrightText, fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp)
@@ -471,6 +464,9 @@ private fun PhotoEditorHome() {
                             }
                         }
                         Spacer(modifier = Modifier.height(12.dp))
+                        Column(
+                            modifier = Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState())
+                        ) {
                         Text("STYLE PRESETS", color = BrightText, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                         Row(
                             modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
@@ -530,15 +526,22 @@ private fun PhotoEditorHome() {
                         }
                         Text("Crop is centered. Check the preview before exporting.", color = SoftText, fontSize = 10.sp)
                         Spacer(modifier = Modifier.height(8.dp))
-                        Button(
-                            onClick = { applyCurrentSettings() },
-                            enabled = !isPreparingPreview && !isExporting,
-                            modifier = Modifier.fillMaxWidth().height(46.dp),
-                            shape = RoundedCornerShape(12.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Ink)
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.End
                         ) {
-                            androidx.compose.material3.Icon(Icons.Rounded.Tune, contentDescription = null)
-                            Text("  Apply adjustments", fontWeight = FontWeight.Bold)
+                            Button(
+                                onClick = {
+                                    setStyle("Auto")
+                                    cropLabel = "Original"
+                                },
+                                shape = RoundedCornerShape(10.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = Color(0xFF293333), contentColor = BrightText
+                                ),
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 2.dp)
+                            ) { Text("Reset edits", fontSize = 11.sp) }
+                        }
                         }
                     }
                 }

@@ -90,7 +90,9 @@ private data class PhotoItem(
     val contrast: Int = 0,
     val note: String = "Waiting for analysis",
     val fingerprint: String? = null,
-    val isExactDuplicate: Boolean = false
+    val visualFingerprint: Long? = null,
+    val isExactDuplicate: Boolean = false,
+    val isNearDuplicate: Boolean = false
 )
 
 class MainActivity : ComponentActivity() {
@@ -222,6 +224,13 @@ private fun PhotoEditorHome() {
                                     }
                                 } catch (_: Exception) {
                                     null
+                                },
+                                visualFingerprint = try {
+                                    withContext(Dispatchers.Default) {
+                                        PhotoQualityAnalyzer.visualFingerprint(context.contentResolver, uri)
+                                    }
+                                } catch (_: Exception) {
+                                    null
                                 }
                             )
                         }
@@ -243,6 +252,22 @@ private fun PhotoEditorHome() {
                         selectedPhotos[index] = photo.copy(
                             isExactDuplicate = !seenFingerprints.add(fingerprint)
                         )
+                    }
+                }
+                for (index in selectedPhotos.indices) {
+                    val photo = selectedPhotos[index]
+                    val visualHash = photo.visualFingerprint
+                    if (!photo.isExactDuplicate && visualHash != null) {
+                        val similarToEarlier = selectedPhotos.take(index).any { earlier ->
+                            !earlier.isExactDuplicate &&
+                                earlier.fingerprint != photo.fingerprint &&
+                                earlier.visualFingerprint?.let { otherHash ->
+                                    java.lang.Long.bitCount(visualHash xor otherHash) <= 5
+                                } == true
+                        }
+                        if (similarToEarlier) {
+                            selectedPhotos[index] = photo.copy(isNearDuplicate = true)
+                        }
                     }
                 }
                 selectedPhotos.sortByDescending { it.score ?: -1 }
@@ -438,6 +463,7 @@ private fun PhotoEditorHome() {
             }
 
             val exactDuplicateCount = selectedPhotos.count { it.isExactDuplicate }
+            val nearDuplicateCount = selectedPhotos.count { it.isNearDuplicate }
             if (activePhoto == null && exactDuplicateCount > 0) {
                 Button(
                     onClick = {
@@ -452,6 +478,22 @@ private fun PhotoEditorHome() {
                         containerColor = Color(0xFF293333), contentColor = Mint
                     )
                 ) { Text("Remove " + exactDuplicateCount + " exact duplicate(s)") }
+            }
+
+            if (activePhoto == null && nearDuplicateCount > 0) {
+                Button(
+                    onClick = {
+                        selectedPhotos.removeAll { it.isNearDuplicate }
+                        statusMessage = "Removed " + nearDuplicateCount +
+                            " visually similar photo(s) from this selection. Your originals are untouched."
+                    },
+                    enabled = !isAnalyzing && !isExporting,
+                    modifier = Modifier.fillMaxWidth().padding(top = 5.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFF293333), contentColor = Mint
+                    )
+                ) { Text("Remove " + nearDuplicateCount + " visually similar photo(s)") }
             }
 
             if (isAnalyzing) {
@@ -731,6 +773,11 @@ private fun PhotoEditorHome() {
                             )
                             if (photo.isExactDuplicate) {
                                 Text("EXACT DUPLICATE", color = Color(0xFFFFC078),
+                                    fontSize = 8.sp, fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(top = 3.dp, start = 2.dp))
+                            }
+                            if (photo.isNearDuplicate) {
+                                Text("VISUALLY SIMILAR", color = Color(0xFF9CC8FF),
                                     fontSize = 8.sp, fontWeight = FontWeight.Bold,
                                     modifier = Modifier.padding(top = 3.dp, start = 2.dp))
                             }

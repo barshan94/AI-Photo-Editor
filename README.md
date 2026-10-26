@@ -2,7 +2,7 @@
 
 A native Android photo editor focused on batch workflows. It runs locally on the device; no website, account, backend, or Vercel deployment is required.
 
-## Current milestone: selectable burst-group comparison (Beta 1.2.0)
+## Current milestone: direct crop repositioning (Beta 1.3.0)
 
 - Import multiple images with Android's document picker.
 - Score technical quality using estimated sharpness, exposure, contrast, and clipped highlights/shadows; sort higher scores first.
@@ -14,7 +14,7 @@ A native Android photo editor focused on batch workflows. It runs locally on the
 - Use the editor's **All photos** button or Android system Back to return to the existing batch without re-importing it.
 - Apply style presets: Auto, Natural, Vivid, Warm, Cool, and Mono; the preview updates automatically after a short debounce.
 - Adjust brightness, contrast, saturation, and warmth using sliders; changes appear live without tapping Apply.
-- Crop to Original, Square (1:1), Portrait (4:5), Story (9:16), or Landscape (16:9), then adjust horizontal and vertical crop position with live preview updates.
+- Crop to Original, Square (1:1), Portrait (4:5), Story (9:16), or Landscape (16:9), then drag the preview to reposition the crop window; horizontal and vertical sliders remain available for fine adjustment.
 - Pinch to zoom the preview up to 5×, drag to inspect details, and reset zoom with one tap.
 - Keep the preview image and main actions fixed while only the editing controls scroll; Reset edits restores Auto and Original crop.
 - Preview enhanced output, switch to the original, and export one edited copy.
@@ -29,7 +29,7 @@ A native Android photo editor focused on batch workflows. It runs locally on the
 - Ranking scores are heuristics, not a trained AI model or an understanding of the photo's meaning. Intentional blur and artistic lighting may score poorly.
 - Burst candidates are inferred from recorded capture timestamps, not definitive camera burst metadata. Photos without readable capture time cannot be grouped; two photos taken close together may not belong to the same burst.
 - Style presets and sliders are conventional on-device pixel adjustments, not generative editing.
-- Crop positioning is controlled with horizontal and vertical sliders; direct drag-to-position crop gestures are not implemented yet.
+- When a crop ratio is active, dragging the preview adjusts crop position and disables pinch-zoom gestures for that preview. Switch to Original to use pinch-to-zoom and pan.
 - The on-screen live preview uses a working size of up to about 1800 pixels for responsiveness; pinch-to-zoom magnifies this preview, not the exported source. Exports are rendered from the full-resolution source. Crop ratios intentionally reduce dimensions to the chosen framing.
 - Full-resolution processing uses more memory. Very large photos may take longer or exceed device memory.
 - Very large batches can take time and use battery. Keep the app open until batch export finishes.
@@ -63,6 +63,7 @@ The beta uses package `com.barshan.aiphotoeditor.beta`, labelled **FRAME AI Beta
 11. Visual-similarity grouping and safe removal from the selection — implemented in Beta 0.6.0; heuristic needs real-world validation
 12. Capture-time-based burst candidate grouping and safe keep-best action — implemented in Beta 1.0.0; needs validation across device metadata formats
 13. Choose a burst-candidate group and compare its top two photos side by side — implemented in Beta 1.2.0; needs usability testing on-device
+16. Direct drag-to-position crop window with slider fine adjustment — implemented in Beta 1.3.0; needs usability testing on-device
 14. Subject-aware ranking and personalized style learning
 15. Personalized style learning and smarter social export
 

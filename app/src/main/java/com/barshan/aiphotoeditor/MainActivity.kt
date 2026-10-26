@@ -133,6 +133,8 @@ private fun PhotoEditorHome() {
     var saturation by remember { mutableFloatStateOf(1.06f) }
     var warmth by remember { mutableFloatStateOf(0f) }
     var cropLabel by remember { mutableStateOf("Original") }
+    var cropOffsetX by remember { mutableFloatStateOf(0f) }
+    var cropOffsetY by remember { mutableFloatStateOf(0f) }
     var selectedStyle by remember { mutableStateOf("Auto") }
     var statusMessage by remember { mutableStateOf("Choose photos to begin. Analysis and edits run on this device.") }
 
@@ -167,7 +169,9 @@ private fun PhotoEditorHome() {
             "Story 9:16" -> 9f / 16f
             "Landscape 16:9" -> 16f / 9f
             else -> null
-        }
+        },
+        cropOffsetX = cropOffsetX,
+        cropOffsetY = cropOffsetY
     )
 
     fun setStyle(style: String) {
@@ -304,7 +308,7 @@ private fun PhotoEditorHome() {
     }
 
     // Debounced live preview: controls update the image without an Apply button.
-    LaunchedEffect(activePhoto?.uri, brightness, contrast, saturation, warmth, cropLabel) {
+    LaunchedEffect(activePhoto?.uri, brightness, contrast, saturation, warmth, cropLabel, cropOffsetX, cropOffsetY) {
         val photo = activePhoto
         if (photo != null) {
             delay(220)
@@ -390,7 +394,7 @@ private fun PhotoEditorHome() {
                         fontSize = 9.sp, letterSpacing = 1.1.sp)
                 }
                 Spacer(modifier = Modifier.weight(1f))
-                Text("BETA 0.7", color = Mint, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                Text("BETA 0.8", color = Mint, fontSize = 10.sp, fontWeight = FontWeight.Bold)
             }
 
             Spacer(modifier = Modifier.height(18.dp))
@@ -724,7 +728,23 @@ private fun PhotoEditorHome() {
                                 ) { Text(crop, fontSize = 10.sp) }
                             }
                         }
-                        Text("Crop is centered. Check the preview before exporting.", color = SoftText, fontSize = 10.sp)
+                        if (cropLabel != "Original") {
+                            Text("CROP HORIZONTAL  " + (cropOffsetX * 100).toInt() + "%", color = SoftText, fontSize = 11.sp)
+                            Slider(
+                                value = cropOffsetX,
+                                onValueChange = { cropOffsetX = it },
+                                valueRange = -1f..1f
+                            )
+                            Text("CROP VERTICAL  " + (cropOffsetY * 100).toInt() + "%", color = SoftText, fontSize = 11.sp)
+                            Slider(
+                                value = cropOffsetY,
+                                onValueChange = { cropOffsetY = it },
+                                valueRange = -1f..1f
+                            )
+                            Text("Move the crop window to keep your subject in frame.", color = SoftText, fontSize = 10.sp)
+                        } else {
+                            Text("Choose a crop ratio to reposition the crop window.", color = SoftText, fontSize = 10.sp)
+                        }
                         Spacer(modifier = Modifier.height(8.dp))
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -734,6 +754,8 @@ private fun PhotoEditorHome() {
                                 onClick = {
                                     setStyle("Auto")
                                     cropLabel = "Original"
+                                    cropOffsetX = 0f
+                                    cropOffsetY = 0f
                                 },
                                 shape = RoundedCornerShape(10.dp),
                                 colors = ButtonDefaults.buttonColors(

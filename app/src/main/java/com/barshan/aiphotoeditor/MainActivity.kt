@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -296,6 +297,12 @@ private fun PhotoEditorHome() {
         resetPreviewZoom()
     }
 
+    // Android system Back returns to the current batch instead of exiting the editor.
+    BackHandler(enabled = activePhoto != null) {
+        activePhoto = null
+        resetPreviewZoom()
+    }
+
     // Debounced live preview: controls update the image without an Apply button.
     LaunchedEffect(activePhoto?.uri, brightness, contrast, saturation, warmth, cropLabel) {
         val photo = activePhoto
@@ -383,7 +390,7 @@ private fun PhotoEditorHome() {
                         fontSize = 9.sp, letterSpacing = 1.1.sp)
                 }
                 Spacer(modifier = Modifier.weight(1f))
-                Text("BETA 0.6", color = Mint, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                Text("BETA 0.7", color = Mint, fontSize = 10.sp, fontWeight = FontWeight.Bold)
             }
 
             Spacer(modifier = Modifier.height(18.dp))
@@ -590,6 +597,43 @@ private fun PhotoEditorHome() {
                             Text("Technical score: " + current.score + "/100  •  " + current.note,
                                 color = SoftText, fontSize = 11.sp,
                                 modifier = Modifier.padding(top = 7.dp))
+                        }
+                        val activeIndex = selectedPhotos.indexOfFirst { it.uri == activePhoto?.uri }
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Button(
+                                onClick = {
+                                    if (activeIndex > 0) openEditor(selectedPhotos[activeIndex - 1])
+                                },
+                                enabled = activeIndex > 0 && !isExporting,
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(10.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = Color(0xFF293333), contentColor = BrightText
+                                ),
+                                contentPadding = PaddingValues(horizontal = 5.dp)
+                            ) { Text("← Previous", fontSize = 11.sp) }
+                            Text(
+                                if (activeIndex >= 0) "${activeIndex + 1} / ${selectedPhotos.size}" else "",
+                                color = SoftText, fontSize = 11.sp,
+                                modifier = Modifier.align(Alignment.CenterVertically)
+                            )
+                            Button(
+                                onClick = {
+                                    if (activeIndex >= 0 && activeIndex < selectedPhotos.lastIndex) {
+                                        openEditor(selectedPhotos[activeIndex + 1])
+                                    }
+                                },
+                                enabled = activeIndex >= 0 && activeIndex < selectedPhotos.lastIndex && !isExporting,
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(10.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = Color(0xFF293333), contentColor = BrightText
+                                ),
+                                contentPadding = PaddingValues(horizontal = 5.dp)
+                            ) { Text("Next →", fontSize = 11.sp) }
                         }
                         Spacer(modifier = Modifier.height(9.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

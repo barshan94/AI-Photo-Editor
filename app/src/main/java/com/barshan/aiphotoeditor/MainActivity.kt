@@ -413,7 +413,7 @@ private fun PhotoEditorHome() {
     }
 
     // Debounced live preview: controls update the image without an Apply button.
-    LaunchedEffect(activePhoto?.uri, brightness, contrast, saturation, warmth, cropLabel, cropOffsetX, cropOffsetY) {
+    LaunchedEffect(activePhoto?.uri, brightness, contrast, saturation, warmth, cropLabel, cropOffsetX, cropOffsetY, selectedStyle) {
         val photo = activePhoto
         if (photo != null) {
             delay(220)
@@ -421,18 +421,27 @@ private fun PhotoEditorHome() {
             val settings = currentSettings()
             var original: Bitmap? = null
             var adjusted: Bitmap? = null
+            var aiNotice: String? = null
             try {
                 original = withContext(Dispatchers.IO) {
                     AutoEnhancer.decodeForEditing(context.contentResolver, photo.uri, maxDimension = 1800)
                 }
-                adjusted = withContext(Dispatchers.Default) {
-                    AutoEnhancer.enhance(original!!, settings)
+                if (selectedStyle == "AI Portrait") {
+                    val aiResult = SubjectAwareEnhancer.enhance(original!!, settings)
+                    adjusted = aiResult.bitmap
+                    aiNotice = aiResult.message
+                } else {
+                    adjusted = withContext(Dispatchers.Default) {
+                        AutoEnhancer.enhance(original!!, settings)
+                    }
                 }
                 previewBitmap?.let { if (!it.isRecycled) it.recycle() }
                 previewBitmap = adjusted
                 adjusted = null
                 showEnhanced = true
-                statusMessage = "Live preview updated. Export a copy when you're happy."
+                statusMessage = aiNotice ?: if (selectedStyle == "AI Portrait") {
+                    "AI Portrait enhancement applied using on-device person segmentation."
+                } else "Live preview updated. Export a copy when you're happy."
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {
@@ -445,26 +454,35 @@ private fun PhotoEditorHome() {
         }
     }
 
-    fun exportOne(photo: PhotoItem, settings: EditSettings) {
+    fun exportOne(photo: PhotoItem, settings: EditSettings, useAiPortrait: Boolean = false) {
         if (isExporting) return
         isExporting = true
         statusMessage = "Rendering full-resolution export…"
         scope.launch {
             var original: Bitmap? = null
             var enhanced: Bitmap? = null
+            var aiNotice: String? = null
             try {
                 original = withContext(Dispatchers.IO) {
                     AutoEnhancer.decodeForEditing(context.contentResolver, photo.uri, maxDimension = Int.MAX_VALUE)
                 }
-                enhanced = withContext(Dispatchers.Default) {
-                    AutoEnhancer.enhance(original!!, settings)
+                if (useAiPortrait) {
+                    val aiResult = SubjectAwareEnhancer.enhance(original!!, settings)
+                    enhanced = aiResult.bitmap
+                    aiNotice = aiResult.message
+                } else {
+                    enhanced = withContext(Dispatchers.Default) {
+                        AutoEnhancer.enhance(original!!, settings)
+                    }
                 }
                 val width = enhanced!!.width
                 val height = enhanced!!.height
                 withContext(Dispatchers.IO) {
                     AutoEnhancer.saveJpeg(context.contentResolver, enhanced!!)
                 }
-                statusMessage = "Saved full-resolution " + width + "x" + height +
+                statusMessage = (aiNotice?.let { "$it " } ?: if (useAiPortrait) {
+                    "AI Portrait enhancement applied. "
+                } else "") + "Saved full-resolution " + width + "x" + height +
                     " copy to Pictures/FRAME AI. Original untouched."
             } catch (error: CancellationException) {
                 statusMessage = "Export cancelled. No original photo was changed."
@@ -504,7 +522,7 @@ private fun PhotoEditorHome() {
                         fontSize = 9.sp, letterSpacing = 1.1.sp)
                 }
                 Spacer(modifier = Modifier.weight(1f))
-                Text("BETA 1.10", color = Mint, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                Text("BETA 2.0", color = Mint, fontSize = 10.sp, fontWeight = FontWeight.Bold)
             }
 
             Spacer(modifier = Modifier.height(18.dp))
@@ -535,9 +553,11 @@ private fun PhotoEditorHome() {
                             exportProgress = 0
                             statusMessage = "Enhancing and exporting the batch…"
                             val settingsForBatch = if (batchPreset == "Current edits") currentSettings() else BatchExportPolicy.settingsForPreset(batchPreset)
+                            val useAiPortrait = batchPreset == "AI Portrait"
                             scope.launch {
                                 var succeeded = 0
                                 var failed = 0
+                                var aiFallbacks = 0
                                 val failedNames = mutableListOf<String>()
                                 val batch = selectedPhotos.filter { it.decision != "Reject" }
                                 val skipped = selectedPhotos.size - batch.size
@@ -552,8 +572,14 @@ private fun PhotoEditorHome() {
                                                     context.contentResolver, photo.uri, maxDimension = Int.MAX_VALUE
                                                 )
                                             }
-                                            enhanced = withContext(Dispatchers.Default) {
-                                                AutoEnhancer.enhance(original!!, settingsForBatch)
+                                            if (useAiPortrait) {
+                                                val aiResult = SubjectAwareEnhancer.enhance(original!!, settingsForBatch)
+                                                enhanced = aiResult.bitmap
+                                                if (!aiResult.usedAi) aiFallbacks++
+                                            } else {
+                                                enhanced = withContext(Dispatchers.Default) {
+                                                    AutoEnhancer.enhance(original!!, settingsForBatch)
+                                                }
                                             }
                                             withContext(Dispatchers.IO) {
                                                 AutoEnhancer.saveJpeg(context.contentResolver, enhanced!!)
@@ -575,7 +601,8 @@ private fun PhotoEditorHome() {
                                         exportProgress = index + 1
                                         statusMessage = BatchExportPolicy.progressLabel(index + 1, batch.size, succeeded, failed)
                                     }
-                                    batchSummary = BatchExportPolicy.summary(succeeded, failed, skipped, batchPreset, failedNames)
+                                    batchSummary = BatchExportPolicy.summary(succeeded, failed, skipped, batchPreset, failedNames) +
+                                        if (aiFallbacks > 0) "\nAI fallback used for $aiFallbacks photo(s) because person segmentation was unavailable." else ""
                                     statusMessage = (batchSummary ?: "Batch export finished.") + " Originals are untouched."
                                 } finally {
                                     isExporting = false
@@ -1127,7 +1154,7 @@ private fun PhotoEditorHome() {
                             Button(
                                 onClick = {
                                     val photo = activePhoto
-                                    if (photo != null) exportOne(photo, currentSettings())
+                                    if (photo != null) exportOne(photo, currentSettings(), selectedStyle == "AI Portrait")
                                 },
                                 enabled = previewBitmap != null && !isExporting,
                                 modifier = Modifier.weight(1f),
@@ -1152,7 +1179,7 @@ private fun PhotoEditorHome() {
                             modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
-                            listOf("Auto", "Natural", "Vivid", "Warm", "Cool", "Mono").forEach { style ->
+                            listOf("Auto", "Natural", "Vivid", "Warm", "Cool", "Mono", "AI Portrait").forEach { style ->
                                 Button(
                                     onClick = { setStyle(style) },
                                     shape = RoundedCornerShape(10.dp),

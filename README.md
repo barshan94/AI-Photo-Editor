@@ -6,6 +6,7 @@ A native Android photo editor focused on batch workflows. It runs locally on the
 
 - Import multiple images with Android's document picker.
 - Score technical quality using estimated sharpness, exposure, contrast, and clipped highlights/shadows; sort higher scores first.
+- Detect byte-identical duplicate files in the selected batch and optionally remove duplicates from the current selection without deleting anything from the phone.
 - Tap any photo to open the editing workspace.
 - Apply style presets: Auto, Natural, Vivid, Warm, Cool, and Mono; the preview updates automatically after a short debounce.
 - Adjust brightness, contrast, saturation, and warmth using sliders; changes appear live without tapping Apply.
@@ -49,7 +50,8 @@ The beta uses package `com.barshan.aiphotoeditor.beta`, labelled **FRAME AI Beta
 4. Manual sliders, creative presets, and social crop ratios — implemented in this milestone
 5. Full-resolution export and maximum-quality JPEG output — implemented in Beta 0.5.0
 6. Validate edits across different phone photos; improve color/exposure algorithms
-7. Duplicate/burst grouping and subject-aware ranking
-8. Personalized style learning and smarter social export
+7. Exact duplicate file detection and safe removal from the selection — implemented in Beta 0.5.0
+8. Near-duplicate/burst grouping and subject-aware ranking
+9. Personalized style learning and smarter social export
 
 The current editor does not claim to have a trained AI model. This milestone builds reliable controls and export behavior first; subject-aware intelligence and personalized learning come later.

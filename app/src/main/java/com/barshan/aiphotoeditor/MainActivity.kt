@@ -20,6 +20,9 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -40,11 +43,13 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -106,7 +111,65 @@ private fun PhotoEditorHome() {
     var previewBitmap by remember { mutableStateOf<Bitmap?>(null) }
     var isPreparingPreview by remember { mutableStateOf(false) }
     var showEnhanced by remember { mutableStateOf(true) }
+    var brightness by remember { mutableFloatStateOf(0f) }
+    var contrast by remember { mutableFloatStateOf(1.07f) }
+    var saturation by remember { mutableFloatStateOf(1.06f) }
+    var warmth by remember { mutableFloatStateOf(0f) }
+    var cropLabel by remember { mutableStateOf("Original") }
+    var selectedStyle by remember { mutableStateOf("Auto") }
     var statusMessage by remember { mutableStateOf("Choose photos to begin. Analysis and edits run on this device.") }
+
+    fun currentSettings(): EditSettings = EditSettings(
+        brightness = brightness,
+        contrast = contrast,
+        saturation = saturation,
+        warmth = warmth,
+        cropRatio = when (cropLabel) {
+            "Square" -> 1f
+            "Portrait 4:5" -> 4f / 5f
+            "Story 9:16" -> 9f / 16f
+            "Landscape 16:9" -> 16f / 9f
+            else -> null
+        }
+    )
+
+    fun setStyle(style: String) {
+        selectedStyle = style
+        when (style) {
+            "Natural" -> { brightness = 0f; contrast = 1.03f; saturation = 1.02f; warmth = 0f }
+            "Vivid" -> { brightness = 0f; contrast = 1.13f; saturation = 1.28f; warmth = 0f }
+            "Warm" -> { brightness = 2f; contrast = 1.06f; saturation = 1.08f; warmth = 12f }
+            "Cool" -> { brightness = 0f; contrast = 1.05f; saturation = 1.04f; warmth = -10f }
+            "Mono" -> { brightness = 0f; contrast = 1.10f; saturation = 0f; warmth = 0f }
+            else -> { brightness = 0f; contrast = 1.07f; saturation = 1.06f; warmth = 0f }
+        }
+    }
+
+    fun applyCurrentSettings() {
+        val photo = activePhoto ?: return
+        isPreparingPreview = true
+        statusMessage = "Applying " + selectedStyle + " adjustments…"
+        scope.launch {
+            var original: Bitmap? = null
+            try {
+                original = withContext(Dispatchers.IO) {
+                    AutoEnhancer.decodeForEditing(context.contentResolver, photo.uri)
+                }
+                val adjusted = withContext(Dispatchers.Default) {
+                    AutoEnhancer.enhance(original!!, currentSettings())
+                }
+                previewBitmap?.let { if (!it.isRecycled) it.recycle() }
+                previewBitmap = adjusted
+                showEnhanced = true
+                statusMessage = "Edits applied. Export a copy or adjust more."
+            } catch (error: Exception) {
+                statusMessage = "Edit failed: " + (error.message ?: "unknown error")
+            } finally {
+                original?.let { if (!it.isRecycled) it.recycle() }
+                isPreparingPreview = false
+            }
+        }
+    }
 
     val photoPicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenMultipleDocuments()
@@ -179,8 +242,9 @@ private fun PhotoEditorHome() {
                 val original = withContext(Dispatchers.IO) {
                     AutoEnhancer.decodeForEditing(context.contentResolver, photo.uri)
                 }
-                val enhanced = withContext(Dispatchers.Default) { AutoEnhancer.enhance(original) }
+                val enhanced = withContext(Dispatchers.Default) { AutoEnhancer.enhance(original, currentSettings()) }
                 original.recycle()
+                previewBitmap?.let { if (!it.isRecycled) it.recycle() }
                 previewBitmap = enhanced
                 isPreparingPreview = false
                 statusMessage = "Preview ready. The original photo has not been changed."
@@ -232,7 +296,7 @@ private fun PhotoEditorHome() {
                         fontSize = 9.sp, letterSpacing = 1.1.sp)
                 }
                 Spacer(modifier = Modifier.weight(1f))
-                Text("BETA 0.2", color = Mint, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                Text("BETA 0.3", color = Mint, fontSize = 10.sp, fontWeight = FontWeight.Bold)
             }
 
             Spacer(modifier = Modifier.height(18.dp))
@@ -272,7 +336,7 @@ private fun PhotoEditorHome() {
                                             AutoEnhancer.decodeForEditing(context.contentResolver, photo.uri)
                                         }
                                         val enhanced = withContext(Dispatchers.Default) {
-                                            AutoEnhancer.enhance(original)
+                                            AutoEnhancer.enhance(original, currentSettings())
                                         }
                                         original.recycle()
                                         withContext(Dispatchers.IO) {
@@ -327,11 +391,11 @@ private fun PhotoEditorHome() {
             if (activePhoto != null) {
                 Spacer(modifier = Modifier.height(12.dp))
                 Card(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().weight(1f),
                     shape = RoundedCornerShape(20.dp),
                     colors = CardDefaults.cardColors(containerColor = Panel)
                 ) {
-                    Column(modifier = Modifier.padding(12.dp)) {
+                    Column(modifier = Modifier.padding(12.dp).verticalScroll(rememberScrollState())) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text("EDIT PREVIEW", color = BrightText, fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp)
@@ -392,13 +456,84 @@ private fun PhotoEditorHome() {
                                 Text("Export copy", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                             }
                         }
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text("STYLE PRESETS", color = BrightText, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        Row(
+                            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            listOf("Auto", "Natural", "Vivid", "Warm", "Cool", "Mono").forEach { style ->
+                                Button(
+                                    onClick = { setStyle(style) },
+                                    shape = RoundedCornerShape(10.dp),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = if (selectedStyle == style) Mint else Color(0xFF293333),
+                                        contentColor = if (selectedStyle == style) Ink else BrightText
+                                    ),
+                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 2.dp)
+                                ) { Text(style, fontSize = 11.sp) }
+                            }
+                        }
+                        Text("BRIGHTNESS  " + brightness.toInt(), color = SoftText, fontSize = 11.sp)
+                        Slider(value = brightness, onValueChange = {
+                            brightness = it
+                            selectedStyle = "Custom"
+                        }, valueRange = -25f..25f)
+                        Text("CONTRAST  " + String.format(java.util.Locale.US, "%.2f", contrast),
+                            color = SoftText, fontSize = 11.sp)
+                        Slider(value = contrast, onValueChange = {
+                            contrast = it
+                            selectedStyle = "Custom"
+                        }, valueRange = 0.75f..1.40f)
+                        Text("SATURATION  " + String.format(java.util.Locale.US, "%.2f", saturation),
+                            color = SoftText, fontSize = 11.sp)
+                        Slider(value = saturation, onValueChange = {
+                            saturation = it
+                            selectedStyle = "Custom"
+                        }, valueRange = 0f..1.65f)
+                        Text("WARMTH  " + warmth.toInt(), color = SoftText, fontSize = 11.sp)
+                        Slider(value = warmth, onValueChange = {
+                            warmth = it
+                            selectedStyle = "Custom"
+                        }, valueRange = -24f..24f)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text("CROP FOR", color = BrightText, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        Row(
+                            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            listOf("Original", "Square", "Portrait 4:5", "Story 9:16", "Landscape 16:9").forEach { crop ->
+                                Button(
+                                    onClick = { cropLabel = crop },
+                                    shape = RoundedCornerShape(10.dp),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = if (cropLabel == crop) Mint else Color(0xFF293333),
+                                        contentColor = if (cropLabel == crop) Ink else BrightText
+                                    ),
+                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp)
+                                ) { Text(crop, fontSize = 10.sp) }
+                            }
+                        }
+                        Text("Crop is centered. Check the preview before exporting.", color = SoftText, fontSize = 10.sp)
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Button(
+                            onClick = { applyCurrentSettings() },
+                            enabled = !isPreparingPreview && !isExporting,
+                            modifier = Modifier.fillMaxWidth().height(46.dp),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Ink)
+                        ) {
+                            androidx.compose.material3.Icon(Icons.Rounded.Tune, contentDescription = null)
+                            Text("  Apply adjustments", fontWeight = FontWeight.Bold)
+                        }
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(10.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(if (selectedPhotos.isEmpty()) "YOUR WORKSPACE" else "BEST SHOTS FIRST",
+            if (activePhoto == null) {
+                Spacer(modifier = Modifier.height(10.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(if (selectedPhotos.isEmpty()) "YOUR WORKSPACE" else "BEST SHOTS FIRST",
                     color = BrightText, fontSize = 12.sp, fontWeight = FontWeight.Bold,
                     letterSpacing = 0.8.sp)
                 Spacer(modifier = Modifier.weight(1f))
@@ -409,8 +544,9 @@ private fun PhotoEditorHome() {
                 color = SoftText, fontSize = 10.sp, lineHeight = 14.sp,
                 modifier = Modifier.padding(top = 3.dp, bottom = 7.dp)
             )
+            }
 
-            if (selectedPhotos.isEmpty()) {
+            if (activePhoto == null && selectedPhotos.isEmpty()) {
                 Box(
                     modifier = Modifier.weight(1f).fillMaxWidth()
                         .clip(RoundedCornerShape(20.dp)).background(Color(0xFF151A1A)),
@@ -427,7 +563,7 @@ private fun PhotoEditorHome() {
                             color = SoftText, fontSize = 12.sp, lineHeight = 18.sp)
                     }
                 }
-            } else {
+            } else if (activePhoto == null) {
                 LazyVerticalGrid(
                     columns = GridCells.Fixed(3),
                     modifier = Modifier.weight(1f),

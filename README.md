@@ -2,7 +2,15 @@
 
 A native Android photo editor focused on batch workflows. It runs locally on the device; no website, account, backend, or Vercel deployment is required.
 
-## Current milestone: photo triage and decision filters (Beta 1.5.0)
+## Current milestone: professional editing controls (Beta 1.6.0)
+
+- Before/after comparison view with an adjustable reveal slider.
+- Undo and redo for editing settings, including style, tone, and crop controls.
+- Rule-of-thirds crop guides can be toggled on and off.
+- Existing presets, crop positioning, and non-destructive export remain available.
+- Comparison and guide overlays are preview-only; they are not burned into exported images.
+
+## Previous milestone: photo triage and decision filters (Beta 1.5.0)
 
 - Give each photo a personal **Keep**, **Review**, or **Reject** decision from the editor; the default is Review.
 - Filter the grid by decision, visually similar/exact duplicates, or burst candidates, and see live counts for each decision.
@@ -74,6 +82,7 @@ The beta uses package `com.barshan.aiphotoeditor.beta`, labelled **FRAME AI Beta
 16. Direct drag-to-position crop window with slider fine adjustment — implemented in Beta 1.3.0; needs usability testing on-device
 17. Prevent over-grouping burst candidates caused by chains of adjacent timestamps — implemented in Beta 1.4.0; needs validation on real photo batches
 18. Per-photo Keep / Review / Reject triage, decision filters, batch export skipping rejected items, and score breakdown — implemented in Beta 1.5.0; needs usability testing on-device
+19. Before/after reveal slider, edit undo/redo, and toggleable rule-of-thirds crop guides — implemented in Beta 1.6.0; needs usability testing on-device
 14. Subject-aware ranking and personalized style learning
 15. Personalized style learning and smarter social export
 

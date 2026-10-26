@@ -2,7 +2,15 @@
 
 A native Android photo editor focused on batch workflows. It runs locally on the device; no website, account, backend, or Vercel deployment is required.
 
-## Current milestone: professional editing controls (Beta 1.6.0)
+## Current milestone: reviewed batch editing and export (Beta 1.7.0)
+
+- Choose a batch-wide preset: Current edits, Auto, Natural, Vivid, Warm, Cool, or Mono.
+- Preview a representative eligible photo with the chosen batch preset before exporting.
+- Review how many photos will be exported and how many marked Reject will be skipped.
+- Export progress updates as each photo is processed; a completion summary reports saved, failed, and skipped counts plus up to five failed items.
+- Exports remain full-resolution JPEG copies in Pictures/FRAME AI; source photos are never overwritten.
+
+## Previous milestone: professional editing controls (Beta 1.6.0)
 
 - Before/after comparison view with an adjustable reveal slider.
 - Undo and redo for editing settings, including style, tone, and crop controls.
@@ -83,6 +91,7 @@ The beta uses package `com.barshan.aiphotoeditor.beta`, labelled **FRAME AI Beta
 17. Prevent over-grouping burst candidates caused by chains of adjacent timestamps — implemented in Beta 1.4.0; needs validation on real photo batches
 18. Per-photo Keep / Review / Reject triage, decision filters, batch export skipping rejected items, and score breakdown — implemented in Beta 1.5.0; needs usability testing on-device
 19. Before/after reveal slider, edit undo/redo, and toggleable rule-of-thirds crop guides — implemented in Beta 1.6.0; needs usability testing on-device
+20. Batch-wide preset selection, sample preview, progress and export summary — implemented in Beta 1.7.0; needs real-device usability testing
 14. Subject-aware ranking and personalized style learning
 15. Personalized style learning and smarter social export
 

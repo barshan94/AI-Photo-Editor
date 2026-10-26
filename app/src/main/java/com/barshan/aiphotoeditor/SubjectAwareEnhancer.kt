@@ -86,10 +86,13 @@ object SubjectAwareEnhancer {
                         val width = mask.width
                         val height = mask.height
                         val count = width * height
-                        val values = FloatArray(count)
+                        val bytes = ByteArray(count)
                         val buffer = mask.buffer.duplicate()
                         buffer.rewind()
-                        buffer.get(values)
+                        buffer.get(bytes)
+                        val values = FloatArray(count) { index ->
+                            (bytes[index].toInt() and 0xFF) / 255f
+                        }
                         continuation.resume(PersonMask(width, height, values))
                     } catch (error: Exception) {
                         continuation.resumeWithException(error)

@@ -52,12 +52,7 @@ internal object PhotoAnalysisEngine {
             val faces = detector.process(input).awaitResult()
             val brightness = estimateBrightness(bitmap)
             val faceCount = faces.size
-            val subjectSummary = when (faceCount) {
-                0 -> "No clear face detected. This may be a landscape, object, animal, or a photo where faces are not visible."
-                1 -> "One face detected — likely a single-person or portrait candidate."
-                2 -> "Two faces detected — could be a couple, friends, or a small group. The model cannot infer their relationship."
-                else -> "$faceCount faces detected — group-photo candidate. Check that every face stays inside the crop."
-            }
+            val subjectSummary = summarizeFaceCount(faceCount)
 
             val lightingSummary = when {
                 brightness < 62 -> "The sampled image looks dark. Check shadow detail and exposure before adding contrast."

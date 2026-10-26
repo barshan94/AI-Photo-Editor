@@ -92,6 +92,8 @@ private data class PhotoItem(
     val note: String = "Waiting for analysis",
     val fingerprint: String? = null,
     val visualFingerprint: Long? = null,
+    val captureTimeMillis: Long? = null,
+    val burstGroupId: Long? = null,
     val isExactDuplicate: Boolean = false,
     val isNearDuplicate: Boolean = false
 )
@@ -236,6 +238,13 @@ private fun PhotoEditorHome() {
                                     }
                                 } catch (_: Exception) {
                                     null
+                                },
+                                captureTimeMillis = try {
+                                    withContext(Dispatchers.IO) {
+                                        PhotoQualityAnalyzer.captureTimeMillis(context.contentResolver, uri)
+                                    }
+                                } catch (_: Exception) {
+                                    null
                                 }
                             )
                         }
@@ -259,6 +268,33 @@ private fun PhotoEditorHome() {
                         )
                     }
                 }
+                // Cluster photos whose recorded capture times are within two seconds.
+                // These are burst candidates, not guaranteed camera burst sequences.
+                val chronological = selectedPhotos.mapIndexedNotNull { index, photo ->
+                    photo.captureTimeMillis?.let { timestamp -> index to timestamp }
+                }.sortedBy { it.second }
+                var burstMembers = mutableListOf<Pair<Int, Long>>()
+                var previousCaptureTime: Long? = null
+                fun markBurstMembers() {
+                    if (burstMembers.size >= 2) {
+                        val groupId = burstMembers.first().second
+                        burstMembers.forEach { member ->
+                            val current = selectedPhotos[member.first]
+                            selectedPhotos[member.first] = current.copy(burstGroupId = groupId)
+                        }
+                    }
+                    burstMembers = mutableListOf()
+                }
+                for (entry in chronological) {
+                    val previous = previousCaptureTime
+                    if (previous != null && entry.second - previous > 2_000L) {
+                        markBurstMembers()
+                    }
+                    burstMembers.add(entry)
+                    previousCaptureTime = entry.second
+                }
+                markBurstMembers()
+
                 // Rank first, then compare against higher-scoring representatives.
                 // This makes "remove visually similar" keep the strongest technical shot,
                 // rather than whichever file happened to be selected first.
@@ -398,7 +434,7 @@ private fun PhotoEditorHome() {
                         fontSize = 9.sp, letterSpacing = 1.1.sp)
                 }
                 Spacer(modifier = Modifier.weight(1f))
-                Text("BETA 0.9", color = Mint, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                Text("BETA 1.0", color = Mint, fontSize = 10.sp, fontWeight = FontWeight.Bold)
             }
 
             Spacer(modifier = Modifier.height(18.dp))
@@ -479,6 +515,9 @@ private fun PhotoEditorHome() {
 
             val exactDuplicateCount = selectedPhotos.count { it.isExactDuplicate }
             val nearDuplicateCount = selectedPhotos.count { it.isNearDuplicate }
+            val burstGroups = selectedPhotos.filter { it.burstGroupId != null }
+                .groupBy { it.burstGroupId }
+            val burstExtraCount = burstGroups.values.sumOf { group -> (group.size - 1).coerceAtLeast(0) }
             if (activePhoto == null && exactDuplicateCount > 0) {
                 Button(
                     onClick = {
@@ -493,6 +532,29 @@ private fun PhotoEditorHome() {
                         containerColor = Color(0xFF293333), contentColor = Mint
                     )
                 ) { Text("Remove " + exactDuplicateCount + " exact duplicate(s)") }
+            }
+
+            if (activePhoto == null && burstExtraCount > 0) {
+                Button(
+                    onClick = {
+                        val keepUris = burstGroups.values.mapNotNull { group ->
+                            group.maxByOrNull { it.score ?: -1 }?.uri
+                        }.toSet()
+                        val removeUris = burstGroups.values.flatten()
+                            .filter { it.uri !in keepUris }
+                            .map { it.uri }
+                            .toSet()
+                        selectedPhotos.removeAll { it.uri in removeUris }
+                        statusMessage = "Kept the highest-scoring photo in each time-based burst candidate set. Removed " +
+                            removeUris.size + " item(s) from this selection only; originals are untouched."
+                    },
+                    enabled = !isAnalyzing && !isExporting,
+                    modifier = Modifier.fillMaxWidth().padding(top = 5.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFF293333), contentColor = Mint
+                    )
+                ) { Text("Keep best from burst candidates · remove " + burstExtraCount) }
             }
 
             if (activePhoto == null && nearDuplicateCount > 0) {
@@ -848,6 +910,11 @@ private fun PhotoEditorHome() {
                             }
                             if (photo.isNearDuplicate) {
                                 Text("SIMILAR · LOWER SCORE", color = Color(0xFF9CC8FF),
+                                    fontSize = 8.sp, fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(top = 3.dp, start = 2.dp))
+                            }
+                            if (photo.burstGroupId != null) {
+                                Text("BURST CANDIDATE", color = Color(0xFFFFC078),
                                     fontSize = 8.sp, fontWeight = FontWeight.Bold,
                                     modifier = Modifier.padding(top = 3.dp, start = 2.dp))
                             }

@@ -10,6 +10,8 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.rememberTransformableState
+import androidx.compose.foundation.gestures.transformable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -60,6 +62,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -114,6 +118,11 @@ private fun PhotoEditorHome() {
     var exportProgress by remember { mutableIntStateOf(0) }
     var activePhoto by remember { mutableStateOf<PhotoItem?>(null) }
     var previewBitmap by remember { mutableStateOf<Bitmap?>(null) }
+    var previewScale by remember { mutableFloatStateOf(1f) }
+    var previewOffsetX by remember { mutableFloatStateOf(0f) }
+    var previewOffsetY by remember { mutableFloatStateOf(0f) }
+    var previewWidthPx by remember { mutableIntStateOf(0) }
+    var previewHeightPx by remember { mutableIntStateOf(0) }
     var isPreparingPreview by remember { mutableStateOf(false) }
     var showEnhanced by remember { mutableStateOf(true) }
     var brightness by remember { mutableFloatStateOf(0f) }
@@ -123,6 +132,26 @@ private fun PhotoEditorHome() {
     var cropLabel by remember { mutableStateOf("Original") }
     var selectedStyle by remember { mutableStateOf("Auto") }
     var statusMessage by remember { mutableStateOf("Choose photos to begin. Analysis and edits run on this device.") }
+
+    val previewTransformState = rememberTransformableState { zoomChange, panChange, _ ->
+        val nextScale = (previewScale * zoomChange).coerceIn(1f, 5f)
+        previewScale = nextScale
+        if (nextScale <= 1.001f) {
+            previewOffsetX = 0f
+            previewOffsetY = 0f
+        } else {
+            val maxX = previewWidthPx * (nextScale - 1f) / 2f
+            val maxY = previewHeightPx * (nextScale - 1f) / 2f
+            previewOffsetX = (previewOffsetX + panChange.x).coerceIn(-maxX, maxX)
+            previewOffsetY = (previewOffsetY + panChange.y).coerceIn(-maxY, maxY)
+        }
+    }
+
+    fun resetPreviewZoom() {
+        previewScale = 1f
+        previewOffsetX = 0f
+        previewOffsetY = 0f
+    }
 
     fun currentSettings(): EditSettings = EditSettings(
         brightness = brightness,
@@ -229,12 +258,17 @@ private fun PhotoEditorHome() {
     }
 
     fun openEditor(photo: PhotoItem) {
+        resetPreviewZoom()
         activePhoto = photo
         previewBitmap?.let { if (!it.isRecycled) it.recycle() }
         previewBitmap = null
         showEnhanced = true
         isPreparingPreview = true
         statusMessage = "Preparing live preview…"
+    }
+
+    LaunchedEffect(activePhoto?.uri) {
+        resetPreviewZoom()
     }
 
     // Debounced live preview: controls update the image without an Apply button.
@@ -248,7 +282,7 @@ private fun PhotoEditorHome() {
             var adjusted: Bitmap? = null
             try {
                 original = withContext(Dispatchers.IO) {
-                    AutoEnhancer.decodeForEditing(context.contentResolver, photo.uri, maxDimension = Int.MAX_VALUE)
+                    AutoEnhancer.decodeForEditing(context.contentResolver, photo.uri, maxDimension = 1800)
                 }
                 adjusted = withContext(Dispatchers.Default) {
                     AutoEnhancer.enhance(original!!, settings)
@@ -324,7 +358,7 @@ private fun PhotoEditorHome() {
                         fontSize = 9.sp, letterSpacing = 1.1.sp)
                 }
                 Spacer(modifier = Modifier.weight(1f))
-                Text("BETA 0.5", color = Mint, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                Text("BETA 0.6", color = Mint, fontSize = 10.sp, fontWeight = FontWeight.Bold)
             }
 
             Spacer(modifier = Modifier.height(18.dp))
@@ -466,21 +500,48 @@ private fun PhotoEditorHome() {
                         }
                         Spacer(modifier = Modifier.height(8.dp))
                         Box(
-                            modifier = Modifier.fillMaxWidth().height(180.dp)
-                                .clip(RoundedCornerShape(14.dp)).background(Ink),
+                            modifier = Modifier.fillMaxWidth().height(220.dp)
+                                .clip(RoundedCornerShape(14.dp)).background(Ink)
+                                .onSizeChanged { size ->
+                                    previewWidthPx = size.width
+                                    previewHeightPx = size.height
+                                }
+                                .transformable(state = previewTransformState),
                             contentAlignment = Alignment.Center
                         ) {
                             val active = activePhoto
                             if (active != null) {
                                 if (showEnhanced && previewBitmap != null) {
                                     AsyncImage(model = previewBitmap, contentDescription = "Enhanced preview",
-                                        modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
+                                        modifier = Modifier.fillMaxSize().graphicsLayer {
+                                            scaleX = previewScale
+                                            scaleY = previewScale
+                                            translationX = previewOffsetX
+                                            translationY = previewOffsetY
+                                        }, contentScale = ContentScale.Fit)
                                 } else {
                                     AsyncImage(model = active.uri, contentDescription = "Original photo",
-                                        modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
+                                        modifier = Modifier.fillMaxSize().graphicsLayer {
+                                            scaleX = previewScale
+                                            scaleY = previewScale
+                                            translationX = previewOffsetX
+                                            translationY = previewOffsetY
+                                        }, contentScale = ContentScale.Fit)
                                 }
                             }
                             if (isPreparingPreview) CircularProgressIndicator(color = Mint)
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(top = 5.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("Pinch to zoom · drag to move", color = SoftText, fontSize = 10.sp)
+                            Spacer(modifier = Modifier.weight(1f))
+                            if (previewScale > 1.01f) {
+                                Text("Reset zoom", color = Mint, fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.clickable { resetPreviewZoom() }.padding(4.dp))
+                            }
                         }
                         val current = activePhoto
                         if (current != null && current.score != null) {

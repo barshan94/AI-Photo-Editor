@@ -4,6 +4,10 @@ import android.content.ContentResolver
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
+import android.provider.MediaStore
+import androidx.exifinterface.media.ExifInterface
+import java.text.SimpleDateFormat
+import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.ln
 import kotlin.math.sqrt
@@ -111,6 +115,52 @@ object PhotoQualityAnalyzer {
         }
     }
 
+
+    /**
+     * Reads the photo's capture timestamp from MediaStore when available, then EXIF.
+     * Returns null when the provider/file has no trustworthy capture-time metadata.
+     */
+    fun captureTimeMillis(resolver: ContentResolver, uri: Uri): Long? {
+        try {
+            resolver.query(
+                uri,
+                arrayOf(MediaStore.Images.ImageColumns.DATE_TAKEN),
+                null,
+                null,
+                null
+            )?.use { cursor ->
+                if (cursor.moveToFirst() && !cursor.isNull(0)) {
+                    val timestamp = cursor.getLong(0)
+                    if (timestamp > 0L) return timestamp
+                }
+            }
+        } catch (_: Exception) {
+            // SAF providers do not always expose MediaStore columns.
+        }
+
+        return try {
+            val input = resolver.openInputStream(uri) ?: return null
+            input.use { stream ->
+                val exif = ExifInterface(stream)
+                val date = exif.getAttribute(ExifInterface.TAG_DATETIME_ORIGINAL)
+                    ?: exif.getAttribute(ExifInterface.TAG_DATETIME)
+                    ?: return null
+                val offset = exif.getAttribute(ExifInterface.TAG_OFFSET_TIME_ORIGINAL)
+                    ?: exif.getAttribute(ExifInterface.TAG_OFFSET_TIME)
+                val pattern = if (!offset.isNullOrBlank()) {
+                    "yyyy:MM:dd HH:mm:ssXXX"
+                } else {
+                    "yyyy:MM:dd HH:mm:ss"
+                }
+                val parser = SimpleDateFormat(pattern, Locale.US).apply {
+                    isLenient = false
+                }
+                parser.parse(if (!offset.isNullOrBlank()) date + offset else date)?.time
+            }
+        } catch (_: Exception) {
+            null
+        }
+    }
 
     /**
      * Makes a compact visual hash from a tiny grayscale image. Similar-looking

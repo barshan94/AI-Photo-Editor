@@ -2,7 +2,14 @@
 
 A native Android photo editor focused on batch workflows. It runs locally on the device; no website, account, backend, or Vercel deployment is required.
 
-## Current milestone: on-device AI Portrait enhancement (Beta 2.0.0)
+## Current milestone: AI Portrait reliability (Beta 2.1.0)
+
+- Decode ML Kit segmentation masks as floating-point confidence values rather than treating each byte as a separate pixel. This is essential for correct subject-mask interpretation.
+- Validate expected mask dimensions and buffer length, clamp confidence to the 0–1 range, and safely handle NaN values.
+- Regression tests cover known confidence values, out-of-range values, NaN, invalid dimensions, short buffers, and preservation of the caller's buffer position.
+- GitHub Actions runs the new tests before building the debug APK. Device-level portrait quality, performance, and memory behavior still require testing on real photos.
+
+## Previous milestone: on-device AI Portrait enhancement (Beta 2.0.0)
 
 - Add an **AI Portrait** style for single-photo preview/export and batch export.
 - Use on-device ML Kit person segmentation to apply a localized subject-aware look, while keeping edits and image files on the device.
@@ -97,7 +104,7 @@ The beta uses package `com.barshan.aiphotoeditor.beta`, labelled **FRAME AI Beta
 
 - Kotlin, Jetpack Compose, Material 3
 - Android document picker and MediaStore
-- Coil for image display; AndroidX ExifInterface for orientation
+- Coil for image display; AndroidX ExifInterface for orientation; ML Kit Selfie Segmentation for AI Portrait
 - GitHub Actions, Gradle, JDK 17
 
 ## Roadmap
@@ -124,6 +131,7 @@ The beta uses package `com.barshan.aiphotoeditor.beta`, labelled **FRAME AI Beta
 22. Complete EXIF orientation handling and safer bitmap cleanup/cancellation — implemented in Beta 1.9.0; verify on real-device photos
 23. Regression tests for photo quality scoring, burst grouping, and visual similarity — implemented in Beta 1.10.0; compare rankings against real photo sets
 24. On-device ML Kit person segmentation and AI Portrait look for preview/single/batch export — implemented in Beta 2.0.0; verify segmentation and fallback behavior on-device
+25. AI segmentation confidence-mask decoding and validation — implemented in Beta 2.1.0; test subject edges, multiple people, low light, and memory on the Pixel 6a
 14. Subject-aware ranking and personalized style learning
 15. Personalized style learning and smarter social export
 

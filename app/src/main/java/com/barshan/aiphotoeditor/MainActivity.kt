@@ -485,7 +485,10 @@ private fun PhotoEditorHome() {
                 statusMessage = "Saved full-resolution " + width + "x" + height +
                     " copy to Pictures/FRAME AI. Original untouched."
             } catch (error: CancellationException) {
+                statusMessage = "Export cancelled. No original photo was changed."
                 throw error
+            } catch (error: OutOfMemoryError) {
+                statusMessage = "Export needs more memory than this device can provide for this photo. Try a smaller image."
             } catch (error: Exception) {
                 statusMessage = "Export failed: " + (error.message ?: "unknown error")
             } finally {
@@ -519,7 +522,7 @@ private fun PhotoEditorHome() {
                         fontSize = 9.sp, letterSpacing = 1.1.sp)
                 }
                 Spacer(modifier = Modifier.weight(1f))
-                Text("BETA 1.8", color = Mint, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                Text("BETA 1.9", color = Mint, fontSize = 10.sp, fontWeight = FontWeight.Bold)
             }
 
             Spacer(modifier = Modifier.height(18.dp))
@@ -557,37 +560,44 @@ private fun PhotoEditorHome() {
                                 val batch = selectedPhotos.filter { it.decision != "Reject" }
                                 val skipped = selectedPhotos.size - batch.size
                                 batchSummary = null
-                                for ((index, photo) in batch.withIndex()) {
-                                    try {
-                                        val original = withContext(Dispatchers.IO) {
-                                            AutoEnhancer.decodeForEditing(
-                                                context.contentResolver, photo.uri, maxDimension = Int.MAX_VALUE
-                                            )
-                                        }
-                                        val enhanced = withContext(Dispatchers.Default) {
-                                            AutoEnhancer.enhance(original, settingsForBatch)
-                                        }
+                                try {
+                                    for ((index, photo) in batch.withIndex()) {
+                                        var original: Bitmap? = null
+                                        var enhanced: Bitmap? = null
                                         try {
+                                            original = withContext(Dispatchers.IO) {
+                                                AutoEnhancer.decodeForEditing(
+                                                    context.contentResolver, photo.uri, maxDimension = Int.MAX_VALUE
+                                                )
+                                            }
+                                            enhanced = withContext(Dispatchers.Default) {
+                                                AutoEnhancer.enhance(original!!, settingsForBatch)
+                                            }
                                             withContext(Dispatchers.IO) {
-                                                AutoEnhancer.saveJpeg(context.contentResolver, enhanced)
+                                                AutoEnhancer.saveJpeg(context.contentResolver, enhanced!!)
                                             }
                                             succeeded++
+                                        } catch (error: CancellationException) {
+                                            statusMessage = "Batch export cancelled. Previously saved copies remain available; originals are untouched."
+                                            throw error
+                                        } catch (error: OutOfMemoryError) {
+                                            failed++
+                                            failedNames.add((photo.uri.lastPathSegment ?: "Photo " + (index + 1)) + " (not enough memory)")
+                                        } catch (error: Exception) {
+                                            failed++
+                                            failedNames.add(photo.uri.lastPathSegment ?: "Photo " + (index + 1))
                                         } finally {
-                                            if (!enhanced.isRecycled) enhanced.recycle()
-                                            if (!original.isRecycled) original.recycle()
+                                            enhanced?.let { if (!it.isRecycled) it.recycle() }
+                                            original?.let { if (!it.isRecycled) it.recycle() }
                                         }
-                                    } catch (error: CancellationException) {
-                                        throw error
-                                    } catch (error: Exception) {
-                                        failed++
-                                        failedNames.add(photo.uri.lastPathSegment ?: "Photo " + (index + 1))
+                                        exportProgress = index + 1
+                                        statusMessage = BatchExportPolicy.progressLabel(index + 1, batch.size, succeeded, failed)
                                     }
-                                    exportProgress = index + 1
-                                    statusMessage = BatchExportPolicy.progressLabel(index + 1, batch.size, succeeded, failed)
+                                    batchSummary = BatchExportPolicy.summary(succeeded, failed, skipped, batchPreset, failedNames)
+                                    statusMessage = (batchSummary ?: "Batch export finished.") + " Originals are untouched."
+                                } finally {
+                                    isExporting = false
                                 }
-                                isExporting = false
-                                batchSummary = BatchExportPolicy.summary(succeeded, failed, skipped, batchPreset, failedNames)
-                                statusMessage = (batchSummary ?: "Batch export finished.") + " Originals are untouched."
                             }
                         }
                     },

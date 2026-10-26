@@ -637,7 +637,7 @@ private fun PhotoEditorHome() {
                         if (sample != null) {
                             openEditor(sample)
                             if (batchPreset != "Current edits") {
-                                applyEditSnapshot(settingsForBatchPreset(batchPreset))
+                                applyEditSnapshot(BatchExportPolicy.settingsForPreset(batchPreset))
                                 selectedStyle = batchPreset
                             }
                             statusMessage = "Batch preview sample: " + batchPreset + ". Return to the grid to export the reviewed batch."

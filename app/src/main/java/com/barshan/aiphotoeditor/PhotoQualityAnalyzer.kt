@@ -7,6 +7,7 @@ import android.net.Uri
 import kotlin.math.abs
 import kotlin.math.ln
 import kotlin.math.sqrt
+import java.security.MessageDigest
 
 /**
  * Fast, on-device technical photo scoring. This is a heuristic, not a judgement
@@ -108,6 +109,23 @@ object PhotoQualityAnalyzer {
         } finally {
             bitmap.recycle()
         }
+    }
+
+
+    /** Hashes the original file stream without loading the entire photo into memory. */
+    fun fingerprint(resolver: ContentResolver, uri: Uri): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        val input = resolver.openInputStream(uri)
+            ?: throw IllegalArgumentException("Could not read photo bytes")
+        input.use { stream ->
+            val buffer = ByteArray(64 * 1024)
+            while (true) {
+                val read = stream.read(buffer)
+                if (read < 0) break
+                if (read > 0) digest.update(buffer, 0, read)
+            }
+        }
+        return digest.digest().joinToString("") { byte -> "%02x".format(byte) }
     }
 
     private fun decodeSmall(resolver: ContentResolver, uri: Uri): Bitmap? {

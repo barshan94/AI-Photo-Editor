@@ -10,8 +10,8 @@ android {
         applicationId = "com.barshan.aiphotoeditor.beta"
         minSdk = 26
         targetSdk = 35
-        versionCode = 20
-        versionName = "1.10.0"
+        versionCode = 21
+        versionName = "2.0.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     buildTypes {
@@ -35,6 +35,7 @@ dependencies {
     implementation("androidx.activity:activity-compose:1.9.3")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
     implementation("androidx.exifinterface:exifinterface:1.3.7")
+    implementation("com.google.mlkit:segmentation-selfie:16.0.0-beta6")
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.ui:ui-tooling-preview")

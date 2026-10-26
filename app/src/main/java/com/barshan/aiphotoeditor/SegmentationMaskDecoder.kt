@@ -11,7 +11,7 @@ object SegmentationMaskDecoder {
             "Mask buffer is smaller than the expected float-confidence data"
         }
 
-        val input = buffer.duplicate()
+        val input = buffer.duplicate().order(buffer.order())
         input.rewind()
         return FloatArray(count) {
             val confidence = input.getFloat()

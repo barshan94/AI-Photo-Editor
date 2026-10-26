@@ -23,7 +23,7 @@ A native Android app for ranking a batch of photos, previewing a restrained auto
 
 ## Build and install
 
-Pushes to `main` run the GitHub Actions workflow. Open **Actions**, select the latest successful **Android APK** run, and download the `ai-photo-editor-debug-apk` artifact. Extract the ZIP and install `app-debug.apk` on the phone.
+Pushes to `main` run the GitHub Actions workflow. Open **Actions**, select the latest successful **Android APK** run, and download the `ai-photo-editor-debug-apk` artifact. Extract the ZIP and install `app-debug.apk` on the phone. This milestone uses the separate package `com.barshan.aiphotoeditor.beta`, labelled **FRAME AI Beta**, so it can be installed alongside the earlier prototype without uninstalling it. CI now caches its debug signing key so later beta APKs can update in place.
 
 ## Stack
 

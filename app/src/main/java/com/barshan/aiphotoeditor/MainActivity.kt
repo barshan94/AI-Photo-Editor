@@ -236,15 +236,6 @@ private fun PhotoEditorHome() {
         }
     }
 
-    fun settingsForBatchPreset(style: String): EditSettings = when (style) {
-        "Natural" -> EditSettings(brightness = 0f, contrast = 1.03f, saturation = 1.02f, warmth = 0f)
-        "Vivid" -> EditSettings(brightness = 0f, contrast = 1.13f, saturation = 1.28f, warmth = 0f)
-        "Warm" -> EditSettings(brightness = 2f, contrast = 1.06f, saturation = 1.08f, warmth = 12f)
-        "Cool" -> EditSettings(brightness = 0f, contrast = 1.05f, saturation = 1.04f, warmth = -10f)
-        "Mono" -> EditSettings(brightness = 0f, contrast = 1.10f, saturation = 0f, warmth = 0f)
-        else -> EditSettings()
-    }
-
     fun setStyle(style: String) {
         recordEditChange()
         selectedStyle = style
@@ -493,6 +484,8 @@ private fun PhotoEditorHome() {
                 }
                 statusMessage = "Saved full-resolution " + width + "x" + height +
                     " copy to Pictures/FRAME AI. Original untouched."
+            } catch (error: CancellationException) {
+                throw error
             } catch (error: Exception) {
                 statusMessage = "Export failed: " + (error.message ?: "unknown error")
             } finally {
@@ -526,7 +519,7 @@ private fun PhotoEditorHome() {
                         fontSize = 9.sp, letterSpacing = 1.1.sp)
                 }
                 Spacer(modifier = Modifier.weight(1f))
-                Text("BETA 1.7", color = Mint, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                Text("BETA 1.8", color = Mint, fontSize = 10.sp, fontWeight = FontWeight.Bold)
             }
 
             Spacer(modifier = Modifier.height(18.dp))
@@ -556,7 +549,7 @@ private fun PhotoEditorHome() {
                             isExporting = true
                             exportProgress = 0
                             statusMessage = "Enhancing and exporting the batch…"
-                            val settingsForBatch = if (batchPreset == "Current edits") currentSettings() else settingsForBatchPreset(batchPreset)
+                            val settingsForBatch = if (batchPreset == "Current edits") currentSettings() else BatchExportPolicy.settingsForPreset(batchPreset)
                             scope.launch {
                                 var succeeded = 0
                                 var failed = 0
@@ -583,16 +576,17 @@ private fun PhotoEditorHome() {
                                             if (!enhanced.isRecycled) enhanced.recycle()
                                             if (!original.isRecycled) original.recycle()
                                         }
+                                    } catch (error: CancellationException) {
+                                        throw error
                                     } catch (error: Exception) {
                                         failed++
                                         failedNames.add(photo.uri.lastPathSegment ?: "Photo " + (index + 1))
                                     }
                                     exportProgress = index + 1
-                                    statusMessage = "Exporting " + (index + 1) + "/" + batch.size + " · " + succeeded + " saved · " + failed + " failed"
+                                    statusMessage = BatchExportPolicy.progressLabel(index + 1, batch.size, succeeded, failed)
                                 }
                                 isExporting = false
-                                batchSummary = "Batch export summary: " + succeeded + " saved, " + failed + " failed, " + skipped + " rejected/skipped. Preset: " + batchPreset + ". Destination: Pictures/FRAME AI." +
-                                    if (failedNames.isNotEmpty()) "\nFailed items: " + failedNames.take(5).joinToString(", ") + if (failedNames.size > 5) " and " + (failedNames.size - 5) + " more." else "" else ""
+                                batchSummary = BatchExportPolicy.summary(succeeded, failed, skipped, batchPreset, failedNames)
                                 statusMessage = (batchSummary ?: "Batch export finished.") + " Originals are untouched."
                             }
                         }
@@ -616,7 +610,7 @@ private fun PhotoEditorHome() {
                     modifier = Modifier.padding(top = 8.dp, bottom = 4.dp))
                 Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    listOf("Current edits", "Auto", "Natural", "Vivid", "Warm", "Cool", "Mono").forEach { preset ->
+                    BatchExportPolicy.presetNames.forEach { preset ->
                         Button(onClick = { batchPreset = preset; batchSummary = null },
                             enabled = !isExporting && !isAnalyzing,
                             shape = RoundedCornerShape(10.dp),

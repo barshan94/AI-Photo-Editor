@@ -84,7 +84,9 @@ private data class PhotoItem(
     val sharpness: Int = 0,
     val exposure: Int = 0,
     val contrast: Int = 0,
-    val note: String = "Waiting for analysis"
+    val note: String = "Waiting for analysis",
+    val fingerprint: String? = null,
+    val isExactDuplicate: Boolean = false
 )
 
 class MainActivity : ComponentActivity() {
@@ -184,7 +186,14 @@ private fun PhotoEditorHome() {
                                 sharpness = result.sharpness,
                                 exposure = result.exposure,
                                 contrast = result.contrast,
-                                note = result.note
+                                note = result.note,
+                                fingerprint = try {
+                                    withContext(Dispatchers.IO) {
+                                        PhotoQualityAnalyzer.fingerprint(context.contentResolver, uri)
+                                    }
+                                } catch (_: Exception) {
+                                    null
+                                }
                             )
                         }
                     } catch (_: Exception) {
@@ -196,6 +205,16 @@ private fun PhotoEditorHome() {
                         }
                     }
                     analysisProgress = index + 1
+                }
+                val seenFingerprints = mutableSetOf<String>()
+                for (index in selectedPhotos.indices) {
+                    val photo = selectedPhotos[index]
+                    val fingerprint = photo.fingerprint
+                    if (fingerprint != null) {
+                        selectedPhotos[index] = photo.copy(
+                            isExactDuplicate = !seenFingerprints.add(fingerprint)
+                        )
+                    }
                 }
                 selectedPhotos.sortByDescending { it.score ?: -1 }
                 isAnalyzing = false
@@ -380,6 +399,23 @@ private fun PhotoEditorHome() {
                     androidx.compose.material3.Icon(Icons.Rounded.AutoAwesome, contentDescription = null)
                     Text("  Enhance all", fontWeight = FontWeight.Bold, fontSize = 13.sp)
                 }
+            }
+
+            val exactDuplicateCount = selectedPhotos.count { it.isExactDuplicate }
+            if (activePhoto == null && exactDuplicateCount > 0) {
+                Button(
+                    onClick = {
+                        selectedPhotos.removeAll { it.isExactDuplicate }
+                        statusMessage = "Removed " + exactDuplicateCount +
+                            " exact duplicate file(s) from this selection. Your originals are untouched."
+                    },
+                    enabled = !isAnalyzing && !isExporting,
+                    modifier = Modifier.fillMaxWidth().padding(top = 7.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFF293333), contentColor = Mint
+                    )
+                ) { Text("Remove " + exactDuplicateCount + " exact duplicate(s)") }
             }
 
             if (isAnalyzing) {
@@ -630,6 +666,11 @@ private fun PhotoEditorHome() {
                                 fontSize = 10.sp, fontWeight = FontWeight.Bold,
                                 modifier = Modifier.padding(top = 5.dp, start = 2.dp)
                             )
+                            if (photo.isExactDuplicate) {
+                                Text("EXACT DUPLICATE", color = Color(0xFFFFC078),
+                                    fontSize = 8.sp, fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(top = 3.dp, start = 2.dp))
+                            }
                             Text(photo.note, color = SoftText, fontSize = 9.sp, lineHeight = 12.sp,
                                 maxLines = 2, modifier = Modifier.padding(top = 2.dp, start = 2.dp, bottom = 2.dp))
                         }

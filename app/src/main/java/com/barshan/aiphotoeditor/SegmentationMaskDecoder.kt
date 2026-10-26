@@ -1,7 +1,6 @@
 package com.barshan.aiphotoeditor
 
 import java.nio.ByteBuffer
-import java.nio.ByteOrder
 
 /** Converts ML Kit's float-confidence mask buffer into bounded per-pixel confidence values. */
 object SegmentationMaskDecoder {
@@ -12,7 +11,7 @@ object SegmentationMaskDecoder {
             "Mask buffer is smaller than the expected float-confidence data"
         }
 
-        val input = buffer.duplicate().order(ByteOrder.nativeOrder())
+        val input = buffer.duplicate()
         input.rewind()
         return FloatArray(count) {
             val confidence = input.getFloat()

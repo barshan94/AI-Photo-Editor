@@ -2,7 +2,14 @@
 
 A native Android photo editor focused on batch workflows. It runs locally on the device; no website, account, backend, or Vercel deployment is required.
 
-## Current milestone: photo-quality and grouping validation (Beta 1.10.0)
+## Current milestone: on-device AI Portrait enhancement (Beta 2.0.0)
+
+- Add an **AI Portrait** style for single-photo preview/export and batch export.
+- Use on-device ML Kit person segmentation to apply a localized subject-aware look, while keeping edits and image files on the device.
+- If segmentation fails, fall back to the conventional edit rather than losing the export; batch summaries report how many photos used fallback.
+- The AI Portrait effect is person-aware, not generative image creation, and it does not claim to understand every subject type.
+
+## Previous milestone: photo-quality and grouping validation (Beta 1.10.0)
 
 - Extract the quality-scoring algorithm into deterministic, testable logic and add regression coverage for exposure, sharpness, clipping, and score bounds.
 - Extract burst grouping and visual-hash similarity rules into a policy module with tests for missing timestamps and the two-second whole-group boundary.
@@ -71,7 +78,7 @@ A native Android photo editor focused on batch workflows. It runs locally on the
 
 ## Important limitations
 
-- Ranking scores are heuristics, not a trained AI model or an understanding of the photo's meaning. Intentional blur and artistic lighting may score poorly.
+- Ranking scores remain technical heuristics, not a semantic understanding of photo meaning. Intentional blur and artistic lighting may score poorly. The AI Portrait preset uses a separate on-device person-segmentation model.
 - Burst candidates are inferred from recorded capture timestamps, not definitive camera burst metadata. The whole group is limited to a two-second timestamp span, but photos taken close together may still not belong to the same camera burst; photos without readable capture time cannot be grouped.
 - Style presets and sliders are conventional on-device pixel adjustments, not generative editing.
 - When a crop ratio is active, dragging the preview adjusts crop position and disables pinch-zoom gestures for that preview. Switch to Original to use pinch-to-zoom and pan.
@@ -116,6 +123,7 @@ The beta uses package `com.barshan.aiphotoeditor.beta`, labelled **FRAME AI Beta
 21. Regression tests for batch presets/progress/summary and CI test gate — implemented in Beta 1.8.0; device export stress-testing remains
 22. Complete EXIF orientation handling and safer bitmap cleanup/cancellation — implemented in Beta 1.9.0; verify on real-device photos
 23. Regression tests for photo quality scoring, burst grouping, and visual similarity — implemented in Beta 1.10.0; compare rankings against real photo sets
+24. On-device ML Kit person segmentation and AI Portrait look for preview/single/batch export — implemented in Beta 2.0.0; verify segmentation and fallback behavior on-device
 14. Subject-aware ranking and personalized style learning
 15. Personalized style learning and smarter social export
 

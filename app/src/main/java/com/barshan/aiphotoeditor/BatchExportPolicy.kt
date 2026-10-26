@@ -2,7 +2,7 @@ package com.barshan.aiphotoeditor
 
 /** Pure batch-export rules kept separate so they can be regression-tested on CI. */
 object BatchExportPolicy {
-    val presetNames: List<String> = listOf("Current edits", "Auto", "Natural", "Vivid", "Warm", "Cool", "Mono", "AI Portrait")
+    val presetNames: List<String> = listOf("Current edits", "Auto", "Natural", "Vivid", "Warm", "Cool", "Mono")
 
     fun settingsForPreset(name: String): EditSettings = when (name) {
         "Natural" -> EditSettings(brightness = 0f, contrast = 1.03f, saturation = 1.02f, warmth = 0f)

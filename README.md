@@ -2,12 +2,12 @@
 
 A native Android photo editor focused on batch workflows. It runs locally on the device; no website, account, backend, or Vercel deployment is required.
 
-## Current milestone: direct crop repositioning (Beta 1.3.0)
+## Current milestone: safer burst-candidate grouping (Beta 1.4.0)
 
 - Import multiple images with Android's document picker.
 - Score technical quality using estimated sharpness, exposure, contrast, and clipped highlights/shadows; sort higher scores first.
 - Detect byte-identical duplicate files and visually similar frames in the selected batch; similar-shot candidates are ranked by technical score. The highest-scoring representative is retained by the optional cleanup action. No files are deleted from the phone.
-- Read capture time from MediaStore or EXIF when available; photos recorded within two seconds of one another are marked as **burst candidates**. An optional action keeps the highest technical score per candidate group and removes the rest from the current selection only.
+- Read capture time from MediaStore or EXIF when available; photos whose entire candidate group fits within a two-second capture-time span are marked as **burst candidates**. This prevents a chain of individually close timestamps from merging a much longer sequence. An optional action keeps the highest technical score per candidate group and removes the rest from the current selection only.
 - Choose any detected burst-candidate group from a list showing capture time, photo count, and best technical score; compare its two highest-ranked photos side by side, then open either photo for editing. Comparison itself never removes or deletes photos.
 - Tap any photo to open the editing workspace.
 - Use Previous / Next to move through the selected batch without returning to the grid; the position indicator shows the current photo.
@@ -27,7 +27,7 @@ A native Android photo editor focused on batch workflows. It runs locally on the
 ## Important limitations
 
 - Ranking scores are heuristics, not a trained AI model or an understanding of the photo's meaning. Intentional blur and artistic lighting may score poorly.
-- Burst candidates are inferred from recorded capture timestamps, not definitive camera burst metadata. Photos without readable capture time cannot be grouped; two photos taken close together may not belong to the same burst.
+- Burst candidates are inferred from recorded capture timestamps, not definitive camera burst metadata. The whole group is limited to a two-second timestamp span, but photos taken close together may still not belong to the same camera burst; photos without readable capture time cannot be grouped.
 - Style presets and sliders are conventional on-device pixel adjustments, not generative editing.
 - When a crop ratio is active, dragging the preview adjusts crop position and disables pinch-zoom gestures for that preview. Switch to Original to use pinch-to-zoom and pan.
 - The on-screen live preview uses a working size of up to about 1800 pixels for responsiveness; pinch-to-zoom magnifies this preview, not the exported source. Exports are rendered from the full-resolution source. Crop ratios intentionally reduce dimensions to the chosen framing.
@@ -64,6 +64,7 @@ The beta uses package `com.barshan.aiphotoeditor.beta`, labelled **FRAME AI Beta
 12. Capture-time-based burst candidate grouping and safe keep-best action — implemented in Beta 1.0.0; needs validation across device metadata formats
 13. Choose a burst-candidate group and compare its top two photos side by side — implemented in Beta 1.2.0; needs usability testing on-device
 16. Direct drag-to-position crop window with slider fine adjustment — implemented in Beta 1.3.0; needs usability testing on-device
+17. Prevent over-grouping burst candidates caused by chains of adjacent timestamps — implemented in Beta 1.4.0; needs validation on real photo batches
 14. Subject-aware ranking and personalized style learning
 15. Personalized style learning and smarter social export
 

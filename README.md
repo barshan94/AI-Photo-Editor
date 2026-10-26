@@ -2,7 +2,15 @@
 
 A native Android photo editor focused on batch workflows. It runs locally on the device; no website, account, backend, or Vercel deployment is required.
 
-## Current milestone: safer burst-candidate grouping (Beta 1.4.0)
+## Current milestone: photo triage and decision filters (Beta 1.5.0)
+
+- Give each photo a personal **Keep**, **Review**, or **Reject** decision from the editor; the default is Review.
+- Filter the grid by decision, visually similar/exact duplicates, or burst candidates, and see live counts for each decision.
+- Batch **Enhance all** skips photos marked Reject. Individual export remains available if you open a rejected photo deliberately.
+- View the technical score breakdown (sharpness, exposure, and contrast) while editing. Scores remain guidance, not a substitute for personal judgement.
+- Decisions only change the current in-app batch; they do not delete, overwrite, or modify original images.
+
+## Previous milestone: safer burst-candidate grouping (Beta 1.4.0)
 
 - Import multiple images with Android's document picker.
 - Score technical quality using estimated sharpness, exposure, contrast, and clipped highlights/shadows; sort higher scores first.
@@ -65,6 +73,7 @@ The beta uses package `com.barshan.aiphotoeditor.beta`, labelled **FRAME AI Beta
 13. Choose a burst-candidate group and compare its top two photos side by side — implemented in Beta 1.2.0; needs usability testing on-device
 16. Direct drag-to-position crop window with slider fine adjustment — implemented in Beta 1.3.0; needs usability testing on-device
 17. Prevent over-grouping burst candidates caused by chains of adjacent timestamps — implemented in Beta 1.4.0; needs validation on real photo batches
+18. Per-photo Keep / Review / Reject triage, decision filters, batch export skipping rejected items, and score breakdown — implemented in Beta 1.5.0; needs usability testing on-device
 14. Subject-aware ranking and personalized style learning
 15. Personalized style learning and smarter social export
 

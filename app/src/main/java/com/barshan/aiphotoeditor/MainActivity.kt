@@ -362,7 +362,9 @@ private fun PhotoEditorHome() {
                                 for ((index, photo) in batch.withIndex()) {
                                     try {
                                         val original = withContext(Dispatchers.IO) {
-                                            AutoEnhancer.decodeForEditing(context.contentResolver, photo.uri)
+                                            AutoEnhancer.decodeForEditing(
+                                                context.contentResolver, photo.uri, maxDimension = Int.MAX_VALUE
+                                            )
                                         }
                                         val enhanced = withContext(Dispatchers.Default) {
                                             AutoEnhancer.enhance(original, settingsForBatch)

@@ -10,7 +10,7 @@ class PhotoAnalysisEngineTest {
     }
 
     @Test
-    fun oneFaceIsa portraitCandidate() {
+    fun oneFaceIsPortraitCandidate() {
         assertEquals("Single-person / portrait candidate", PhotoAnalysisEngine.summarizeFaceCount(1))
     }
 

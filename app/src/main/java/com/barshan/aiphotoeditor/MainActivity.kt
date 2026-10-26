@@ -1333,6 +1333,7 @@ private fun PhotoEditorHome() {
                             recordEditChange()
                             brightness = it
                             selectedStyle = "Custom"
+                            showEnhanced = true
                         }, valueRange = -25f..25f)
                         Text("CONTRAST  " + String.format(java.util.Locale.US, "%.2f", contrast),
                             color = SoftText, fontSize = 11.sp)
@@ -1340,6 +1341,7 @@ private fun PhotoEditorHome() {
                             recordEditChange()
                             contrast = it
                             selectedStyle = "Custom"
+                            showEnhanced = true
                         }, valueRange = 0.75f..1.40f)
                         Text("SATURATION  " + String.format(java.util.Locale.US, "%.2f", saturation),
                             color = SoftText, fontSize = 11.sp)
@@ -1347,25 +1349,27 @@ private fun PhotoEditorHome() {
                             recordEditChange()
                             saturation = it
                             selectedStyle = "Custom"
+                            showEnhanced = true
                         }, valueRange = 0f..1.65f)
                         Text("WARMTH  " + warmth.toInt(), color = SoftText, fontSize = 11.sp)
                         Slider(value = warmth, onValueChange = {
                             recordEditChange()
                             warmth = it
                             selectedStyle = "Custom"
+                            showEnhanced = true
                         }, valueRange = -24f..24f)
                         Spacer(modifier = Modifier.height(4.dp))
                         if (cropLabel != "Original") {
                             Text("CROP HORIZONTAL  " + (cropOffsetX * 100).toInt() + "%", color = SoftText, fontSize = 11.sp)
                             Slider(
                                 value = cropOffsetX,
-                                onValueChange = { recordEditChange(); cropOffsetX = it },
+                                onValueChange = { recordEditChange(); cropOffsetX = it; selectedStyle = "Custom"; showEnhanced = true },
                                 valueRange = -1f..1f
                             )
                             Text("CROP VERTICAL  " + (cropOffsetY * 100).toInt() + "%", color = SoftText, fontSize = 11.sp)
                             Slider(
                                 value = cropOffsetY,
-                                onValueChange = { recordEditChange(); cropOffsetY = it },
+                                onValueChange = { recordEditChange(); cropOffsetY = it; selectedStyle = "Custom"; showEnhanced = true },
                                 valueRange = -1f..1f
                             )
                             Text("Move the crop window to keep your subject in frame.", color = SoftText, fontSize = 10.sp)

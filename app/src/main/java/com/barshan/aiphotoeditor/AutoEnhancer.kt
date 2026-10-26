@@ -129,8 +129,12 @@ object AutoEnhancer {
             cropWidth = adjusted.width
             cropHeight = (cropWidth / ratio).toInt().coerceIn(1, adjusted.height)
         }
-        val left = (adjusted.width - cropWidth) / 2
-        val top = (adjusted.height - cropHeight) / 2
+        val availableX = (adjusted.width - cropWidth).coerceAtLeast(0)
+        val availableY = (adjusted.height - cropHeight).coerceAtLeast(0)
+        val left = ((availableX * ((settings.cropOffsetX.coerceIn(-1f, 1f) + 1f) / 2f)).toInt())
+            .coerceIn(0, availableX)
+        val top = ((availableY * ((settings.cropOffsetY.coerceIn(-1f, 1f) + 1f) / 2f)).toInt())
+            .coerceIn(0, availableY)
         val cropped = Bitmap.createBitmap(adjusted, left, top, cropWidth, cropHeight)
         if (cropped !== adjusted) adjusted.recycle()
         return cropped

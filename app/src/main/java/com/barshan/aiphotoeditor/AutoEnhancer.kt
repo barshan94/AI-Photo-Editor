@@ -45,17 +45,20 @@ object AutoEnhancer {
             ExifInterface.ORIENTATION_NORMAL
         }
 
-        val rotation = when (orientation) {
-            ExifInterface.ORIENTATION_ROTATE_90 -> 90f
-            ExifInterface.ORIENTATION_ROTATE_180 -> 180f
-            ExifInterface.ORIENTATION_ROTATE_270 -> 270f
-            else -> 0f
+        if (orientation == ExifInterface.ORIENTATION_NORMAL ||
+            orientation == ExifInterface.ORIENTATION_UNDEFINED) return decoded
+
+        val matrix = Matrix().apply {
+            setValues(ExifOrientationTransform.matrixValues(orientation, decoded.width, decoded.height))
         }
-        if (rotation == 0f) return decoded
-        val matrix = Matrix().apply { postRotate(rotation) }
-        val rotated = Bitmap.createBitmap(decoded, 0, 0, decoded.width, decoded.height, matrix, true)
-        if (rotated !== decoded) decoded.recycle()
-        return rotated
+        val oriented = try {
+            Bitmap.createBitmap(decoded, 0, 0, decoded.width, decoded.height, matrix, true)
+        } catch (error: RuntimeException) {
+            if (!decoded.isRecycled) decoded.recycle()
+            throw IllegalArgumentException("Could not apply this photo's orientation", error)
+        }
+        if (oriented !== decoded && !decoded.isRecycled) decoded.recycle()
+        return oriented
     }
 
     /**

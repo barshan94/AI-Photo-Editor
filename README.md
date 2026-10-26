@@ -2,7 +2,13 @@
 
 A native Android photo editor focused on batch workflows. It runs locally on the device; no website, account, backend, or Vercel deployment is required.
 
-## Current milestone: image-processing reliability (Beta 1.9.0)
+## Current milestone: photo-quality and grouping validation (Beta 1.10.0)
+
+- Extract the quality-scoring algorithm into deterministic, testable logic and add regression coverage for exposure, sharpness, clipping, and score bounds.
+- Extract burst grouping and visual-hash similarity rules into a policy module with tests for missing timestamps and the two-second whole-group boundary.
+- Continue running all regression tests before the APK build in GitHub Actions.
+
+## Previous milestone: image-processing reliability (Beta 1.9.0)
 
 - Apply all eight EXIF orientation cases, including mirrored and transposed images, before preview and export.
 - Ensure batch export recycles working bitmaps even when decode, enhancement, or saving fails.
@@ -109,6 +115,7 @@ The beta uses package `com.barshan.aiphotoeditor.beta`, labelled **FRAME AI Beta
 20. Batch-wide preset selection, sample preview, progress and export summary — implemented in Beta 1.7.0; needs real-device usability testing
 21. Regression tests for batch presets/progress/summary and CI test gate — implemented in Beta 1.8.0; device export stress-testing remains
 22. Complete EXIF orientation handling and safer bitmap cleanup/cancellation — implemented in Beta 1.9.0; verify on real-device photos
+23. Regression tests for photo quality scoring, burst grouping, and visual similarity — implemented in Beta 1.10.0; compare rankings against real photo sets
 14. Subject-aware ranking and personalized style learning
 15. Personalized style learning and smarter social export
 

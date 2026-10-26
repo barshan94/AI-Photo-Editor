@@ -149,7 +149,7 @@ object AutoEnhancer {
             val stream = resolver.openOutputStream(uri)
                 ?: throw IllegalStateException("Could not open the export destination")
             stream.use {
-                if (!bitmap.compress(Bitmap.CompressFormat.JPEG, 94, it)) {
+                if (!bitmap.compress(Bitmap.CompressFormat.JPEG, 100, it)) {
                     throw IllegalStateException("JPEG export failed")
                 }
             }

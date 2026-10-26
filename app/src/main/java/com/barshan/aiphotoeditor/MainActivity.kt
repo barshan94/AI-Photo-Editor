@@ -122,6 +122,8 @@ private fun PhotoEditorHome() {
     var isExporting by remember { mutableStateOf(false) }
     var exportProgress by remember { mutableIntStateOf(0) }
     var activePhoto by remember { mutableStateOf<PhotoItem?>(null) }
+    var showBurstComparison by remember { mutableStateOf(false) }
+    var comparisonGroupId by remember { mutableStateOf<Long?>(null) }
     var previewBitmap by remember { mutableStateOf<Bitmap?>(null) }
     var previewScale by remember { mutableFloatStateOf(1f) }
     var previewOffsetX by remember { mutableFloatStateOf(0f) }
@@ -342,9 +344,14 @@ private fun PhotoEditorHome() {
     }
 
     // Android system Back returns to the current batch instead of exiting the editor.
-    BackHandler(enabled = activePhoto != null) {
-        activePhoto = null
-        resetPreviewZoom()
+    BackHandler(enabled = activePhoto != null || showBurstComparison) {
+        if (activePhoto != null) {
+            activePhoto = null
+            resetPreviewZoom()
+        } else {
+            showBurstComparison = false
+            comparisonGroupId = null
+        }
     }
 
     // Debounced live preview: controls update the image without an Apply button.
@@ -534,6 +541,26 @@ private fun PhotoEditorHome() {
                 ) { Text("Remove " + exactDuplicateCount + " exact duplicate(s)") }
             }
 
+            if (activePhoto == null && burstGroups.isNotEmpty()) {
+                Button(
+                    onClick = {
+                        val group = burstGroups.entries
+                            .filter { it.value.size >= 2 }
+                            .maxByOrNull { it.value.size }
+                        if (group != null) {
+                            comparisonGroupId = group.key
+                            showBurstComparison = true
+                        }
+                    },
+                    enabled = !isAnalyzing && !isExporting && burstGroups.values.any { it.size >= 2 },
+                    modifier = Modifier.fillMaxWidth().padding(top = 5.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFF293333), contentColor = Mint
+                    )
+                ) { Text("Compare burst candidates side by side") }
+            }
+
             if (activePhoto == null && burstExtraCount > 0) {
                 Button(
                     onClick = {
@@ -590,6 +617,96 @@ private fun PhotoEditorHome() {
                 )
                 Text("Exporting " + exportProgress + " / " + selectedPhotos.size,
                     color = SoftText, fontSize = 11.sp, modifier = Modifier.padding(top = 3.dp))
+            }
+
+            if (activePhoto == null && showBurstComparison) {
+                val comparisonPhotos = selectedPhotos
+                    .filter { it.burstGroupId == comparisonGroupId }
+                    .sortedByDescending { it.score ?: -1 }
+                    .take(2)
+                Spacer(modifier = Modifier.height(12.dp))
+                Card(
+                    modifier = Modifier.fillMaxWidth().weight(1f),
+                    shape = RoundedCornerShape(20.dp),
+                    colors = CardDefaults.cardColors(containerColor = Panel)
+                ) {
+                    Column(
+                        modifier = Modifier.fillMaxSize().padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("BURST COMPARISON", color = BrightText, fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp)
+                                Text("Choose the frame you prefer. Scores are only technical guidance.",
+                                    color = SoftText, fontSize = 10.sp, lineHeight = 14.sp)
+                            }
+                            Button(
+                                onClick = { showBurstComparison = false; comparisonGroupId = null },
+                                shape = RoundedCornerShape(10.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = Color(0xFF293333), contentColor = BrightText
+                                ),
+                                contentPadding = PaddingValues(horizontal = 9.dp, vertical = 1.dp)
+                            ) { Text("Back", fontSize = 10.sp) }
+                        }
+                        if (comparisonPhotos.size == 2) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().weight(1f),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                comparisonPhotos.forEachIndexed { index, candidate ->
+                                    Column(
+                                        modifier = Modifier.weight(1f).clip(RoundedCornerShape(14.dp))
+                                            .background(Color(0xFF111616)).padding(7.dp),
+                                        verticalArrangement = Arrangement.spacedBy(7.dp)
+                                    ) {
+                                        AsyncImage(
+                                            model = candidate.uri,
+                                            contentDescription = "Burst candidate " + (index + 1),
+                                            modifier = Modifier.fillMaxWidth().weight(1f)
+                                                .clip(RoundedCornerShape(10.dp)),
+                                            contentScale = ContentScale.Fit
+                                        )
+                                        Text(
+                                            (if (index == 0) "HIGHER SCORE" else "ALTERNATIVE") +
+                                                "\nScore: " + (candidate.score ?: "—") + "/100",
+                                            color = if (index == 0) Mint else BrightText,
+                                            fontSize = 10.sp, fontWeight = FontWeight.Bold,
+                                            lineHeight = 15.sp
+                                        )
+                                        Text(candidate.note, color = SoftText, fontSize = 9.sp,
+                                            lineHeight = 12.sp, maxLines = 3)
+                                        Button(
+                                            onClick = {
+                                                openEditor(candidate)
+                                                showBurstComparison = false
+                                                comparisonGroupId = null
+                                            },
+                                            modifier = Modifier.fillMaxWidth(),
+                                            shape = RoundedCornerShape(10.dp),
+                                            colors = ButtonDefaults.buttonColors(
+                                                containerColor = if (index == 0) Mint else Color(0xFF293333),
+                                                contentColor = if (index == 0) Ink else BrightText
+                                            ),
+                                            contentPadding = PaddingValues(horizontal = 5.dp, vertical = 3.dp)
+                                        ) {
+                                            Text("Edit this photo", fontSize = 10.sp,
+                                                fontWeight = FontWeight.Bold)
+                                        }
+                                    }
+                                }
+                            }
+                            Text(
+                                "Nothing is deleted here. Choose a frame to edit, then return to the grid when ready.",
+                                color = SoftText, fontSize = 10.sp, lineHeight = 14.sp
+                            )
+                        } else {
+                            Text("These burst candidates are no longer both in the current selection.",
+                                color = SoftText, fontSize = 12.sp)
+                        }
+                    }
+                }
             }
 
             if (activePhoto != null) {
@@ -835,7 +952,7 @@ private fun PhotoEditorHome() {
                 }
             }
 
-            if (activePhoto == null) {
+            if (activePhoto == null && !showBurstComparison) {
                 Spacer(modifier = Modifier.height(10.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(if (selectedPhotos.isEmpty()) "YOUR WORKSPACE" else "BEST SHOTS FIRST",
@@ -851,7 +968,7 @@ private fun PhotoEditorHome() {
             )
             }
 
-            if (activePhoto == null && selectedPhotos.isEmpty()) {
+            if (activePhoto == null && !showBurstComparison && selectedPhotos.isEmpty()) {
                 Box(
                     modifier = Modifier.weight(1f).fillMaxWidth()
                         .clip(RoundedCornerShape(20.dp)).background(Color(0xFF151A1A)),
@@ -868,7 +985,7 @@ private fun PhotoEditorHome() {
                             color = SoftText, fontSize = 12.sp, lineHeight = 18.sp)
                     }
                 }
-            } else if (activePhoto == null) {
+            } else if (activePhoto == null && !showBurstComparison) {
                 LazyVerticalGrid(
                     columns = GridCells.Fixed(3),
                     modifier = Modifier.weight(1f),

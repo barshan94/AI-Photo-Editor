@@ -2,7 +2,7 @@
 
 A native Android photo editor focused on batch workflows. It runs locally on the device; no website, account, backend, or Vercel deployment is required.
 
-## Current milestone: batch-preserving navigation, pinch-to-zoom, and full-resolution export (Beta 0.7.0)
+## Current milestone: repositionable crops, batch navigation, and full-resolution export (Beta 0.8.0)
 
 - Import multiple images with Android's document picker.
 - Score technical quality using estimated sharpness, exposure, contrast, and clipped highlights/shadows; sort higher scores first.
@@ -12,7 +12,7 @@ A native Android photo editor focused on batch workflows. It runs locally on the
 - Use the editor's **All photos** button or Android system Back to return to the existing batch without re-importing it.
 - Apply style presets: Auto, Natural, Vivid, Warm, Cool, and Mono; the preview updates automatically after a short debounce.
 - Adjust brightness, contrast, saturation, and warmth using sliders; changes appear live without tapping Apply.
-- Center-crop to Original, Square (1:1), Portrait (4:5), Story (9:16), or Landscape (16:9), with immediate preview updates.
+- Crop to Original, Square (1:1), Portrait (4:5), Story (9:16), or Landscape (16:9), then adjust horizontal and vertical crop position with live preview updates.
 - Pinch to zoom the preview up to 5×, drag to inspect details, and reset zoom with one tap.
 - Keep the preview image and main actions fixed while only the editing controls scroll; Reset edits restores Auto and Original crop.
 - Preview enhanced output, switch to the original, and export one edited copy.
@@ -26,7 +26,7 @@ A native Android photo editor focused on batch workflows. It runs locally on the
 
 - Ranking scores are heuristics, not a trained AI model or an understanding of the photo's meaning. Intentional blur and artistic lighting may score poorly.
 - Style presets and sliders are conventional on-device pixel adjustments, not generative editing.
-- Crops are centered; there is no drag-to-reposition crop tool yet.
+- Crop positioning is controlled with horizontal and vertical sliders; direct drag-to-position crop gestures are not implemented yet.
 - The on-screen live preview uses a working size of up to about 1800 pixels for responsiveness; pinch-to-zoom magnifies this preview, not the exported source. Exports are rendered from the full-resolution source. Crop ratios intentionally reduce dimensions to the chosen framing.
 - Full-resolution processing uses more memory. Very large photos may take longer or exceed device memory.
 - Very large batches can take time and use battery. Keep the app open until batch export finishes.
@@ -54,10 +54,11 @@ The beta uses package `com.barshan.aiphotoeditor.beta`, labelled **FRAME AI Beta
 5. Full-resolution export and maximum-quality JPEG output — implemented in Beta 0.5.0
 6. Pinch-to-zoom and pan in the editor preview — implemented in Beta 0.6.0
 7. Preserve selected batch when using Android Back; previous/next photo navigation — implemented in Beta 0.7.0
-8. Validate edits across different phone photos; improve color/exposure algorithms
-9. Exact duplicate file detection and safe removal from the selection — implemented in Beta 0.5.0
-10. Visual-similarity grouping and safe removal from the selection — implemented in Beta 0.6.0; heuristic needs real-world validation
-11. Subject-aware ranking and burst grouping
-12. Personalized style learning and smarter social export
+8. Reposition crop window horizontally and vertically — implemented in Beta 0.8.0
+9. Validate edits across different phone photos; improve color/exposure algorithms
+10. Exact duplicate file detection and safe removal from the selection — implemented in Beta 0.5.0
+11. Visual-similarity grouping and safe removal from the selection — implemented in Beta 0.6.0; heuristic needs real-world validation
+12. Subject-aware ranking and burst grouping
+13. Personalized style learning and smarter social export
 
 The current editor does not claim to have a trained AI model. This milestone builds reliable controls and export behavior first; subject-aware intelligence and personalized learning come later.

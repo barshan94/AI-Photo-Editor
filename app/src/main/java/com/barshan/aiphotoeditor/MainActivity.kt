@@ -504,7 +504,7 @@ private fun PhotoEditorHome() {
                         fontSize = 9.sp, letterSpacing = 1.1.sp)
                 }
                 Spacer(modifier = Modifier.weight(1f))
-                Text("BETA 1.9", color = Mint, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                Text("BETA 1.10", color = Mint, fontSize = 10.sp, fontWeight = FontWeight.Bold)
             }
 
             Spacer(modifier = Modifier.height(18.dp))

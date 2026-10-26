@@ -9,7 +9,7 @@ class BatchExportPolicyTest {
     @Test
     fun exposesAllSupportedPresetsInStableOrder() {
         assertEquals(
-            listOf("Current edits", "Auto", "Natural", "Vivid", "Warm", "Cool", "Mono", "AI Portrait"),
+            listOf("Current edits", "Auto", "Natural", "Vivid", "Warm", "Cool", "Mono"),
             BatchExportPolicy.presetNames
         )
     }

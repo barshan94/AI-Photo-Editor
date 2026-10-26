@@ -226,7 +226,7 @@ private fun PhotoEditorHome() {
                                     null
                                 },
                                 visualFingerprint = try {
-                                    withContext(Dispatchers.Default) {
+                                    withContext(Dispatchers.IO) {
                                         PhotoQualityAnalyzer.visualFingerprint(context.contentResolver, uri)
                                     }
                                 } catch (_: Exception) {

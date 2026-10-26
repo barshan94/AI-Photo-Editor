@@ -1,29 +1,35 @@
 # FRAME / AI — Android Photo Editor
 
-A native Android app for ranking a batch of photos, previewing a restrained automatic enhancement, and exporting enhanced copies. It runs locally; there is no website, account, backend, or Vercel deployment.
+A native Android photo editor focused on batch workflows. It runs locally on the device; no website, account, backend, or Vercel deployment is required.
 
-## Current milestone: batch photo workflow
+## Current milestone: manual edits and social crops
 
 - Import multiple images with Android's document picker.
-- Keep read access to selected files when Android permits it.
-- Score technical quality using estimated sharpness, exposure, contrast, and clipped highlights/shadows.
-- Sort photos from higher to lower technical score.
-- Tap any photo for an original/enhanced preview.
-- Export one enhanced copy or enhance/export the whole batch.
+- Score technical quality using estimated sharpness, exposure, contrast, and clipped highlights/shadows; sort higher scores first.
+- Tap any photo to open the editing workspace.
+- Apply style presets: Auto, Natural, Vivid, Warm, Cool, and Mono.
+- Adjust brightness, contrast, saturation, and warmth using sliders.
+- Center-crop to Original, Square (1:1), Portrait (4:5), Story (9:16), or Landscape (16:9).
+- Preview enhanced output, switch to the original, and export one edited copy.
+- Apply the chosen controls to the whole selected batch with **Enhance all**.
 - Save new JPEGs under **Pictures/FRAME AI** on modern Android.
-- Never modify or overwrite the original photo.
+- Original photos are never edited or overwritten.
+- Return to the gallery to choose another photo without re-importing the batch.
 
 ## Important limitations
 
-- Scores are heuristics, not an AI understanding of the scene. A meaningful candid, artistic blur, or intentionally dark image can receive a low score.
-- Auto enhancement is a gentle exposure/contrast/saturation adjustment, not generative editing.
-- Images are decoded at a reduced working size for previews and exports, so exported files may be smaller than the original. The original remains untouched.
+- Ranking scores are heuristics, not a trained AI model or an understanding of the photo's meaning. Intentional blur and artistic lighting may score poorly.
+- Style presets and sliders are conventional on-device pixel adjustments, not generative editing.
+- Crops are centered; there is no drag-to-reposition crop tool yet.
+- Images are decoded to a working size with a longest dimension of up to about 1800 pixels, so exports can be smaller than originals.
 - Very large batches can take time and use battery. Keep the app open until batch export finishes.
-- The legacy Android storage path (Android 9 and earlier) may require storage permission; modern Android versions use MediaStore.
+- On modern Android, exports use MediaStore and do not require broad storage permission.
 
 ## Build and install
 
-Pushes to `main` run the GitHub Actions workflow. Open **Actions**, select the latest successful **Android APK** run, and download the `ai-photo-editor-debug-apk` artifact. Extract the ZIP and install `app-debug.apk` on the phone. This milestone uses the separate package `com.barshan.aiphotoeditor.beta`, labelled **FRAME AI Beta**, so it can be installed alongside the earlier prototype without uninstalling it. CI now caches its debug signing key so later beta APKs can update in place.
+Pushes to `main` run GitHub Actions. Open **Actions**, select the latest successful **Android APK** run, and download the `ai-photo-editor-debug-apk` artifact. Extract the ZIP and install `app-debug.apk`.
+
+The beta uses package `com.barshan.aiphotoeditor.beta`, labelled **FRAME AI Beta**, so it can sit alongside the earlier prototype. CI caches its debug signing key to allow later beta APKs to update in place.
 
 ## Stack
 
@@ -34,11 +40,12 @@ Pushes to `main` run the GitHub Actions workflow. Open **Actions**, select the l
 
 ## Roadmap
 
-1. Native app and multi-photo import — complete
-2. Technical quality ranking — implemented in this milestone
-3. Non-destructive enhancement preview and export — implemented in this milestone
-4. Validate behavior on real-device photo sets and tune scoring/enhancement
-5. Subject-aware ranking, duplicate/burst grouping, and smarter scene understanding
-6. Personal style presets and social-media crop/export presets
+1. Native Android shell and multi-photo import — complete
+2. Technical quality ranking — implemented; needs broader real-world validation
+3. Auto enhancement and non-destructive export — implemented
+4. Manual sliders, creative presets, and social crop ratios — implemented in this milestone
+5. Validate edits across different phone photos; improve color/exposure algorithms
+6. Duplicate/burst grouping and subject-aware ranking
+7. Personalized style learning and smarter social export
 
-The app does not yet claim to have a trained AI model. The current ranking and enhancement are on-device image-processing heuristics; later intelligence features will be added only after the baseline is tested.
+The current editor does not claim to have a trained AI model. This milestone builds reliable controls and export behavior first; subject-aware intelligence and personalized learning come later.

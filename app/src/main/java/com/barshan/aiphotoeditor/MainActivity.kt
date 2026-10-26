@@ -11,6 +11,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.rememberTransformableState
 import androidx.compose.foundation.gestures.transformable
 import androidx.compose.foundation.layout.Arrangement
@@ -70,6 +71,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.input.pointer.pointerInput
 import coil.compose.AsyncImage
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -805,7 +807,21 @@ private fun PhotoEditorHome() {
                                     previewWidthPx = size.width
                                     previewHeightPx = size.height
                                 }
-                                .transformable(state = previewTransformState),
+                                .then(
+                                    if (cropLabel != "Original") {
+                                        Modifier.pointerInput(cropLabel, previewWidthPx, previewHeightPx) {
+                                            detectDragGestures { change, dragAmount ->
+                                                change.consume()
+                                                val width = previewWidthPx.coerceAtLeast(1).toFloat()
+                                                val height = previewHeightPx.coerceAtLeast(1).toFloat()
+                                                cropOffsetX = (cropOffsetX + dragAmount.x / width * 2f).coerceIn(-1f, 1f)
+                                                cropOffsetY = (cropOffsetY + dragAmount.y / height * 2f).coerceIn(-1f, 1f)
+                                            }
+                                        }
+                                    } else {
+                                        Modifier.transformable(state = previewTransformState)
+                                    }
+                                ),
                             contentAlignment = Alignment.Center
                         ) {
                             val active = activePhoto
@@ -834,7 +850,11 @@ private fun PhotoEditorHome() {
                             modifier = Modifier.fillMaxWidth().padding(top = 5.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text("Pinch to zoom · drag to move", color = SoftText, fontSize = 10.sp)
+                            Text(
+                                if (cropLabel == "Original") "Pinch to zoom · drag to inspect"
+                                else "Drag preview to reposition crop",
+                                color = SoftText, fontSize = 10.sp
+                            )
                             Spacer(modifier = Modifier.weight(1f))
                             if (previewScale > 1.01f) {
                                 Text("Reset zoom", color = Mint, fontSize = 10.sp,

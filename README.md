@@ -2,12 +2,13 @@
 
 A native Android photo editor focused on batch workflows. It runs locally on the device; no website, account, backend, or Vercel deployment is required.
 
-## Current milestone: capture-time burst candidates and quality-first ranking (Beta 1.0.0)
+## Current milestone: side-by-side burst comparison (Beta 1.1.0)
 
 - Import multiple images with Android's document picker.
 - Score technical quality using estimated sharpness, exposure, contrast, and clipped highlights/shadows; sort higher scores first.
 - Detect byte-identical duplicate files and visually similar frames in the selected batch; similar-shot candidates are ranked by technical score. The highest-scoring representative is retained by the optional cleanup action. No files are deleted from the phone.
 - Read capture time from MediaStore or EXIF when available; photos recorded within two seconds of one another are marked as **burst candidates**. An optional action keeps the highest technical score per candidate group and removes the rest from the current selection only.
+- Compare the two highest-ranked photos from the largest detected burst-candidate group side by side, then open either photo for editing. Comparison itself never removes or deletes photos.
 - Tap any photo to open the editing workspace.
 - Use Previous / Next to move through the selected batch without returning to the grid; the position indicator shows the current photo.
 - Use the editor's **All photos** button or Android system Back to return to the existing batch without re-importing it.
@@ -61,7 +62,8 @@ The beta uses package `com.barshan.aiphotoeditor.beta`, labelled **FRAME AI Beta
 10. Exact duplicate file detection and safe removal from the selection — implemented in Beta 0.5.0
 11. Visual-similarity grouping and safe removal from the selection — implemented in Beta 0.6.0; heuristic needs real-world validation
 12. Capture-time-based burst candidate grouping and safe keep-best action — implemented in Beta 1.0.0; needs validation across device metadata formats
-13. Subject-aware ranking and personalized style learning
-13. Personalized style learning and smarter social export
+13. Side-by-side comparison of the top two candidates in the largest detected group — implemented in Beta 1.1.0; needs usability testing on-device
+14. Subject-aware ranking and personalized style learning
+15. Personalized style learning and smarter social export
 
 The current editor does not claim to have a trained AI model. This milestone builds reliable controls and export behavior first; subject-aware intelligence and personalized learning come later.

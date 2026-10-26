@@ -112,6 +112,37 @@ object PhotoQualityAnalyzer {
     }
 
 
+    /**
+     * Makes a compact visual hash from a tiny grayscale image. Similar-looking
+     * frames tend to have nearby hashes even when JPEG bytes differ.
+     */
+    fun visualFingerprint(resolver: ContentResolver, uri: Uri): Long {
+        val bitmap = decodeSmall(resolver, uri)
+            ?: throw IllegalArgumentException("Could not read photo for visual comparison")
+        try {
+            val tiny = Bitmap.createScaledBitmap(bitmap, 8, 8, true)
+            try {
+                val pixels = IntArray(64)
+                tiny.getPixels(pixels, 0, 8, 0, 0, 8, 8)
+                val luminances = pixels.map { pixel ->
+                    0.2126 * (pixel shr 16 and 0xFF) +
+                        0.7152 * (pixel shr 8 and 0xFF) +
+                        0.0722 * (pixel and 0xFF)
+                }
+                val mean = luminances.average()
+                var hash = 0L
+                for (luma in luminances) {
+                    hash = (hash shl 1) or if (luma >= mean) 1L else 0L
+                }
+                return hash
+            } finally {
+                if (tiny !== bitmap && !tiny.isRecycled) tiny.recycle()
+            }
+        } finally {
+            if (!bitmap.isRecycled) bitmap.recycle()
+        }
+    }
+
     /** Hashes the original file stream without loading the entire photo into memory. */
     fun fingerprint(resolver: ContentResolver, uri: Uri): String {
         val digest = MessageDigest.getInstance("SHA-256")

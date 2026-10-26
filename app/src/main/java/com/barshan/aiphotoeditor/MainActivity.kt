@@ -97,7 +97,9 @@ private data class PhotoItem(
     val captureTimeMillis: Long? = null,
     val burstGroupId: Long? = null,
     val isExactDuplicate: Boolean = false,
-    val isNearDuplicate: Boolean = false
+    val isNearDuplicate: Boolean = false,
+    /** User triage state; changing it never touches the source image. */
+    val decision: String = "Review"
 )
 
 class MainActivity : ComponentActivity() {
@@ -126,6 +128,7 @@ private fun PhotoEditorHome() {
     var activePhoto by remember { mutableStateOf<PhotoItem?>(null) }
     var showBurstComparison by remember { mutableStateOf(false) }
     var showBurstGroupPicker by remember { mutableStateOf(false) }
+    var gridFilter by remember { mutableStateOf("All") }
     var comparisonGroupId by remember { mutableStateOf<Long?>(null) }
     var previewBitmap by remember { mutableStateOf<Bitmap?>(null) }
     var previewScale by remember { mutableFloatStateOf(1f) }
@@ -332,6 +335,20 @@ private fun PhotoEditorHome() {
         }
     }
 
+    fun setPhotoDecision(photo: PhotoItem, decision: String) {
+        val position = selectedPhotos.indexOfFirst { it.uri == photo.uri }
+        if (position >= 0) {
+            val updated = selectedPhotos[position].copy(decision = decision)
+            selectedPhotos[position] = updated
+            if (activePhoto?.uri == photo.uri) activePhoto = updated
+            statusMessage = when (decision) {
+                "Keep" -> "Marked Keep. This photo will be included in Enhance all."
+                "Reject" -> "Marked Reject. This photo will be skipped by Enhance all; the original remains untouched."
+                else -> "Marked Review. This photo remains in the batch until you decide."
+            }
+        }
+    }
+
     fun openEditor(photo: PhotoItem) {
         resetPreviewZoom()
         activePhoto = photo
@@ -446,7 +463,7 @@ private fun PhotoEditorHome() {
                         fontSize = 9.sp, letterSpacing = 1.1.sp)
                 }
                 Spacer(modifier = Modifier.weight(1f))
-                Text("BETA 1.3", color = Mint, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                Text("BETA 1.5", color = Mint, fontSize = 10.sp, fontWeight = FontWeight.Bold)
             }
 
             Spacer(modifier = Modifier.height(18.dp))
@@ -480,7 +497,7 @@ private fun PhotoEditorHome() {
                             scope.launch {
                                 var succeeded = 0
                                 var failed = 0
-                                val batch = selectedPhotos.toList()
+                                val batch = selectedPhotos.filter { it.decision != "Reject" }
                                 for ((index, photo) in batch.withIndex()) {
                                     try {
                                         val original = withContext(Dispatchers.IO) {
@@ -511,7 +528,7 @@ private fun PhotoEditorHome() {
                             }
                         }
                     },
-                    enabled = selectedPhotos.isNotEmpty() && !isAnalyzing && !isExporting,
+                    enabled = selectedPhotos.any { it.decision != "Reject" } && !isAnalyzing && !isExporting,
                     modifier = Modifier.weight(1f).height(48.dp),
                     shape = RoundedCornerShape(14.dp),
                     colors = ButtonDefaults.buttonColors(
@@ -525,6 +542,9 @@ private fun PhotoEditorHome() {
                 }
             }
 
+            val keptCount = selectedPhotos.count { it.decision == "Keep" }
+            val reviewCount = selectedPhotos.count { it.decision == "Review" }
+            val rejectedCount = selectedPhotos.count { it.decision == "Reject" }
             val exactDuplicateCount = selectedPhotos.count { it.isExactDuplicate }
             val nearDuplicateCount = selectedPhotos.count { it.isNearDuplicate }
             val burstGroups = selectedPhotos.filter { it.burstGroupId != null }
@@ -611,10 +631,10 @@ private fun PhotoEditorHome() {
             if (isExporting) {
                 Spacer(modifier = Modifier.height(8.dp))
                 LinearProgressIndicator(
-                    progress = { if (selectedPhotos.isEmpty()) 0f else exportProgress.toFloat() / selectedPhotos.size },
+                    progress = { if (selectedPhotos.none { it.decision != "Reject" }) 0f else exportProgress.toFloat() / selectedPhotos.count { it.decision != "Reject" } },
                     modifier = Modifier.fillMaxWidth(), color = Mint
                 )
-                Text("Exporting " + exportProgress + " / " + selectedPhotos.size,
+                Text("Exporting " + exportProgress + " / " + selectedPhotos.count { it.decision != "Reject" } + " (rejected photos skipped)",
                     color = SoftText, fontSize = 11.sp, modifier = Modifier.padding(top = 3.dp))
             }
 
@@ -864,9 +884,39 @@ private fun PhotoEditorHome() {
                         }
                         val current = activePhoto
                         if (current != null && current.score != null) {
-                            Text("Technical score: " + current.score + "/100  •  " + current.note,
-                                color = SoftText, fontSize = 11.sp,
+                            Text("TECHNICAL SCORE  " + current.score + "/100",
+                                color = Mint, fontSize = 11.sp, fontWeight = FontWeight.Bold,
                                 modifier = Modifier.padding(top = 7.dp))
+                            Text("Sharpness " + current.sharpness + "  ·  Exposure " + current.exposure +
+                                "  ·  Contrast " + current.contrast,
+                                color = SoftText, fontSize = 10.sp,
+                                modifier = Modifier.padding(top = 3.dp))
+                            Text(current.note, color = SoftText, fontSize = 10.sp,
+                                modifier = Modifier.padding(top = 2.dp))
+                        }
+                        if (current != null) {
+                            Text("YOUR DECISION", color = BrightText, fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp))
+                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
+                                listOf("Keep", "Review", "Reject").forEach { decision ->
+                                    Button(
+                                        onClick = { setPhotoDecision(current, decision) },
+                                        modifier = Modifier.weight(1f),
+                                        shape = RoundedCornerShape(10.dp),
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = if (current.decision == decision) {
+                                                when (decision) {
+                                                    "Keep" -> Mint
+                                                    "Reject" -> Color(0xFF8B4242)
+                                                    else -> Color(0xFF52605D)
+                                                }
+                                            } else Color(0xFF293333),
+                                            contentColor = if (current.decision == decision && decision == "Keep") Ink else BrightText
+                                        ),
+                                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp)
+                                    ) { Text(decision, fontSize = 11.sp, fontWeight = FontWeight.Bold) }
+                                }
+                            }
                         }
                         val activeIndex = selectedPhotos.indexOfFirst { it.uri == activePhoto?.uri }
                         Row(
@@ -1044,6 +1094,24 @@ private fun PhotoEditorHome() {
                 Spacer(modifier = Modifier.weight(1f))
                 Text(selectedPhotos.size.toString() + " photos", color = SoftText, fontSize = 11.sp)
             }
+            if (selectedPhotos.isNotEmpty()) {
+                Text("Keep " + keptCount + "  ·  Review " + reviewCount + "  ·  Reject " + rejectedCount,
+                    color = SoftText, fontSize = 10.sp, modifier = Modifier.padding(top = 4.dp))
+                Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf("All", "Keep", "Review", "Reject", "Similar", "Burst").forEach { filter ->
+                        Button(
+                            onClick = { gridFilter = filter },
+                            shape = RoundedCornerShape(10.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (gridFilter == filter) Mint else Color(0xFF293333),
+                                contentColor = if (gridFilter == filter) Ink else BrightText
+                            ),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp)
+                        ) { Text(filter, fontSize = 10.sp) }
+                    }
+                }
+            }
             Text(
                 "Scores measure technical quality only—not whether a moment matters to you.",
                 color = SoftText, fontSize = 10.sp, lineHeight = 14.sp,
@@ -1076,7 +1144,17 @@ private fun PhotoEditorHome() {
                     horizontalArrangement = Arrangement.spacedBy(7.dp),
                     verticalArrangement = Arrangement.spacedBy(7.dp)
                 ) {
-                    items(selectedPhotos, key = { it.uri.toString() }) { photo ->
+                    val visiblePhotos = selectedPhotos.filter { photo ->
+                        when (gridFilter) {
+                            "Keep" -> photo.decision == "Keep"
+                            "Review" -> photo.decision == "Review"
+                            "Reject" -> photo.decision == "Reject"
+                            "Similar" -> photo.isNearDuplicate || photo.isExactDuplicate
+                            "Burst" -> photo.burstGroupId != null
+                            else -> true
+                        }
+                    }
+                    items(visiblePhotos, key = { it.uri.toString() }) { photo ->
                         Column(
                             modifier = Modifier.clip(RoundedCornerShape(13.dp))
                                 .background(if (activePhoto?.uri == photo.uri) Color(0xFF263B38) else Panel)
@@ -1103,6 +1181,13 @@ private fun PhotoEditorHome() {
                                 fontSize = 10.sp, fontWeight = FontWeight.Bold,
                                 modifier = Modifier.padding(top = 5.dp, start = 2.dp)
                             )
+                            Text(photo.decision.uppercase(),
+                                color = when (photo.decision) {
+                                    "Keep" -> Mint
+                                    "Reject" -> Color(0xFFFF8B8B)
+                                    else -> Color(0xFFFFC078)
+                                }, fontSize = 8.sp, fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(top = 3.dp, start = 2.dp))
                             if (photo.isExactDuplicate) {
                                 Text("EXACT DUPLICATE", color = Color(0xFFFFC078),
                                     fontSize = 8.sp, fontWeight = FontWeight.Bold,
@@ -1123,6 +1208,21 @@ private fun PhotoEditorHome() {
                         }
                     }
                 }
+            }
+
+            if (activePhoto == null && !showBurstComparison && !showBurstGroupPicker && selectedPhotos.isNotEmpty() &&
+                gridFilter != "All" && selectedPhotos.none { photo ->
+                    when (gridFilter) {
+                        "Keep" -> photo.decision == "Keep"
+                        "Review" -> photo.decision == "Review"
+                        "Reject" -> photo.decision == "Reject"
+                        "Similar" -> photo.isNearDuplicate || photo.isExactDuplicate
+                        "Burst" -> photo.burstGroupId != null
+                        else -> true
+                    }
+                }) {
+                Text("No photos in the " + gridFilter + " filter yet.", color = SoftText,
+                    fontSize = 11.sp, modifier = Modifier.padding(top = 8.dp))
             }
 
             Text(

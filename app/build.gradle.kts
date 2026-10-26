@@ -7,7 +7,7 @@ android {
     namespace = "com.barshan.aiphotoeditor"
     compileSdk = 35
     defaultConfig {
-        applicationId = "com.barshan.aiphotoeditor"
+        applicationId = "com.barshan.aiphotoeditor.beta"
         minSdk = 26
         targetSdk = 35
         versionCode = 2

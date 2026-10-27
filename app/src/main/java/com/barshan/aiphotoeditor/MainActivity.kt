@@ -47,6 +47,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
@@ -74,7 +75,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.input.pointer.pointerInput
+import com.google.mlkit.vision.common.InputImage
+import com.google.mlkit.vision.label.ImageLabeling
+import com.google.mlkit.vision.label.defaults.ImageLabelerOptions
 import coil.compose.AsyncImage
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -122,6 +128,7 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun PhotoEditorHome() {
     val context = LocalContext.current
+    val clipboardManager = LocalClipboardManager.current
     val scope = rememberCoroutineScope()
     // Keep the working set and non-destructive edit controls across process death.
     // OpenMultipleDocuments grants persistable read access for these selected URIs.
@@ -172,6 +179,55 @@ private fun PhotoEditorHome() {
     var cropOffsetY by remember { mutableFloatStateOf(recoveryPrefs.getFloat("crop_offset_y", 0f)) }
     var selectedStyle by remember { mutableStateOf(recoveryPrefs.getString("selected_style", "Auto") ?: "Auto") }
     var statusMessage by remember { mutableStateOf("Choose photos to begin. Analysis and edits run on this device.") }
+    var captionSuggestions by remember { mutableStateOf<CaptionSuggestionEngine.Suggestions?>(null) }
+    var captionEnglish by remember { mutableStateOf("") }
+    var captionBengali by remember { mutableStateOf("") }
+    var captionIndex by remember { mutableIntStateOf(0) }
+    var isGeneratingCaptions by remember { mutableStateOf(false) }
+
+    fun applyCaptionSuggestions(labels: List<Pair<String, Float>>, ratio: Float) {
+        val suggestions = CaptionSuggestionEngine.fromLabels(labels, ratio)
+        captionSuggestions = suggestions
+        captionIndex = 0
+        captionEnglish = suggestions.english.first()
+        captionBengali = suggestions.bengali.first()
+        isGeneratingCaptions = false
+    }
+
+    fun suggestCaptions() {
+        val bitmap = previewBitmap
+        if (bitmap == null || bitmap.isRecycled) {
+            statusMessage = "Prepare a photo preview before suggesting captions."
+            return
+        }
+        isGeneratingCaptions = true
+        statusMessage = "Looking for visual clues on this device…"
+        val labeler = ImageLabeling.getClient(ImageLabelerOptions.DEFAULT_OPTIONS)
+        try {
+            labeler.process(InputImage.fromBitmap(bitmap, 0))
+                .addOnSuccessListener { labels ->
+                    val ratio = bitmap.width.toFloat() / bitmap.height.coerceAtLeast(1).toFloat()
+                    applyCaptionSuggestions(labels.map { it.text to it.confidence }, ratio)
+                    statusMessage = if (labels.isEmpty()) {
+                        "No clear visual labels found. Neutral caption starters are ready to edit."
+                    } else {
+                        "Caption starters based on on-device visual labels. Review them before sharing."
+                    }
+                    labeler.close()
+                }
+                .addOnFailureListener {
+                    val ratio = bitmap.width.toFloat() / bitmap.height.coerceAtLeast(1).toFloat()
+                    applyCaptionSuggestions(emptyList(), ratio)
+                    statusMessage = "Image labels were unavailable; neutral caption starters are ready."
+                    labeler.close()
+                }
+        } catch (error: Exception) {
+            val ratio = bitmap.width.toFloat() / bitmap.height.coerceAtLeast(1).toFloat()
+            applyCaptionSuggestions(emptyList(), ratio)
+            statusMessage = "Could not analyze visual labels. Neutral caption starters are ready."
+            labeler.close()
+        }
+    }
 
     // Save recovery state whenever the selection or edit controls change.
     LaunchedEffect(
@@ -1232,6 +1288,70 @@ private fun PhotoEditorHome() {
                                 ) { Text(style, fontSize = 11.sp) }
                             }
                         }
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text("BILINGUAL CAPTION STARTERS", color = BrightText, fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold)
+                        Text("Uses on-device image labels for ideas. Review every suggestion; it may misread a scene.",
+                            color = SoftText, fontSize = 10.sp, lineHeight = 14.sp,
+                            modifier = Modifier.padding(top = 3.dp, bottom = 6.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Button(onClick = { suggestCaptions() }, enabled = previewBitmap != null && !isGeneratingCaptions,
+                                shape = RoundedCornerShape(10.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Ink),
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+                            ) { Text(if (isGeneratingCaptions) "Analyzing…" else "Suggest captions", fontSize = 10.sp) }
+                            Button(
+                                onClick = {
+                                    val suggestions = captionSuggestions
+                                    if (suggestions != null) {
+                                        captionIndex = (captionIndex + 1) % suggestions.english.size
+                                        captionEnglish = suggestions.english[captionIndex]
+                                        captionBengali = suggestions.bengali[captionIndex]
+                                    } else suggestCaptions()
+                                },
+                                enabled = captionSuggestions != null && !isGeneratingCaptions,
+                                shape = RoundedCornerShape(10.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = BrightText),
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+                            ) { Text("Regenerate", fontSize = 10.sp) }
+                        }
+                        if (captionSuggestions != null) {
+                            val detected = captionSuggestions?.detectedLabels.orEmpty()
+                            if (detected.isNotEmpty()) {
+                                Text("Visual clues: " + detected.joinToString(" · "),
+                                    color = SoftText, fontSize = 10.sp,
+                                    modifier = Modifier.padding(top = 4.dp, bottom = 3.dp))
+                            }
+                            OutlinedTextField(
+                                value = captionEnglish,
+                                onValueChange = { captionEnglish = it },
+                                modifier = Modifier.fillMaxWidth().padding(top = 5.dp),
+                                label = { Text("English caption") },
+                                minLines = 2,
+                                maxLines = 4
+                            )
+                            OutlinedTextField(
+                                value = captionBengali,
+                                onValueChange = { captionBengali = it },
+                                modifier = Modifier.fillMaxWidth().padding(top = 5.dp),
+                                label = { Text("বাংলা ক্যাপশন") },
+                                minLines = 2,
+                                maxLines = 4
+                            )
+                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Button(onClick = { clipboardManager.setText(AnnotatedString(captionEnglish)) },
+                                    shape = RoundedCornerShape(10.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = BrightText),
+                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+                                ) { Text("Copy English", fontSize = 10.sp) }
+                                Button(onClick = { clipboardManager.setText(AnnotatedString(captionBengali)) },
+                                    shape = RoundedCornerShape(10.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = BrightText),
+                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+                                ) { Text("Copy বাংলা", fontSize = 10.sp) }
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(10.dp))
                         Text("BRIGHTNESS  " + brightness.toInt(), color = SoftText, fontSize = 11.sp)
                         Slider(value = brightness, onValueChange = {
                             recordEditChange()

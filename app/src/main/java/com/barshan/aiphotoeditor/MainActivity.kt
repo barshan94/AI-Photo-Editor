@@ -174,7 +174,7 @@ private fun PhotoEditorHome() {
     var cropOffsetY by remember { mutableFloatStateOf(0f) }
     var selectedStyle by remember { mutableStateOf("Auto") }
     var activeEditorPanel by remember { mutableStateOf("Universal Edit") }
-    var showRankingDetails by remember { mutableStateOf(false) }
+    var editedScore by remember { mutableStateOf<PhotoQualityScoring.Score?>(null) }
     var statusMessage by remember { mutableStateOf("Choose photos to begin. Analysis and edits run on this device.") }
     var photoAnalysisResult by remember { mutableStateOf<PhotoAnalysisResult?>(null) }
     var isRunningPhotoAnalysis by remember { mutableStateOf(false) }
@@ -311,7 +311,6 @@ private fun PhotoEditorHome() {
     ) { uris ->
         if (uris.isNotEmpty()) {
             selectedPhotos.clear()
-            showRankingDetails = false
             activePhoto = null
             previewBitmap = null
             uris.forEach { uri ->
@@ -444,6 +443,7 @@ private fun PhotoEditorHome() {
     fun openEditor(photo: PhotoItem) {
         resetPreviewZoom()
         activePhoto = photo
+        editedScore = null
         activeEditorPanel = "Universal Edit"
         compareBeforeAfter = false
         comparePosition = 0.5f
@@ -507,6 +507,7 @@ private fun PhotoEditorHome() {
     LaunchedEffect(activePhoto?.uri) {
         resetPreviewZoom()
         photoAnalysisResult = null
+        editedScore = null
     }
 
     // Android system Back returns to the current batch instead of exiting the editor.
@@ -546,6 +547,20 @@ private fun PhotoEditorHome() {
                 } else {
                     adjusted = withContext(Dispatchers.Default) {
                         AutoEnhancer.enhance(original!!, settings)
+                    }
+                }
+                val scoredBitmap = adjusted!!
+                editedScore = withContext(Dispatchers.Default) {
+                    val scale = minOf(1f, 256f / maxOf(scoredBitmap.width, scoredBitmap.height).toFloat())
+                    val sampleWidth = (scoredBitmap.width * scale).toInt().coerceAtLeast(3)
+                    val sampleHeight = (scoredBitmap.height * scale).toInt().coerceAtLeast(3)
+                    val sample = Bitmap.createScaledBitmap(scoredBitmap, sampleWidth, sampleHeight, true)
+                    try {
+                        val pixels = IntArray(sample.width * sample.height)
+                        sample.getPixels(pixels, 0, sample.width, 0, 0, sample.width, sample.height)
+                        PhotoQualityScoring.scorePixels(pixels, sample.width, sample.height)
+                    } finally {
+                        if (sample !== scoredBitmap && !sample.isRecycled) sample.recycle()
                     }
                 }
                 previewBitmap?.let { if (!it.isRecycled) it.recycle() }
@@ -1202,7 +1217,7 @@ private fun PhotoEditorHome() {
                             if (active != null) {
                                 if (compareBeforeAfter && previewBitmap != null) {
                                     AsyncImage(model = previewBitmap, contentDescription = "After edit comparison",
-                                        modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
+                                        modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
                                     AsyncImage(model = active.uri, contentDescription = "Before edit comparison",
                                         modifier = Modifier.fillMaxSize().drawWithContent {
                                             clipRect(right = size.width * comparePosition) { this@drawWithContent.drawContent() }
@@ -1299,7 +1314,7 @@ private fun PhotoEditorHome() {
                         ) {
                             Text("EDIT WORKSPACE", color = Mint, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                             Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                listOf("Universal Edit", "Portrait & Background", "AI Tools", "Presets").forEach { panel ->
+                                listOf("Universal Edit", "AI Edit", "Presets").forEach { panel ->
                                     Button(
                                         onClick = { activeEditorPanel = panel; compareBeforeAfter = false },
                                         shape = RoundedCornerShape(10.dp),
@@ -1312,48 +1327,15 @@ private fun PhotoEditorHome() {
                                 }
                             }
                             Text("Only the selected tool group is expanded. Universal Edit keeps the standard controls together.", color = SoftText, fontSize = 10.sp, lineHeight = 14.sp)
-                        if (activeEditorPanel == "AI Tools") {
+                        if (activeEditorPanel == "AI Edit") {
                         Card(
                             modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
                             colors = CardDefaults.cardColors(containerColor = Color(0xFF1A2424)),
                             shape = RoundedCornerShape(14.dp)
                         ) {
                             Column(modifier = Modifier.fillMaxWidth().padding(12.dp)) {
-                                Text("AI TOOLBOX", color = Mint, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                                Text("On-device workflows: ESRGAN upscale, LaMa removal, subject-aware retouch, and private edit preferences.", color = SoftText, fontSize = 10.sp, lineHeight = 14.sp, modifier = Modifier.padding(top = 3.dp, bottom = 8.dp))
-                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text("Background blur", color = BrightText, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
-                                        Text("AVAILABLE · Portrait & Background panel", color = Mint, fontSize = 9.sp)
-                                    }
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text("Subject lightening", color = BrightText, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
-                                        Text("EXPERIMENTAL · Portrait & Background panel", color = Color(0xFFE8C77A), fontSize = 9.sp)
-                                    }
-                                }
-                                androidx.compose.material3.HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = Color(0xFF344040))
-                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text("Portrait/background segmentation", color = BrightText, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
-                                        Text("MEDIAPIPE SEGMENTATION + BLUR", color = Mint, fontSize = 9.sp)
-                                    }
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text("Skin retouch + natural makeup", color = BrightText, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
-                                        Text("SKIN MASK + SOFTENING + FACE CONTOURS", color = Mint, fontSize = 9.sp)
-                                    }
-                                }
-                                androidx.compose.material3.HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = Color(0xFF344040))
-                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text("Object / person removal", color = BrightText, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
-                                        Text("LaMa NEURAL INPAINTING CONNECTED", color = Mint, fontSize = 9.sp)
-                                    }
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text("AI image upscale", color = BrightText, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
-                                        Text("ESRGAN 4× MODEL CONNECTED", color = Mint, fontSize = 9.sp)
-                                    }
-                                }
-                                androidx.compose.material3.HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = Color(0xFF344040))
+                                Text("AI EDIT ACTIONS", color = Mint, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                                Text("Improve detail, remove unwanted objects, inspect the scene, and build a personal editing style.", color = SoftText, fontSize = 10.sp, lineHeight = 14.sp, modifier = Modifier.padding(top = 3.dp, bottom = 8.dp))
                                 Button(
                                     onClick = {
                                         val photo = activePhoto
@@ -1376,7 +1358,7 @@ private fun PhotoEditorHome() {
                                     Text("$operationProgress% · $operationStage", color = SoftText, fontSize = 10.sp, lineHeight = 14.sp,
                                         modifier = Modifier.padding(top = 3.dp))
                                 }
-                                Text("ESRGAN runs tile-by-tile on this device. The input is memory-bounded to about 1024 px on its longest edge, then reconstructed at 4×. The source photo is never overwritten.", color = SoftText, fontSize = 10.sp, lineHeight = 14.sp)
+                                Text("AI upscaling processes image tiles on this device. The input is memory-bounded to about 1024 px on its longest edge, then reconstructed at 4×. The source photo is never overwritten.", color = SoftText, fontSize = 10.sp, lineHeight = 14.sp)
                                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                     Button(
                                         onClick = {
@@ -1454,11 +1436,11 @@ private fun PhotoEditorHome() {
                                         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 5.dp)
                                     ) { Text("Reset learning", fontSize = 10.sp) }
                                 }
-                                Text("This learns a private preference profile, not new neural-network weights. It never uploads photos or trains in the background.", color = SoftText, fontSize = 9.sp, lineHeight = 12.sp)
+                                Text("Your editing preferences stay on this device. Photos are not stored for learning.", color = SoftText, fontSize = 9.sp, lineHeight = 12.sp)
                             }
                         }
                         }
-                        if (activeEditorPanel == "Portrait & Background") {
+                        if (activeEditorPanel == "AI Edit") {
                         Card(
                             modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
                             colors = CardDefaults.cardColors(containerColor = Color(0xFF202929)),
@@ -1474,7 +1456,7 @@ private fun PhotoEditorHome() {
                                     selectedStyle = if (it > 0f || backgroundBlur > 0f) "AI Portrait" else "Custom"
                                     showEnhanced = true
                                 }, valueRange = 0f..10f)
-                                Text("Enhances background color separation and local contrast while protecting the detected person. This is a segmentation-guided image adjustment, not a separate generative model.", color = SoftText, fontSize = 10.sp, lineHeight = 14.sp)
+                                Text("Enhances background color separation and local contrast while protecting the detected person.", color = SoftText, fontSize = 10.sp, lineHeight = 14.sp)
                                 Text("BACKGROUND BLUR  " + backgroundBlur.toInt(), color = SoftText, fontSize = 11.sp)
                                 Slider(value = backgroundBlur, onValueChange = {
                                     recordEditChange()
@@ -1562,39 +1544,28 @@ private fun PhotoEditorHome() {
                         }
                         val current = activePhoto
                         if (current != null && current.score != null) {
-                            Text("TECHNICAL SCORE  " + current.score + "/100",
-                                color = Mint, fontSize = 11.sp, fontWeight = FontWeight.Bold,
-                                modifier = Modifier.padding(top = 7.dp))
-                            Text("Sharpness " + current.sharpness + "  ·  Exposure " + current.exposure +
-                                "  ·  Contrast " + current.contrast,
+                            val live = editedScore
+                            val delta = if (live != null) live.score - current.score else 0
+                            Text(
+                                if (live == null) "EDITED TECHNICAL SCORE  Calculating…" else
+                                    "EDITED TECHNICAL SCORE  ${live.score}/100  (" +
+                                        (if (delta > 0) "+" else "") + delta + " vs original)",
+                                color = if (live != null && delta < 0) Color(0xFFFFB4A2) else Mint,
+                                fontSize = 11.sp, fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(top = 7.dp)
+                            )
+                            Text(
+                                if (live == null) "Re-scoring the current preview…" else
+                                    "Sharpness ${live.sharpness}  ·  Exposure ${live.exposure}  ·  Contrast ${live.contrast}",
                                 color = SoftText, fontSize = 10.sp,
-                                modifier = Modifier.padding(top = 3.dp))
-                            Text(current.note, color = SoftText, fontSize = 10.sp,
-                                modifier = Modifier.padding(top = 2.dp))
-                        }
-                        if (current != null) {
-                            Text("YOUR DECISION", color = BrightText, fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp))
-                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
-                                listOf("Keep", "Review", "Reject").forEach { decision ->
-                                    Button(
-                                        onClick = { setPhotoDecision(current, decision) },
-                                        modifier = Modifier.weight(1f),
-                                        shape = RoundedCornerShape(10.dp),
-                                        colors = ButtonDefaults.buttonColors(
-                                            containerColor = if (current.decision == decision) {
-                                                when (decision) {
-                                                    "Keep" -> Mint
-                                                    "Reject" -> Color(0xFF8B4242)
-                                                    else -> Color(0xFF52605D)
-                                                }
-                                            } else Color(0xFF293333),
-                                            contentColor = if (current.decision == decision && decision == "Keep") Ink else BrightText
-                                        ),
-                                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp)
-                                    ) { Text(decision, fontSize = 11.sp, fontWeight = FontWeight.Bold) }
-                                }
-                            }
+                                modifier = Modifier.padding(top = 3.dp)
+                            )
+                            Text(
+                                if (live == null) current.note else live.note,
+                                color = SoftText, fontSize = 10.sp,
+                                modifier = Modifier.padding(top = 2.dp)
+                            )
+                            Text("Original score: ${current.score}/100. Scores are technical guidance, not a measure of the photo's personal value.", color = SoftText, fontSize = 9.sp, lineHeight = 12.sp)
                         }
                         val activeIndex = selectedPhotos.indexOfFirst { it.uri == activePhoto?.uri }
                         Row(
@@ -1892,56 +1863,6 @@ private fun PhotoEditorHome() {
                 color = SoftText, fontSize = 10.sp, lineHeight = 14.sp,
                 modifier = Modifier.padding(top = 3.dp, bottom = 7.dp)
             )
-            if (selectedPhotos.isNotEmpty()) {
-                Button(
-                    onClick = { showRankingDetails = !showRankingDetails },
-                    modifier = Modifier.fillMaxWidth().padding(bottom = 5.dp),
-                    shape = RoundedCornerShape(10.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = Mint),
-                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 5.dp)
-                ) { Text(if (showRankingDetails) "Hide ranking explanation" else "Explain top 6 shortlist and top 3", fontSize = 11.sp) }
-                if (showRankingDetails) {
-                    val ranked = selectedPhotos.sortedByDescending { it.score ?: -1 }
-                    Card(modifier = Modifier.fillMaxWidth().height(190.dp).padding(bottom = 6.dp),
-                        colors = CardDefaults.cardColors(containerColor = Panel), shape = RoundedCornerShape(12.dp)) {
-                        Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(10.dp),
-                            verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Text("TOP 3 · DETAILED REASONS", color = Mint, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                            ranked.take(3).forEachIndexed { index, photo ->
-                                val weakest = listOf("sharpness" to photo.sharpness, "exposure" to photo.exposure, "contrast" to photo.contrast).minByOrNull { it.second }
-                                Text("#${index + 1} · Score ${photo.score ?: 0}/100", color = BrightText, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                Text("Sharpness ${photo.sharpness}/100 · Exposure ${photo.exposure}/100 · Contrast ${photo.contrast}/100", color = SoftText, fontSize = 10.sp)
-                                Text("Why: ${photo.note}. Lowest technical dimension: ${weakest?.first ?: "not available"} (${weakest?.second ?: 0}/100).", color = BrightText, fontSize = 10.sp, lineHeight = 14.sp)
-                            }
-                            if (ranked.size > 6) {
-                                Text("WHY RANKS 7–${ranked.size} ARE OUTSIDE THE TOP 6", color = Mint, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                ranked.drop(6).forEachIndexed { index, photo ->
-                                    val weakest = listOf("sharpness" to photo.sharpness, "exposure" to photo.exposure, "contrast" to photo.contrast).minByOrNull { it.second }
-                                    Text("Rank ${index + 7} · ${photo.score ?: 0}/100 — ${photo.note}; weakest dimension ${weakest?.first ?: "unknown"} (${weakest?.second ?: 0}/100).", color = SoftText, fontSize = 10.sp, lineHeight = 14.sp)
-                                }
-                            }
-                            Text("The score is technical guidance, not a judgement of the moment. Applying the shortlist marks the top 6 Keep and the rest Reject for batch export; it never deletes files, and every decision remains editable.", color = BrightText, fontSize = 10.sp, lineHeight = 14.sp)
-                            Button(
-                                onClick = {
-                                    val rankedUris = ranked.take(6).map { it.uri }.toSet()
-                                    for (index in selectedPhotos.indices) {
-                                        val photo = selectedPhotos[index]
-                                        selectedPhotos[index] = photo.copy(decision = if (photo.uri in rankedUris) "Keep" else "Reject")
-                                    }
-                                    gridFilter = "All"
-                                    showRankingDetails = true
-                                    statusMessage = "Top 6 marked Keep; ${selectedPhotos.size - rankedUris.size} lower-ranked photo(s) marked Reject for batch export. Nothing was deleted; change any decision in the editor."
-                                },
-                                modifier = Modifier.fillMaxWidth(),
-                                enabled = !isAnalyzing && ranked.all { it.score != null },
-                                shape = RoundedCornerShape(10.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Ink),
-                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
-                            ) { Text(if (isAnalyzing) "Wait for ranking to finish" else "Apply top 6 shortlist to batch", fontSize = 11.sp, fontWeight = FontWeight.Bold) }
-                        }
-                    }
-                }
-            }
             }
 
             if (activePhoto == null && !showBurstComparison && !showBurstGroupPicker && selectedPhotos.isEmpty()) {
@@ -2000,12 +1921,16 @@ private fun PhotoEditorHome() {
                                     )
                                 }
                             }
+                            val photoRank = selectedPhotos.sortedByDescending { it.score ?: -1 }.indexOfFirst { it.uri == photo.uri } + 1
                             Text(
-                                if (photo.score == null) "Analysing…" else "Score " + photo.score + "/100",
+                                if (photo.score == null) "Analysing…" else "#$photoRank · Score " + photo.score + "/100",
                                 color = if ((photo.score ?: 0) >= 70) Mint else BrightText,
                                 fontSize = 10.sp, fontWeight = FontWeight.Bold,
                                 modifier = Modifier.padding(top = 5.dp, start = 2.dp)
                             )
+                            Text("Sharpness ${photo.sharpness} · Exposure ${photo.exposure} · Contrast ${photo.contrast}",
+                                color = SoftText, fontSize = 8.sp, lineHeight = 11.sp,
+                                modifier = Modifier.padding(top = 2.dp, start = 2.dp))
                             Text(photo.decision.uppercase(),
                                 color = when (photo.decision) {
                                     "Keep" -> Mint

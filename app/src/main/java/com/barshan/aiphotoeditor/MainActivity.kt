@@ -151,6 +151,8 @@ private fun PhotoEditorHome() {
     var contrast by remember { mutableFloatStateOf(1.07f) }
     var saturation by remember { mutableFloatStateOf(1.06f) }
     var warmth by remember { mutableFloatStateOf(0f) }
+    var backgroundBlur by remember { mutableFloatStateOf(0f) }
+    var subjectBrightness by remember { mutableFloatStateOf(0f) }
     var cropLabel by remember { mutableStateOf("Original") }
     var cropOffsetX by remember { mutableFloatStateOf(0f) }
     var cropOffsetY by remember { mutableFloatStateOf(0f) }
@@ -192,7 +194,9 @@ private fun PhotoEditorHome() {
             else -> null
         },
         cropOffsetX = cropOffsetX,
-        cropOffsetY = cropOffsetY
+        cropOffsetY = cropOffsetY,
+        backgroundBlur = backgroundBlur,
+        subjectBrightness = subjectBrightness
     )
 
     fun recordEditChange() {
@@ -209,6 +213,8 @@ private fun PhotoEditorHome() {
         contrast = settings.contrast
         saturation = settings.saturation
         warmth = settings.warmth
+        backgroundBlur = settings.backgroundBlur
+        subjectBrightness = settings.subjectBrightness
         cropOffsetX = settings.cropOffsetX
         cropOffsetY = settings.cropOffsetY
         cropLabel = when (settings.cropRatio) {
@@ -246,14 +252,15 @@ private fun PhotoEditorHome() {
         when (style) {
             "Original" -> {
                 brightness = 0f; contrast = 1f; saturation = 1f; warmth = 0f
+                backgroundBlur = 0f; subjectBrightness = 0f
                 cropLabel = "Original"; cropOffsetX = 0f; cropOffsetY = 0f
             }
-            "Natural" -> { brightness = 1f; contrast = 1.02f; saturation = 1.08f; warmth = 2f }
-            "Vivid" -> { brightness = 0f; contrast = 1.13f; saturation = 1.28f; warmth = 0f }
-            "Warm" -> { brightness = 2f; contrast = 1.06f; saturation = 1.08f; warmth = 12f }
-            "Cool" -> { brightness = 0f; contrast = 1.05f; saturation = 1.04f; warmth = -10f }
-            "Mono" -> { brightness = 0f; contrast = 1.10f; saturation = 0f; warmth = 0f }
-            else -> { brightness = 0f; contrast = 1.07f; saturation = 1.06f; warmth = 0f }
+            "Natural" -> { brightness = 1f; contrast = 1.02f; saturation = 1.02f; warmth = 0f; backgroundBlur = 0f; subjectBrightness = 0f }
+            "Vivid" -> { brightness = 0f; contrast = 1.13f; saturation = 1.20f; warmth = 0f; backgroundBlur = 0f; subjectBrightness = 0f }
+            "Warm" -> { brightness = 2f; contrast = 1.06f; saturation = 1.04f; warmth = 8f; backgroundBlur = 0f; subjectBrightness = 0f }
+            "Cool" -> { brightness = 0f; contrast = 1.05f; saturation = 1.02f; warmth = -8f; backgroundBlur = 0f; subjectBrightness = 0f }
+            "Mono" -> { brightness = 0f; contrast = 1.10f; saturation = 0f; warmth = 0f; backgroundBlur = 0f; subjectBrightness = 0f }
+            else -> { brightness = 0f; contrast = 1.07f; saturation = 1.02f; warmth = 0f; backgroundBlur = 0f; subjectBrightness = 0f }
         }
     }
 
@@ -405,6 +412,8 @@ private fun PhotoEditorHome() {
         contrast = 1f
         saturation = 1f
         warmth = 0f
+        backgroundBlur = 0f
+        subjectBrightness = 0f
         cropLabel = "Original"
         cropOffsetX = 0f
         cropOffsetY = 0f
@@ -433,7 +442,13 @@ private fun PhotoEditorHome() {
 
     fun applyAiSuggestedEdit(result: PhotoAnalysisResult) {
         val suggestedStyle = suggestedStyleFor(result)
-        setStyle(suggestedStyle)
+        if (result.faceCount == 1) {
+            setStyle("AI Portrait")
+            backgroundBlur = 8f
+            subjectBrightness = 5f
+        } else {
+            setStyle(suggestedStyle)
+        }
         photoAnalysisResult = result
         statusMessage = "Applied the $suggestedStyle suggestion. Check the preview and compare with Original; you can undo or adjust it."
     }
@@ -457,7 +472,7 @@ private fun PhotoEditorHome() {
     }
 
     // Debounced live preview: controls update the image without an Apply button.
-    LaunchedEffect(activePhoto?.uri, brightness, contrast, saturation, warmth, cropLabel, cropOffsetX, cropOffsetY, selectedStyle) {
+    LaunchedEffect(activePhoto?.uri, brightness, contrast, saturation, warmth, backgroundBlur, subjectBrightness, cropLabel, cropOffsetX, cropOffsetY, selectedStyle) {
         val photo = activePhoto
         if (photo != null) {
             delay(220)
@@ -472,7 +487,7 @@ private fun PhotoEditorHome() {
                 }
                 if (selectedStyle == "Original") {
                     adjusted = Bitmap.createBitmap(original!!)
-                } else if (selectedStyle == "AI Portrait") {
+                } else if (selectedStyle == "AI Portrait" || backgroundBlur > 0f || subjectBrightness > 0f) {
                     val aiResult = SubjectAwareEnhancer.enhance(original!!, settings)
                     adjusted = aiResult.bitmap
                     aiNotice = aiResult.message
@@ -487,7 +502,7 @@ private fun PhotoEditorHome() {
                 showEnhanced = true
                 statusMessage = if (selectedStyle == "Original") {
                     "Original preview. Choose a style or adjust the image to create an edit."
-                } else aiNotice ?: if (selectedStyle == "AI Portrait") {
+                } else aiNotice ?: if (selectedStyle == "AI Portrait" || backgroundBlur > 0f || subjectBrightness > 0f) {
                     "AI Portrait enhancement applied using on-device person segmentation."
                 } else "Live preview updated. Export a copy when you're happy."
             } catch (error: CancellationException) {
@@ -1247,7 +1262,7 @@ private fun PhotoEditorHome() {
                             Button(
                                 onClick = {
                                     val photo = activePhoto
-                                    if (photo != null) exportOne(photo, currentSettings(), selectedStyle == "AI Portrait")
+                                    if (photo != null) exportOne(photo, currentSettings(), selectedStyle == "AI Portrait" || backgroundBlur > 0f || subjectBrightness > 0f)
                                 },
                                 enabled = previewBitmap != null && !isExporting && selectedStyle != "Original",
                                 modifier = Modifier.weight(1f),
@@ -1352,6 +1367,31 @@ private fun PhotoEditorHome() {
                                         color = SoftText, fontSize = 10.sp, lineHeight = 14.sp
                                     )
                                 }
+                            }
+                        }
+                        Card(
+                            modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFF202929)),
+                            shape = RoundedCornerShape(14.dp)
+                        ) {
+                            Column(modifier = Modifier.fillMaxWidth().padding(12.dp)) {
+                                Text("PORTRAIT TOOLS · ON DEVICE", color = Mint, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                Text("Background blur uses person segmentation. Increase carefully around hair and edges.", color = SoftText, fontSize = 10.sp, lineHeight = 14.sp)
+                                Text("BACKGROUND BLUR  " + backgroundBlur.toInt(), color = SoftText, fontSize = 11.sp)
+                                Slider(value = backgroundBlur, onValueChange = {
+                                    recordEditChange()
+                                    backgroundBlur = it
+                                    selectedStyle = if (it > 0f || subjectBrightness > 0f) "AI Portrait" else "Custom"
+                                    showEnhanced = true
+                                }, valueRange = 0f..20f)
+                                Text("PERSON BRIGHTNESS  " + subjectBrightness.toInt(), color = SoftText, fontSize = 11.sp)
+                                Slider(value = subjectBrightness, onValueChange = {
+                                    recordEditChange()
+                                    subjectBrightness = it
+                                    selectedStyle = if (it > 0f || backgroundBlur > 0f) "AI Portrait" else "Custom"
+                                    showEnhanced = true
+                                }, valueRange = 0f..25f)
+                                Text("Person brightness lifts the detected person, not skin alone. This is not a skin-tone or complexion detector.", color = SoftText, fontSize = 10.sp, lineHeight = 14.sp)
                             }
                         }
                         Row(verticalAlignment = Alignment.CenterVertically) {

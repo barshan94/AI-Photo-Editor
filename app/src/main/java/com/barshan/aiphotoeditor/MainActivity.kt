@@ -202,11 +202,21 @@ private fun PhotoEditorHome() {
         }
         isGeneratingCaptions = true
         statusMessage = "Looking for visual clues on this device…"
+        val bitmapForLabels = try {
+            bitmap.copy(Bitmap.Config.ARGB_8888, false)
+        } catch (_: Exception) {
+            null
+        }
+        if (bitmapForLabels == null) {
+            isGeneratingCaptions = false
+            statusMessage = "Could not prepare this photo for caption analysis."
+            return
+        }
         val labeler = ImageLabeling.getClient(ImageLabelerOptions.DEFAULT_OPTIONS)
+        val ratio = bitmapForLabels.width.toFloat() / bitmapForLabels.height.coerceAtLeast(1).toFloat()
         try {
-            labeler.process(InputImage.fromBitmap(bitmap, 0))
+            labeler.process(InputImage.fromBitmap(bitmapForLabels, 0))
                 .addOnSuccessListener { labels ->
-                    val ratio = bitmap.width.toFloat() / bitmap.height.coerceAtLeast(1).toFloat()
                     applyCaptionSuggestions(labels.map { it.text to it.confidence }, ratio)
                     statusMessage = if (labels.isEmpty()) {
                         "No clear visual labels found. Neutral caption starters are ready to edit."
@@ -214,18 +224,19 @@ private fun PhotoEditorHome() {
                         "Caption starters based on on-device visual labels. Review them before sharing."
                     }
                     labeler.close()
+                    if (!bitmapForLabels.isRecycled) bitmapForLabels.recycle()
                 }
                 .addOnFailureListener {
-                    val ratio = bitmap.width.toFloat() / bitmap.height.coerceAtLeast(1).toFloat()
                     applyCaptionSuggestions(emptyList(), ratio)
                     statusMessage = "Image labels were unavailable; neutral caption starters are ready."
                     labeler.close()
+                    if (!bitmapForLabels.isRecycled) bitmapForLabels.recycle()
                 }
         } catch (error: Exception) {
-            val ratio = bitmap.width.toFloat() / bitmap.height.coerceAtLeast(1).toFloat()
             applyCaptionSuggestions(emptyList(), ratio)
             statusMessage = "Could not analyze visual labels. Neutral caption starters are ready."
             labeler.close()
+            if (!bitmapForLabels.isRecycled) bitmapForLabels.recycle()
         }
     }
 

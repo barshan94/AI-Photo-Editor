@@ -1,0 +1,151 @@
+package com.barshan.aiphotoeditor
+
+import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Paint
+import android.graphics.Path
+import android.graphics.Color as AndroidColor
+import androidx.compose.ui.geometry.Offset
+import ai.onnxruntime.OnnxTensor
+import ai.onnxruntime.OrtEnvironment
+import ai.onnxruntime.OrtSession
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
+import java.nio.FloatBuffer
+import kotlin.math.max
+import kotlin.math.min
+
+/** Local LaMa object-removal inference. Mask polarity is 1 = remove, 0 = preserve. */
+internal object LamaInpainter {
+    data class Result(val bitmap: Bitmap, val markedPixels: Int)
+
+    suspend fun inpaint(
+        context: Context,
+        source: Bitmap,
+        normalizedStrokes: List<List<Offset>>,
+        brushRadius: Float
+    ): Result = withContext(Dispatchers.Default) {
+        require(normalizedStrokes.any { it.isNotEmpty() }) { "Paint over the object or person you want to remove first." }
+        require(!source.isRecycled && source.width > 0 && source.height > 0) { "Choose a valid photo first." }
+
+        val modelSize = 512
+        val fullMask = Bitmap.createBitmap(source.width, source.height, Bitmap.Config.ALPHA_8)
+        val modelMask = Bitmap.createBitmap(modelSize, modelSize, Bitmap.Config.ALPHA_8)
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = AndroidColor.WHITE
+            style = Paint.Style.STROKE
+            strokeCap = Paint.Cap.ROUND
+            strokeJoin = Paint.Join.ROUND
+            strokeWidth = max(2f, brushRadius * 2f * source.width / modelSize)
+        }
+        val maskCanvas = Canvas(fullMask)
+        for (stroke in normalizedStrokes) {
+            if (stroke.isEmpty()) continue
+            if (stroke.size == 1) {
+                maskCanvas.drawCircle(
+                    stroke[0].x.coerceIn(0f, 1f) * source.width,
+                    stroke[0].y.coerceIn(0f, 1f) * source.height,
+                    paint.strokeWidth / 2f,
+                    Paint(Paint.ANTI_ALIAS_FLAG).apply { color = AndroidColor.WHITE; style = Paint.Style.FILL }
+                )
+            } else {
+                val path = Path().apply {
+                    moveTo(stroke[0].x.coerceIn(0f, 1f) * source.width, stroke[0].y.coerceIn(0f, 1f) * source.height)
+                    stroke.drop(1).forEach { lineTo(it.x.coerceIn(0f, 1f) * source.width, it.y.coerceIn(0f, 1f) * source.height) }
+                }
+                maskCanvas.drawPath(path, paint)
+            }
+        }
+        val scaledMask = Bitmap.createScaledBitmap(fullMask, modelSize, modelSize, true)
+        val image512 = Bitmap.createScaledBitmap(source, modelSize, modelSize, true)
+        var session: OrtSession? = null
+        var imageTensor: OnnxTensor? = null
+        var maskTensor: OnnxTensor? = null
+        try {
+            val env = OrtEnvironment.getEnvironment()
+            val sessionOptions = OrtSession.SessionOptions().apply { setIntraOpNumThreads(2) }
+            val modelBytes = context.assets.open("lama_512_int8.onnx").use { it.readBytes() }
+            session = env.createSession(modelBytes, sessionOptions)
+
+            val imagePixels = IntArray(modelSize * modelSize)
+            val maskPixels = IntArray(modelSize * modelSize)
+            image512.getPixels(imagePixels, 0, modelSize, 0, 0, modelSize, modelSize)
+            scaledMask.getPixels(maskPixels, 0, modelSize, 0, 0, modelSize, modelSize)
+            val inputValues = FloatArray(4 * modelSize * modelSize)
+            val plane = modelSize * modelSize
+            var marked = 0
+            for (i in imagePixels.indices) {
+                val alpha = AndroidColor.alpha(maskPixels[i])
+                val erase = if (alpha >= 24) 1f else 0f
+                if (erase > 0f) marked++
+                val pixel = imagePixels[i]
+                inputValues[i] = if (erase > 0f) 0f else AndroidColor.red(pixel) / 255f
+                inputValues[plane + i] = if (erase > 0f) 0f else AndroidColor.green(pixel) / 255f
+                inputValues[2 * plane + i] = if (erase > 0f) 0f else AndroidColor.blue(pixel) / 255f
+                inputValues[3 * plane + i] = erase
+            }
+            require(marked > 0) { "The brush mask was too small. Paint over the object with a thicker brush." }
+
+            val imageBuffer = ByteBuffer.allocateDirect(inputValues.size * 4).order(ByteOrder.nativeOrder())
+            val imageFloatBuffer: FloatBuffer = imageBuffer.asFloatBuffer()
+            imageFloatBuffer.put(inputValues).rewind()
+            imageTensor = OnnxTensor.createTensor(env, imageFloatBuffer, longArrayOf(1, 4, modelSize.toLong(), modelSize.toLong()))
+            val outputs = session.run(mapOf("input" to imageTensor))
+            try {
+                val outputTensor = outputs.get("output").orElseThrow { IllegalStateException("LaMa did not return an output image.") } as OnnxTensor
+                val outputBuffer = outputTensor.floatBuffer
+                outputBuffer.rewind()
+                val outputValues = FloatArray(3 * plane)
+                outputBuffer.get(outputValues)
+                val repairedPixels = IntArray(plane)
+                for (i in 0 until plane) {
+                    val red = (outputValues[i] * 255f).toInt().coerceIn(0, 255)
+                    val green = (outputValues[plane + i] * 255f).toInt().coerceIn(0, 255)
+                    val blue = (outputValues[2 * plane + i] * 255f).toInt().coerceIn(0, 255)
+                    repairedPixels[i] = AndroidColor.rgb(red, green, blue)
+                }
+                val repaired512 = Bitmap.createBitmap(modelSize, modelSize, Bitmap.Config.ARGB_8888)
+                repaired512.setPixels(repairedPixels, 0, modelSize, 0, 0, modelSize, modelSize)
+                val result = source.copy(Bitmap.Config.ARGB_8888, true)
+                val sourceRow = IntArray(source.width)
+                val maskRow = IntArray(source.width)
+                val resultRow = IntArray(source.width)
+                for (y in 0 until source.height) {
+                    source.getPixels(sourceRow, 0, source.width, 0, y, source.width, 1)
+                    fullMask.getPixels(maskRow, 0, source.width, 0, y, source.width, 1)
+                    val my = min(modelSize - 1, y * modelSize / source.height)
+                    for (x in 0 until source.width) {
+                        val alpha = AndroidColor.alpha(maskRow[x]) / 255f
+                        if (alpha <= 0f) {
+                            resultRow[x] = sourceRow[x]
+                        } else {
+                            val mx = min(modelSize - 1, x * modelSize / source.width)
+                            val repaired = repaired512.getPixel(mx, my)
+                            val original = sourceRow[x]
+                            val r = (AndroidColor.red(original) * (1f - alpha) + AndroidColor.red(repaired) * alpha).toInt().coerceIn(0, 255)
+                            val g = (AndroidColor.green(original) * (1f - alpha) + AndroidColor.green(repaired) * alpha).toInt().coerceIn(0, 255)
+                            val b = (AndroidColor.blue(original) * (1f - alpha) + AndroidColor.blue(repaired) * alpha).toInt().coerceIn(0, 255)
+                            resultRow[x] = AndroidColor.rgb(r, g, b)
+                        }
+                    }
+                    result.setPixels(resultRow, 0, source.width, 0, y, source.width, 1)
+                }
+                repaired512.recycle()
+                Result(result, marked)
+            } finally {
+                outputs.close()
+            }
+        } finally {
+            imageTensor?.close()
+            maskTensor?.close()
+            session?.close()
+            fullMask.recycle()
+            modelMask.recycle()
+            scaledMask.recycle()
+            image512.recycle()
+        }
+    }
+}

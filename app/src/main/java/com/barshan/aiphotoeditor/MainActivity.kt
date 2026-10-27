@@ -2144,8 +2144,8 @@ private fun PhotoEditorHome() {
                             val baselineScore = batchOriginalScores[photo.uri]
                             val scoreDelta = if (liveScore != null && baselineScore != null) liveScore.score - baselineScore.score else null
                             Text(
-                                if (liveScore != null) "EDITED ${liveScore.score}/100" +
-                                    (scoreDelta?.let { if (it == 0) " (Δ 0 · unchanged)" else " (Δ ${if (it > 0) "+" else ""}$it)" } ?: "")
+                                if (liveScore != null) "LIVE SCORE ${liveScore.score}/100" +
+                                    (scoreDelta?.let { " · Δ ${if (it > 0) "+" else ""}${it} · was ${baselineScore?.score ?: "—"}" } ?: "")
                                 else if (photo.score == null) "Analysing…" else "#$photoRank · Score ${photo.score}/100",
                                 color = when {
                                     scoreDelta != null && scoreDelta > 0 -> Mint
@@ -2156,7 +2156,10 @@ private fun PhotoEditorHome() {
                                 fontSize = 10.sp, fontWeight = FontWeight.Bold,
                                 modifier = Modifier.padding(top = 5.dp, start = 2.dp)
                             )
-                            Text(if (liveScore != null) "Sharpness ${liveScore.sharpness} · Exposure ${liveScore.exposure} · Contrast ${liveScore.contrast}"
+                            Text(
+                                if (liveScore != null && baselineScore != null)
+                                    "Sharp ${liveScore.sharpness} (${if (liveScore.sharpness - baselineScore.sharpness > 0) "+" else ""}${liveScore.sharpness - baselineScore.sharpness}) · Exp ${liveScore.exposure} (${if (liveScore.exposure - baselineScore.exposure > 0) "+" else ""}${liveScore.exposure - baselineScore.exposure}) · Ctr ${liveScore.contrast} (${if (liveScore.contrast - baselineScore.contrast > 0) "+" else ""}${liveScore.contrast - baselineScore.contrast})"
+                                else if (liveScore != null) "Sharpness ${liveScore.sharpness} · Exposure ${liveScore.exposure} · Contrast ${liveScore.contrast}"
                                 else "Sharpness ${photo.sharpness} · Exposure ${photo.exposure} · Contrast ${photo.contrast}",
                                 color = SoftText, fontSize = 8.sp, lineHeight = 11.sp,
                                 modifier = Modifier.padding(top = 2.dp, start = 2.dp))

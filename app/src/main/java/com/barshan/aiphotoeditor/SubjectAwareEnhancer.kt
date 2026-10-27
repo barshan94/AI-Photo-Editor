@@ -48,7 +48,16 @@ object SubjectAwareEnhancer {
                     )
                 }
             }
-            val mask = getPersonMask(maskInput!!)
+            val mask = if (context != null) {
+                try {
+                    getMulticlassPersonMask(context, maskInput!!)
+                } catch (_: Exception) {
+                    // Keep portrait blur available if the additional model cannot initialize.
+                    getPersonMask(maskInput!!)
+                }
+            } else {
+                getPersonMask(maskInput!!)
+            }
             val enhanced = withContext(Dispatchers.Default) { AutoEnhancer.enhance(source, settings) }
             var blurredBackground: Bitmap? = null
             try {
@@ -159,6 +168,40 @@ object SubjectAwareEnhancer {
     }
 
     private data class PersonMask(val width: Int, val height: Int, val values: FloatArray)
+
+    /**
+     * Uses the additional MediaPipe neural network to retain hair, face, body, and clothing
+     * while blurring the background. Its output is categorical rather than a skin mask.
+     */
+    private suspend fun getMulticlassPersonMask(
+        context: Context,
+        bitmap: Bitmap
+    ): PersonMask {
+        val segmented = MulticlassSegmentationEngine.segment(context, bitmap)
+        val values = FloatArray(segmented.classes.size) { index ->
+            when (segmented.classes[index].toInt() and 0xFF) {
+                MulticlassSegmentationEngine.HAIR,
+                MulticlassSegmentationEngine.BODY,
+                MulticlassSegmentationEngine.FACE,
+                MulticlassSegmentationEngine.CLOTHES -> 1f
+                else -> 0f
+            }
+        }
+        // Feather hard category edges slightly to reduce a cut-out look around hair and shoulders.
+        val smoothed = values.copyOf()
+        for (y in 1 until segmented.height - 1) {
+            for (x in 1 until segmented.width - 1) {
+                val i = y * segmented.width + x
+                var total = 0f
+                for (dy in -1..1) for (dx in -1..1) {
+                    total += values[(y + dy) * segmented.width + x + dx]
+                }
+                smoothed[i] = (values[i] * 0.55f + (total / 9f) * 0.45f).coerceIn(0f, 1f)
+            }
+        }
+        return PersonMask(segmented.width, segmented.height, smoothed)
+    }
+
 
     private suspend fun getPersonMask(bitmap: Bitmap): PersonMask =
         suspendCancellableCoroutine { continuation ->

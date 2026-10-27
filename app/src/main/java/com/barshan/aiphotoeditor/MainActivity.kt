@@ -1256,7 +1256,7 @@ private fun PhotoEditorHome() {
                                 androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxSize()) {
                                     val image = previewBitmap
                                     if (image != null && image.width > 0 && image.height > 0) {
-                                        val fit = maxOf(size.width / image.width.toFloat(), size.height / image.height.toFloat())
+                                        val fit = minOf(size.width / image.width.toFloat(), size.height / image.height.toFloat())
                                         val shownWidth = image.width * fit
                                         val shownHeight = image.height * fit
                                         val left = (size.width - shownWidth) / 2f
@@ -1906,7 +1906,7 @@ private fun PhotoEditorHome() {
                                 AsyncImage(model = photo.uri, contentDescription = "Photo",
                                     modifier = Modifier.fillMaxWidth().aspectRatio(0.82f)
                                         .clip(RoundedCornerShape(9.dp)),
-                                    contentScale = ContentScale.Fit)
+                                    contentScale = ContentScale.Crop)
                                 if (activePhoto?.uri == photo.uri) {
                                     androidx.compose.material3.Icon(
                                         imageVector = Icons.Rounded.CheckCircle,

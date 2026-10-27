@@ -33,6 +33,7 @@ android {
 // It is not committed as a binary asset; the same pinned model is used by CI and local builds.
 val segmentationModelFile = layout.projectDirectory.file("src/main/assets/selfie_multiclass_256x256.tflite")
 val esrganModelFile = layout.projectDirectory.file("src/main/assets/ESRGAN.tflite")
+val lamaModelFile = layout.projectDirectory.file("src/main/assets/lama_512_int8.onnx")
 tasks.register("downloadMulticlassSegmentationModel") {
     outputs.file(segmentationModelFile)
     doLast {
@@ -63,9 +64,25 @@ tasks.register("downloadEsrganSuperResolutionModel") {
         }
     }
 }
+tasks.register("downloadLamaInpaintingModel") {
+    outputs.file(lamaModelFile)
+    doLast {
+        val model = lamaModelFile.asFile
+        if (!model.exists() || model.length() < 20_000_000L) {
+            model.parentFile.mkdirs()
+            val temp = File(model.parentFile, model.name + ".download")
+            URL("https://huggingface.co/g-ronimo/lama/resolve/0985db06d44780af925c1d81857a3ef5f025bedd/lama_512_int8.onnx").openStream().use { input ->
+                temp.outputStream().use { output -> input.copyTo(output) }
+            }
+            check(temp.length() > 20_000_000L) { "LaMa inpainting model download was incomplete." }
+            check(temp.renameTo(model)) { "Could not place the LaMa model in app/src/main/assets." }
+        }
+    }
+}
 tasks.named("preBuild").configure {
     dependsOn("downloadMulticlassSegmentationModel")
     dependsOn("downloadEsrganSuperResolutionModel")
+    dependsOn("downloadLamaInpaintingModel")
 }
 
 dependencies {
@@ -79,6 +96,7 @@ dependencies {
     implementation("com.google.mlkit:segmentation-selfie:16.0.0-beta6")
     implementation("com.google.mediapipe:tasks-vision:0.10.14")
     implementation("org.tensorflow:tensorflow-lite:2.14.0")
+    implementation("com.microsoft.onnxruntime:onnxruntime-android:1.20.0")
     implementation("com.google.mlkit:image-labeling:17.0.9")
     implementation("com.google.mlkit:face-detection:16.1.7")
     implementation("androidx.compose.ui:ui")

@@ -1,11 +1,12 @@
 package com.barshan.aiphotoeditor
 
 import android.graphics.Bitmap
-import android.graphics.Canvas
-import android.graphics.Paint
-import android.graphics.RenderEffect
-import android.graphics.Shader
-import android.os.Build
+import android.content.Context
+import android.graphics.Bitmap
+import android.renderscript.Allocation
+import android.renderscript.Element
+import android.renderscript.RenderScript
+import android.renderscript.ScriptIntrinsicBlur
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.segmentation.Segmentation
 import com.google.mlkit.vision.segmentation.SegmentationMask
@@ -32,7 +33,7 @@ object SubjectAwareEnhancer {
         Segmentation.getClient(options)
     }
 
-    suspend fun enhance(source: Bitmap, settings: EditSettings = EditSettings()): Result {
+    suspend fun enhance(source: Bitmap, settings: EditSettings = EditSettings(), context: Context? = null): Result {
         var maskInput: Bitmap? = null
         try {
             maskInput = withContext(Dispatchers.Default) {
@@ -54,7 +55,7 @@ object SubjectAwareEnhancer {
             try {
                 if (settings.backgroundBlur > 0f) {
                     blurredBackground = withContext(Dispatchers.Default) {
-                        createBlurredBackground(source, settings.backgroundBlur)
+                        createBlurredBackground(source, settings.backgroundBlur, context)
                     }
                 }
                 withContext(Dispatchers.Default) {
@@ -90,37 +91,71 @@ object SubjectAwareEnhancer {
     }
 
     /**
-     * Real Gaussian blur on Android 12+ (including Pixel 6a). Older Android versions
-     * use a stronger downscale/upscale fallback. The subject mask is composited afterward.
+     * Gaussian background blur via Android's RenderScript intrinsic, operating on a
+     * reduced-size copy to limit memory. The person mask is composited over it afterward.
+     * A visibly stronger downscale/upscale fallback is used if no Context is supplied.
      */
-    private fun createBlurredBackground(source: Bitmap, strength: Float): Bitmap {
+    @Suppress("DEPRECATION")
+    private fun createBlurredBackground(source: Bitmap, strength: Float, context: Context?): Bitmap {
         val amount = strength.coerceIn(0f, 20f)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            val output = Bitmap.createBitmap(source.width, source.height, Bitmap.Config.ARGB_8888)
-            val canvas = Canvas(output)
-            val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
-                renderEffect = RenderEffect.createBlurEffect(
-                    (amount * 1.8f).coerceAtLeast(1.5f),
-                    (amount * 1.8f).coerceAtLeast(1.5f),
-                    Shader.TileMode.CLAMP
-                )
-            }
-            canvas.drawBitmap(source, 0f, 0f, paint)
-            paint.setRenderEffect(null)
-            return output
+        val scale = minOf(1f, 900f / maxOf(source.width, source.height).toFloat())
+        val small = if (scale < 1f) {
+            Bitmap.createScaledBitmap(
+                source,
+                (source.width * scale).toInt().coerceAtLeast(1),
+                (source.height * scale).toInt().coerceAtLeast(1),
+                true
+            )
+        } else {
+            source.copy(Bitmap.Config.ARGB_8888, false)
         }
 
-        val factor = (2f + amount * 0.35f).toInt().coerceIn(2, 9)
-        val small = Bitmap.createScaledBitmap(
-            source,
-            (source.width / factor).coerceAtLeast(1),
-            (source.height / factor).coerceAtLeast(1),
-            true
-        )
-        return try {
-            Bitmap.createScaledBitmap(small, source.width, source.height, true)
+        if (context == null) {
+            val factor = (2f + amount * 0.35f).toInt().coerceIn(2, 9)
+            val tiny = Bitmap.createScaledBitmap(
+                small,
+                (small.width / factor).coerceAtLeast(1),
+                (small.height / factor).coerceAtLeast(1),
+                true
+            )
+            return try {
+                val blurredSmall = Bitmap.createScaledBitmap(tiny, small.width, small.height, true)
+                if (small !== source && !small.isRecycled) small.recycle()
+                Bitmap.createScaledBitmap(blurredSmall, source.width, source.height, true).also {
+                    if (!blurredSmall.isRecycled) blurredSmall.recycle()
+                }
+            } finally {
+                if (!tiny.isRecycled) tiny.recycle()
+            }
+        }
+
+        var rs: RenderScript? = null
+        var input: Allocation? = null
+        var output: Allocation? = null
+        var intrinsic: ScriptIntrinsicBlur? = null
+        val blurredSmall = Bitmap.createBitmap(small.width, small.height, Bitmap.Config.ARGB_8888)
+        try {
+            rs = RenderScript.create(context.applicationContext)
+            input = Allocation.createFromBitmap(rs, small)
+            output = Allocation.createFromBitmap(rs, blurredSmall)
+            intrinsic = ScriptIntrinsicBlur.create(rs, Element.U8_4(rs))
+            intrinsic.setInput(input)
+            intrinsic.setRadius((amount * 1.25f).coerceIn(1f, 25f))
+            intrinsic.forEach(output)
+            output.copyTo(blurredSmall)
+            return if (blurredSmall.width == source.width && blurredSmall.height == source.height) {
+                blurredSmall
+            } else {
+                Bitmap.createScaledBitmap(blurredSmall, source.width, source.height, true).also {
+                    if (!blurredSmall.isRecycled) blurredSmall.recycle()
+                }
+            }
         } finally {
-            if (!small.isRecycled) small.recycle()
+            intrinsic?.destroy()
+            output?.destroy()
+            input?.destroy()
+            rs?.destroy()
+            if (small !== source && !small.isRecycled) small.recycle()
         }
     }
 

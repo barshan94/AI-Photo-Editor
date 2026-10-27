@@ -65,16 +65,18 @@ internal object MulticlassSegmentationEngine {
                 val categoryMask = result.categoryMask().orElseThrow {
                     IllegalStateException("The segmentation model did not return a category mask.")
                 }
+                val maskWidth = categoryMask.width
+                val maskHeight = categoryMask.height
                 val buffer: ByteBuffer = ByteBufferExtractor.extract(categoryMask)
                 buffer.rewind()
-                val count = categoryMask.width * categoryMask.height
+                val count = maskWidth * maskHeight
                 require(count > 0 && buffer.remaining() >= count) {
                     "The segmentation model returned an invalid mask."
                 }
                 val classes = ByteArray(count)
                 buffer.get(classes, 0, count)
                 categoryMask.close()
-                SegmentationMap(categoryMask.width, categoryMask.height, classes)
+                SegmentationMap(maskWidth, maskHeight, classes)
             } finally {
                 image?.close()
                 segmenter.close()

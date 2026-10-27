@@ -15,7 +15,8 @@ data class PersonalEditProfile(
     val warmth: Float,
     val backgroundBlur: Float,
     val subjectBrightness: Float,
-    val darkerAreaLift: Float
+    val darkerAreaLift: Float,
+    val skinSmoothing: Float
 ) {
     fun toSettings() = EditSettings(
         brightness = brightness,
@@ -24,7 +25,8 @@ data class PersonalEditProfile(
         warmth = warmth,
         backgroundBlur = backgroundBlur,
         subjectBrightness = subjectBrightness,
-        darkerAreaLift = darkerAreaLift
+        darkerAreaLift = darkerAreaLift,
+        skinSmoothing = skinSmoothing
     )
 }
 
@@ -43,7 +45,8 @@ object PersonalEditLearning {
             warmth = p.getFloat("warmth", 0f),
             backgroundBlur = p.getFloat("background_blur", 0f),
             subjectBrightness = p.getFloat("subject_brightness", 0f),
-            darkerAreaLift = p.getFloat("darker_area_lift", 0f)
+            darkerAreaLift = p.getFloat("darker_area_lift", 0f),
+            skinSmoothing = p.getFloat("skin_smoothing", 0f)
         )
     }
 
@@ -62,7 +65,8 @@ object PersonalEditLearning {
             warmth = blend(old.warmth, settings.warmth),
             backgroundBlur = blend(old.backgroundBlur, settings.backgroundBlur),
             subjectBrightness = blend(old.subjectBrightness, settings.subjectBrightness),
-            darkerAreaLift = blend(old.darkerAreaLift, settings.darkerAreaLift)
+            darkerAreaLift = blend(old.darkerAreaLift, settings.darkerAreaLift),
+            skinSmoothing = blend(old.skinSmoothing, settings.skinSmoothing)
         )
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
             .putInt(COUNT, next.acceptedEdits)
@@ -73,6 +77,7 @@ object PersonalEditLearning {
             .putFloat("background_blur", next.backgroundBlur)
             .putFloat("subject_brightness", next.subjectBrightness)
             .putFloat("darker_area_lift", next.darkerAreaLift)
+            .putFloat("skin_smoothing", next.skinSmoothing)
             .apply()
         return next
     }

@@ -15,5 +15,7 @@ data class EditSettings(
     /** 0..25 neutral brightness lift applied to detected skin pixels (face and body skin). */
     val subjectBrightness: Float = 0f,
     /** 0..30 adaptive lift that targets darker skin pixels more strongly than already-bright skin. */
-    val darkerAreaLift: Float = 0f
+    val darkerAreaLift: Float = 0f,
+    /** 0..10 restrained smoothing blended only into detected skin pixels. */
+    val skinSmoothing: Float = 0f
 )

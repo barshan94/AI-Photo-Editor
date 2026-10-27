@@ -1392,6 +1392,7 @@ private fun PhotoEditorHome() {
                                             removalBrushMode = !removalBrushMode
                                             compareBeforeAfter = false
                                             if (removalBrushMode) {
+                                                resetPreviewZoom()
                                                 statusMessage = "Paint over the unwanted object/person in red, then tap Remove marked area."
                                             } else statusMessage = "Mask drawing paused. Your red selection is kept until you clear it or remove the object."
                                         },

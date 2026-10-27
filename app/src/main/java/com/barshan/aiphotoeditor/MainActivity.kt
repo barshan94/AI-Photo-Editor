@@ -1333,7 +1333,7 @@ private fun PhotoEditorHome() {
                                 }
                             }
                             Text("Choose one AI editing group at a time to keep the workspace focused.", color = SoftText, fontSize = 10.sp, lineHeight = 14.sp)
-                            if (activeEditorPanel == "AI Edit" && (activeAiSubpanel == "Enhance" || activeAiSubpanel == "Remove")) {
+                            if (activeEditorPanel == "AI Edit") {
                                 Row(
                                     modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(top = 6.dp, bottom = 8.dp),
                                     horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -1351,7 +1351,7 @@ private fun PhotoEditorHome() {
                                     }
                                 }
                             }
-                        if (activeEditorPanel == "AI Edit" && (activeAiSubpanel == "Background" || activeAiSubpanel == "Subject")) {
+                        if (activeEditorPanel == "AI Edit" && (activeAiSubpanel == "Enhance" || activeAiSubpanel == "Remove")) {
                         Card(
                             modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
                             colors = CardDefaults.cardColors(containerColor = Color(0xFF1A2424)),
@@ -1470,7 +1470,7 @@ private fun PhotoEditorHome() {
                             }
                         }
                         }
-                        if (activeEditorPanel == "AI Edit") {
+                        if (activeEditorPanel == "AI Edit" && (activeAiSubpanel == "Background" || activeAiSubpanel == "Subject")) {
                         Card(
                             modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
                             colors = CardDefaults.cardColors(containerColor = Color(0xFF202929)),

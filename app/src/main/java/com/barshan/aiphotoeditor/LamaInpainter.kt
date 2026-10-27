@@ -33,7 +33,6 @@ internal object LamaInpainter {
 
         val modelSize = 512
         val fullMask = Bitmap.createBitmap(source.width, source.height, Bitmap.Config.ALPHA_8)
-        val modelMask = Bitmap.createBitmap(modelSize, modelSize, Bitmap.Config.ALPHA_8)
         val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = AndroidColor.WHITE
             style = Paint.Style.STROKE
@@ -63,12 +62,16 @@ internal object LamaInpainter {
         val image512 = Bitmap.createScaledBitmap(source, modelSize, modelSize, true)
         var session: OrtSession? = null
         var imageTensor: OnnxTensor? = null
-        var maskTensor: OnnxTensor? = null
         try {
             val env = OrtEnvironment.getEnvironment()
-            val sessionOptions = OrtSession.SessionOptions().apply { setIntraOpNumThreads(2) }
+            val sessionOptions = OrtSession.SessionOptions()
             val modelBytes = context.assets.open("lama_512_int8.onnx").use { it.readBytes() }
-            session = env.createSession(modelBytes, sessionOptions)
+            try {
+                sessionOptions.setIntraOpNumThreads(2)
+                session = env.createSession(modelBytes, sessionOptions)
+            } finally {
+                sessionOptions.close()
+            }
 
             val imagePixels = IntArray(modelSize * modelSize)
             val maskPixels = IntArray(modelSize * modelSize)
@@ -140,10 +143,8 @@ internal object LamaInpainter {
             }
         } finally {
             imageTensor?.close()
-            maskTensor?.close()
             session?.close()
             fullMask.recycle()
-            modelMask.recycle()
             scaledMask.recycle()
             image512.recycle()
         }

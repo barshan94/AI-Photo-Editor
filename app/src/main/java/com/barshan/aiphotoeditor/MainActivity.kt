@@ -1221,7 +1221,7 @@ private fun PhotoEditorHome() {
                                     AsyncImage(model = active.uri, contentDescription = "Before edit comparison",
                                         modifier = Modifier.fillMaxSize().drawWithContent {
                                             clipRect(right = size.width * comparePosition) { this@drawWithContent.drawContent() }
-                                        }, contentScale = ContentScale.Fit)
+                                        }, contentScale = ContentScale.Crop)
                                     Box(modifier = Modifier.fillMaxWidth(comparePosition).height(2.dp)
                                         .align(Alignment.CenterStart).background(Mint))
                                     Text("BEFORE", color = BrightText, fontSize = 9.sp, fontWeight = FontWeight.Bold,
@@ -1237,7 +1237,7 @@ private fun PhotoEditorHome() {
                                             scaleY = previewScale
                                             translationX = previewOffsetX
                                             translationY = previewOffsetY
-                                        }, contentScale = ContentScale.Fit)
+                                        }, contentScale = ContentScale.Crop)
                                 } else {
                                     AsyncImage(model = active.uri, contentDescription = "Original photo",
                                         modifier = Modifier.fillMaxSize().graphicsLayer {
@@ -1245,7 +1245,7 @@ private fun PhotoEditorHome() {
                                             scaleY = previewScale
                                             translationX = previewOffsetX
                                             translationY = previewOffsetY
-                                        }, contentScale = ContentScale.Fit)
+                                        }, contentScale = ContentScale.Crop)
                                 }
                             }
                             if (removalBrushMode || removalStrokes.isNotEmpty() || currentRemovalStroke.isNotEmpty()) {
@@ -1388,7 +1388,7 @@ private fun PhotoEditorHome() {
                                         enabled = activePhoto != null && removalStrokes.isNotEmpty() && !isExporting,
                                         modifier = Modifier.fillMaxWidth(),
                                         colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Ink)
-                                    ) { Text(if (isExporting) "Removing object…" else "Remove marked area with LaMa") }
+                                    ) { Text(if (isExporting) "Removing object…" else "Remove marked area") }
                                 }
                                 Text("PERSONAL EDIT LEARNING · PRIVATE ON THIS DEVICE", color = Mint, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                                 Text(

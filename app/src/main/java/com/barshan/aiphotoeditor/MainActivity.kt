@@ -681,7 +681,7 @@ private fun PhotoEditorHome() {
         }
         isExporting = true
         operationProgress = 3
-        operationStage = "Loading object-removal model"
+        operationStage = "Preparing object removal"
         statusMessage = "Removing the marked object on this device…"
         scope.launch {
             var original: Bitmap? = null

@@ -244,6 +244,34 @@ private fun PhotoEditorHome() {
         }
     }
 
+    // Rebuild lightweight technical scores for photos restored after process death.
+    LaunchedEffect(Unit) {
+        val photosNeedingScores = selectedPhotos.filter { it.score == null }.map { it.uri }
+        for (uri in photosNeedingScores) {
+            try {
+                val result = withContext(Dispatchers.Default) {
+                    PhotoQualityAnalyzer.analyze(context.contentResolver, uri)
+                }
+                val position = selectedPhotos.indexOfFirst { it.uri == uri }
+                if (position >= 0 && selectedPhotos[position].score == null) {
+                    selectedPhotos[position] = selectedPhotos[position].copy(
+                        score = result.score,
+                        sharpness = result.sharpness,
+                        exposure = result.exposure,
+                        contrast = result.contrast,
+                        note = result.note
+                    )
+                    if (activePhoto?.uri == uri) activePhoto = selectedPhotos[position]
+                }
+            } catch (_: Exception) {
+                statusMessage = "Some recovered photos could not be reopened. Re-select those photos to continue."
+            }
+        }
+        if (photosNeedingScores.isNotEmpty()) {
+            statusMessage = "Recovered your previous photo selection and edit settings."
+        }
+    }
+
     // Save recovery state whenever the selection or edit controls change.
     LaunchedEffect(
         selectedPhotos.map { it.uri.toString() }, activePhoto?.uri?.toString(),

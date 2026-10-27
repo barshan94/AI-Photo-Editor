@@ -133,6 +133,8 @@ private fun PhotoEditorHome() {
     var analysisProgress by remember { mutableIntStateOf(0) }
     var isExporting by remember { mutableStateOf(false) }
     var exportProgress by remember { mutableIntStateOf(0) }
+    var operationProgress by remember { mutableIntStateOf(0) }
+    var operationStage by remember { mutableStateOf("Ready") }
     var batchPreset by remember { mutableStateOf("Current edits") }
     var batchSummary by remember { mutableStateOf<String?>(null) }
     var activePhoto by remember { mutableStateOf<PhotoItem?>(null) }
@@ -158,6 +160,7 @@ private fun PhotoEditorHome() {
     var saturation by remember { mutableFloatStateOf(1.06f) }
     var warmth by remember { mutableFloatStateOf(0f) }
     var backgroundBlur by remember { mutableFloatStateOf(0f) }
+    var backgroundEnhancement by remember { mutableFloatStateOf(0f) }
     var subjectBrightness by remember { mutableFloatStateOf(0f) }
     var darkerAreaLift by remember { mutableFloatStateOf(0f) }
     var skinSmoothing by remember { mutableFloatStateOf(0f) }
@@ -170,6 +173,8 @@ private fun PhotoEditorHome() {
     var cropOffsetX by remember { mutableFloatStateOf(0f) }
     var cropOffsetY by remember { mutableFloatStateOf(0f) }
     var selectedStyle by remember { mutableStateOf("Auto") }
+    var activeEditorPanel by remember { mutableStateOf("Universal Edit") }
+    var showRankingDetails by remember { mutableStateOf(false) }
     var statusMessage by remember { mutableStateOf("Choose photos to begin. Analysis and edits run on this device.") }
     var photoAnalysisResult by remember { mutableStateOf<PhotoAnalysisResult?>(null) }
     var isRunningPhotoAnalysis by remember { mutableStateOf(false) }
@@ -222,6 +227,7 @@ private fun PhotoEditorHome() {
         cropOffsetX = cropOffsetX,
         cropOffsetY = cropOffsetY,
         backgroundBlur = backgroundBlur,
+        backgroundEnhancement = backgroundEnhancement,
         subjectBrightness = subjectBrightness,
         darkerAreaLift = darkerAreaLift,
         skinSmoothing = skinSmoothing,
@@ -243,6 +249,7 @@ private fun PhotoEditorHome() {
         saturation = settings.saturation
         warmth = settings.warmth
         backgroundBlur = settings.backgroundBlur
+        backgroundEnhancement = settings.backgroundEnhancement
         subjectBrightness = settings.subjectBrightness
         darkerAreaLift = settings.darkerAreaLift
         skinSmoothing = settings.skinSmoothing
@@ -284,16 +291,16 @@ private fun PhotoEditorHome() {
         when (style) {
             "Original" -> {
                 brightness = 0f; contrast = 1f; saturation = 1f; warmth = 0f
-                backgroundBlur = 0f; subjectBrightness = 0f; darkerAreaLift = 0f
+                backgroundBlur = 0f; backgroundEnhancement = 0f; subjectBrightness = 0f; darkerAreaLift = 0f
                 cropLabel = "Original"; cropOffsetX = 0f; cropOffsetY = 0f
             }
-            "Natural" -> { brightness = 1f; contrast = 1.02f; saturation = 1.02f; warmth = 0f; backgroundBlur = 0f; subjectBrightness = 0f; darkerAreaLift = 0f; skinSmoothing = 0f; makeupIntensity = 0f }
-            "Vivid" -> { brightness = 0f; contrast = 1.13f; saturation = 1.20f; warmth = 0f; backgroundBlur = 0f; subjectBrightness = 0f; darkerAreaLift = 0f; skinSmoothing = 0f; makeupIntensity = 0f }
-            "Warm" -> { brightness = 2f; contrast = 1.06f; saturation = 1.04f; warmth = 8f; backgroundBlur = 0f; subjectBrightness = 0f; darkerAreaLift = 0f; skinSmoothing = 0f; makeupIntensity = 0f }
-            "Cool" -> { brightness = 0f; contrast = 1.05f; saturation = 1.02f; warmth = -8f; backgroundBlur = 0f; subjectBrightness = 0f; darkerAreaLift = 0f; skinSmoothing = 0f; makeupIntensity = 0f }
-            "Mono" -> { brightness = 0f; contrast = 1.10f; saturation = 0f; warmth = 0f; backgroundBlur = 0f; subjectBrightness = 0f; darkerAreaLift = 0f; skinSmoothing = 0f; makeupIntensity = 0f }
+            "Natural" -> { brightness = 1f; contrast = 1.02f; saturation = 1.02f; warmth = 0f; backgroundBlur = 0f; backgroundEnhancement = 0f; subjectBrightness = 0f; darkerAreaLift = 0f; skinSmoothing = 0f; makeupIntensity = 0f }
+            "Vivid" -> { brightness = 0f; contrast = 1.13f; saturation = 1.20f; warmth = 0f; backgroundBlur = 0f; backgroundEnhancement = 0f; subjectBrightness = 0f; darkerAreaLift = 0f; skinSmoothing = 0f; makeupIntensity = 0f }
+            "Warm" -> { brightness = 2f; contrast = 1.06f; saturation = 1.04f; warmth = 8f; backgroundBlur = 0f; backgroundEnhancement = 0f; subjectBrightness = 0f; darkerAreaLift = 0f; skinSmoothing = 0f; makeupIntensity = 0f }
+            "Cool" -> { brightness = 0f; contrast = 1.05f; saturation = 1.02f; warmth = -8f; backgroundBlur = 0f; backgroundEnhancement = 0f; subjectBrightness = 0f; darkerAreaLift = 0f; skinSmoothing = 0f; makeupIntensity = 0f }
+            "Mono" -> { brightness = 0f; contrast = 1.10f; saturation = 0f; warmth = 0f; backgroundBlur = 0f; backgroundEnhancement = 0f; subjectBrightness = 0f; darkerAreaLift = 0f; skinSmoothing = 0f; makeupIntensity = 0f }
             "AI Portrait" -> { brightness = 0f; contrast = 1.02f; saturation = 1.02f; warmth = 0f; backgroundBlur = 16f; subjectBrightness = 0f; darkerAreaLift = 0f; skinSmoothing = 0f; makeupIntensity = 0f }
-            else -> { brightness = 0f; contrast = 1.07f; saturation = 1.02f; warmth = 0f; backgroundBlur = 0f; subjectBrightness = 0f; darkerAreaLift = 0f; skinSmoothing = 0f; makeupIntensity = 0f }
+            else -> { brightness = 0f; contrast = 1.07f; saturation = 1.02f; warmth = 0f; backgroundBlur = 0f; backgroundEnhancement = 0f; subjectBrightness = 0f; darkerAreaLift = 0f; skinSmoothing = 0f; makeupIntensity = 0f }
         }
     }
 
@@ -303,6 +310,7 @@ private fun PhotoEditorHome() {
     ) { uris ->
         if (uris.isNotEmpty()) {
             selectedPhotos.clear()
+            showRankingDetails = false
             activePhoto = null
             previewBitmap = null
             uris.forEach { uri ->
@@ -435,6 +443,7 @@ private fun PhotoEditorHome() {
     fun openEditor(photo: PhotoItem) {
         resetPreviewZoom()
         activePhoto = photo
+        activeEditorPanel = "Universal Edit"
         compareBeforeAfter = false
         comparePosition = 0.5f
         previewBitmap?.let { if (!it.isRecycled) it.recycle() }
@@ -446,6 +455,7 @@ private fun PhotoEditorHome() {
         saturation = 1f
         warmth = 0f
         backgroundBlur = 0f
+        backgroundEnhancement = 0f
         subjectBrightness = 0f
         darkerAreaLift = 0f
         skinSmoothing = 0f
@@ -512,7 +522,7 @@ private fun PhotoEditorHome() {
     }
 
     // Debounced live preview: controls update the image without an Apply button.
-    LaunchedEffect(activePhoto?.uri, brightness, contrast, saturation, warmth, backgroundBlur, subjectBrightness, darkerAreaLift, skinSmoothing, makeupIntensity, cropLabel, cropOffsetX, cropOffsetY, selectedStyle) {
+    LaunchedEffect(activePhoto?.uri, brightness, contrast, saturation, warmth, backgroundBlur, backgroundEnhancement, subjectBrightness, darkerAreaLift, skinSmoothing, makeupIntensity, cropLabel, cropOffsetX, cropOffsetY, selectedStyle) {
         if (selectedStyle == "Object Removal") return@LaunchedEffect
         val photo = activePhoto
         if (photo != null) {
@@ -528,7 +538,7 @@ private fun PhotoEditorHome() {
                 }
                 if (selectedStyle == "Original") {
                     adjusted = Bitmap.createBitmap(original!!)
-                } else if (selectedStyle == "AI Portrait" || backgroundBlur > 0f || subjectBrightness > 0f || darkerAreaLift > 0f || skinSmoothing > 0f || makeupIntensity > 0f) {
+                } else if (selectedStyle == "AI Portrait" || backgroundBlur > 0f || backgroundEnhancement > 0f || subjectBrightness > 0f || darkerAreaLift > 0f || skinSmoothing > 0f || makeupIntensity > 0f) {
                     val aiResult = SubjectAwareEnhancer.enhance(original!!, settings, context)
                     adjusted = aiResult.bitmap
                     aiNotice = aiResult.message
@@ -543,7 +553,7 @@ private fun PhotoEditorHome() {
                 showEnhanced = true
                 statusMessage = if (selectedStyle == "Original") {
                     "Original preview. Choose a style or adjust the image to create an edit."
-                } else aiNotice ?: if (selectedStyle == "AI Portrait" || backgroundBlur > 0f || subjectBrightness > 0f || darkerAreaLift > 0f || skinSmoothing > 0f || makeupIntensity > 0f) {
+                } else aiNotice ?: if (selectedStyle == "AI Portrait" || backgroundBlur > 0f || backgroundEnhancement > 0f || subjectBrightness > 0f || darkerAreaLift > 0f || skinSmoothing > 0f || makeupIntensity > 0f) {
                     "AI Portrait enhancement applied using on-device person segmentation."
                 } else "Live preview updated. Export a copy when you're happy."
             } catch (error: CancellationException) {
@@ -561,7 +571,9 @@ private fun PhotoEditorHome() {
     fun exportOne(photo: PhotoItem, settings: EditSettings, useAiPortrait: Boolean = false, useAiUpscale: Boolean = false) {
         if (isExporting) return
         isExporting = true
-        statusMessage = "Rendering full-resolution export…"
+        operationProgress = 2
+        operationStage = "Reading original photo"
+        statusMessage = "Preparing export…"
         scope.launch {
             var original: Bitmap? = null
             var enhanced: Bitmap? = null
@@ -570,15 +582,24 @@ private fun PhotoEditorHome() {
                 original = withContext(Dispatchers.IO) {
                     AutoEnhancer.decodeForEditing(context.contentResolver, photo.uri, maxDimension = Int.MAX_VALUE)
                 }
+                operationProgress = 12
+                operationStage = if (useAiUpscale) "Preparing AI upscaling" else "Applying edit settings"
                 if (selectedStyle == "Object Removal" && previewBitmap != null && !useAiUpscale) {
                     enhanced = Bitmap.createBitmap(previewBitmap!!)
                 } else if (useAiUpscale) {
-                    val upscaleResult = AiUpscaler.upscale(context, original!!)
+                    val upscaleResult = AiUpscaler.upscale(context, original!!) { progress, stage ->
+                        withContext(Dispatchers.Main.immediate) {
+                            operationProgress = 12 + (progress * 0.78f).toInt()
+                            operationStage = stage
+                        }
+                    }
                     enhanced = upscaleResult.bitmap
                     aiNotice = if (upscaleResult.inputWasResizedForMemory) {
                         "ESRGAN 4x ran locally after resizing the input for phone memory. "
                     } else "ESRGAN 4x AI upscaling ran locally. "
                 } else if (useAiPortrait) {
+                    operationProgress = 22
+                    operationStage = "Detecting person, skin, and background masks"
                     val aiResult = SubjectAwareEnhancer.enhance(original!!, settings, context)
                     enhanced = aiResult.bitmap
                     aiNotice = aiResult.message
@@ -587,12 +608,16 @@ private fun PhotoEditorHome() {
                         AutoEnhancer.enhance(original!!, settings)
                     }
                 }
+                operationProgress = 94
+                operationStage = "Saving edited copy to Pictures/FRAME AI"
                 val width = enhanced!!.width
                 val height = enhanced!!.height
                 withContext(Dispatchers.IO) {
                     AutoEnhancer.saveJpeg(context.contentResolver, enhanced!!)
                 }
                 learnedProfile = PersonalEditLearning.recordAccepted(context, settings)
+                operationProgress = 100
+                operationStage = "Finished · original photo preserved"
                 statusMessage = (aiNotice?.let { "$it " } ?: if (useAiPortrait) {
                     "AI Portrait enhancement applied. "
                 } else "") + (if (useAiUpscale) "Saved ESRGAN-upscaled " else "Saved full-resolution ") + width + "x" + height +
@@ -620,6 +645,8 @@ private fun PhotoEditorHome() {
             return
         }
         isExporting = true
+        operationProgress = 3
+        operationStage = "Loading object-removal model"
         statusMessage = "Running LaMa object-removal model on this device…"
         scope.launch {
             var original: Bitmap? = null
@@ -628,8 +655,12 @@ private fun PhotoEditorHome() {
                 original = withContext(Dispatchers.IO) {
                     AutoEnhancer.decodeForEditing(context.contentResolver, photo.uri, maxDimension = 2400)
                 }
+                operationProgress = 20
+                operationStage = "Reconstructing marked area with LaMa"
                 val result = LamaInpainter.inpaint(context, original!!, strokes, removalBrushSize)
                 repaired = result.bitmap
+                operationProgress = 92
+                operationStage = "Saving repaired copy"
                 withContext(Dispatchers.IO) { AutoEnhancer.saveJpeg(context.contentResolver, repaired!!) }
                 previewBitmap?.let { if (!it.isRecycled) it.recycle() }
                 previewBitmap = repaired
@@ -711,7 +742,10 @@ private fun PhotoEditorHome() {
                             exportProgress = 0
                             statusMessage = "Enhancing and exporting the batch…"
                             val settingsForBatch = if (batchPreset == "Current edits") currentSettings() else BatchExportPolicy.settingsForPreset(batchPreset)
-                            val useAiPortrait = batchPreset == "AI Portrait"
+                            val useAiPortrait = batchPreset == "AI Portrait" ||
+                                settingsForBatch.backgroundBlur > 0f || settingsForBatch.backgroundEnhancement > 0f ||
+                                settingsForBatch.subjectBrightness > 0f || settingsForBatch.darkerAreaLift > 0f ||
+                                settingsForBatch.skinSmoothing > 0f || settingsForBatch.makeupIntensity > 0f
                             scope.launch {
                                 var succeeded = 0
                                 var failed = 0
@@ -1344,6 +1378,7 @@ private fun PhotoEditorHome() {
                                                 saturation = learned.saturation
                                                 warmth = learned.warmth
                                                 backgroundBlur = learned.backgroundBlur
+                                                backgroundEnhancement = learned.backgroundEnhancement
                                                 subjectBrightness = learned.subjectBrightness
                                                 darkerAreaLift = learned.darkerAreaLift
                                                 skinSmoothing = learned.skinSmoothing
@@ -1573,7 +1608,7 @@ private fun PhotoEditorHome() {
                             Button(
                                 onClick = {
                                     val photo = activePhoto
-                                    if (photo != null) exportOne(photo, currentSettings(), selectedStyle == "AI Portrait" || backgroundBlur > 0f || subjectBrightness > 0f || darkerAreaLift > 0f || skinSmoothing > 0f || makeupIntensity > 0f)
+                                    if (photo != null) exportOne(photo, currentSettings(), selectedStyle == "AI Portrait" || backgroundBlur > 0f || backgroundEnhancement > 0f || subjectBrightness > 0f || darkerAreaLift > 0f || skinSmoothing > 0f || makeupIntensity > 0f)
                                 },
                                 enabled = previewBitmap != null && !isExporting && selectedStyle != "Original",
                                 modifier = Modifier.weight(1f),

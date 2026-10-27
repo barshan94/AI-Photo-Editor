@@ -94,7 +94,7 @@ object SubjectAwareEnhancer {
                 }
                 if (settings.makeupIntensity > 0f) {
                     try {
-                        val detectedFaces = applyNaturalMakeup(enhanced, source, settings)
+                        val detectedFaces = applyNaturalMakeup(enhanced, settings)
                         if (detectedFaces == 0) {
                             makeupWarning = "No clear face contours were detected; makeup was skipped. Other adjustments were kept."
                         }
@@ -202,8 +202,8 @@ object SubjectAwareEnhancer {
 
 
     /** Applies a subtle contour-guided lip and cheek tint; no face image leaves the device. */
-    private suspend fun applyNaturalMakeup(bitmap: Bitmap, source: Bitmap, settings: EditSettings): Int {
-        if (settings.makeupIntensity <= 0f || settings.cropRatio != null || bitmap.width != source.width || bitmap.height != source.height) return 0
+    private suspend fun applyNaturalMakeup(bitmap: Bitmap, settings: EditSettings): Int {
+        if (settings.makeupIntensity <= 0f || bitmap.isRecycled || bitmap.width <= 0 || bitmap.height <= 0) return 0
         val options = FaceDetectorOptions.Builder()
             .setContourMode(FaceDetectorOptions.CONTOUR_MODE_ALL)
             .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_ACCURATE)
@@ -211,7 +211,7 @@ object SubjectAwareEnhancer {
         val detector = FaceDetection.getClient(options)
         val faces = try {
             suspendCancellableCoroutine<List<Face>> { continuation ->
-                detector.process(InputImage.fromBitmap(source, 0))
+                detector.process(InputImage.fromBitmap(bitmap, 0))
                     .addOnSuccessListener { result -> if (continuation.isActive) continuation.resume(result) }
                     .addOnFailureListener { error -> if (continuation.isActive) continuation.resumeWithException(error) }
                 continuation.invokeOnCancellation { detector.close() }

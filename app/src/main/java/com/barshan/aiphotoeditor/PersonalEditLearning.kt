@@ -16,7 +16,8 @@ data class PersonalEditProfile(
     val backgroundBlur: Float,
     val subjectBrightness: Float,
     val darkerAreaLift: Float,
-    val skinSmoothing: Float
+    val skinSmoothing: Float,
+    val makeupIntensity: Float
 ) {
     fun toSettings() = EditSettings(
         brightness = brightness,
@@ -26,7 +27,8 @@ data class PersonalEditProfile(
         backgroundBlur = backgroundBlur,
         subjectBrightness = subjectBrightness,
         darkerAreaLift = darkerAreaLift,
-        skinSmoothing = skinSmoothing
+        skinSmoothing = skinSmoothing,
+        makeupIntensity = makeupIntensity
     )
 }
 
@@ -46,7 +48,8 @@ object PersonalEditLearning {
             backgroundBlur = p.getFloat("background_blur", 0f),
             subjectBrightness = p.getFloat("subject_brightness", 0f),
             darkerAreaLift = p.getFloat("darker_area_lift", 0f),
-            skinSmoothing = p.getFloat("skin_smoothing", 0f)
+            skinSmoothing = p.getFloat("skin_smoothing", 0f),
+            makeupIntensity = p.getFloat("makeup_intensity", 0f)
         )
     }
 
@@ -66,7 +69,8 @@ object PersonalEditLearning {
             backgroundBlur = blend(old.backgroundBlur, settings.backgroundBlur),
             subjectBrightness = blend(old.subjectBrightness, settings.subjectBrightness),
             darkerAreaLift = blend(old.darkerAreaLift, settings.darkerAreaLift),
-            skinSmoothing = blend(old.skinSmoothing, settings.skinSmoothing)
+            skinSmoothing = blend(old.skinSmoothing, settings.skinSmoothing),
+            makeupIntensity = blend(old.makeupIntensity, settings.makeupIntensity)
         )
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
             .putInt(COUNT, next.acceptedEdits)
@@ -78,6 +82,7 @@ object PersonalEditLearning {
             .putFloat("subject_brightness", next.subjectBrightness)
             .putFloat("darker_area_lift", next.darkerAreaLift)
             .putFloat("skin_smoothing", next.skinSmoothing)
+            .putFloat("makeup_intensity", next.makeupIntensity)
             .apply()
         return next
     }

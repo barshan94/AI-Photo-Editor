@@ -1223,13 +1223,11 @@ private fun PhotoEditorHome() {
                             if (active != null) {
                                 if (compareBeforeAfter && previewBitmap != null) {
                                     AsyncImage(model = previewBitmap, contentDescription = "After edit comparison",
-                                        modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                                        modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
                                     AsyncImage(model = active.uri, contentDescription = "Before edit comparison",
                                         modifier = Modifier.fillMaxSize().drawWithContent {
                                             clipRect(right = size.width * comparePosition) { this@drawWithContent.drawContent() }
-                                        }, contentScale = ContentScale.Crop)
-                                    Box(modifier = Modifier.fillMaxWidth(comparePosition).height(2.dp)
-                                        .align(Alignment.CenterStart).background(Mint))
+                                        }, contentScale = ContentScale.Fit)
                                     Text("BEFORE", color = BrightText, fontSize = 9.sp, fontWeight = FontWeight.Bold,
                                         modifier = Modifier.align(Alignment.TopStart).padding(8.dp)
                                             .background(Ink.copy(alpha = 0.8f), RoundedCornerShape(5.dp)).padding(5.dp))
@@ -1243,7 +1241,7 @@ private fun PhotoEditorHome() {
                                             scaleY = previewScale
                                             translationX = previewOffsetX
                                             translationY = previewOffsetY
-                                        }, contentScale = ContentScale.Crop)
+                                        }, contentScale = ContentScale.Fit)
                                 } else {
                                     AsyncImage(model = active.uri, contentDescription = "Original photo",
                                         modifier = Modifier.fillMaxSize().graphicsLayer {
@@ -1251,7 +1249,7 @@ private fun PhotoEditorHome() {
                                             scaleY = previewScale
                                             translationX = previewOffsetX
                                             translationY = previewOffsetY
-                                        }, contentScale = ContentScale.Crop)
+                                        }, contentScale = ContentScale.Fit)
                                 }
                             }
                             if (removalBrushMode || removalStrokes.isNotEmpty() || currentRemovalStroke.isNotEmpty()) {
@@ -1319,17 +1317,18 @@ private fun PhotoEditorHome() {
                             modifier = Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState())
                         ) {
                             Text("EDIT WORKSPACE", color = Mint, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                            Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                 listOf("Universal Edit", "AI Edit", "Presets").forEach { panel ->
                                     Button(
                                         onClick = { activeEditorPanel = panel; compareBeforeAfter = false },
+                                        modifier = Modifier.weight(1f),
                                         shape = RoundedCornerShape(10.dp),
                                         colors = ButtonDefaults.buttonColors(
                                             containerColor = if (activeEditorPanel == panel) Mint else Color(0xFF293333),
                                             contentColor = if (activeEditorPanel == panel) Ink else BrightText
                                         ),
-                                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 3.dp)
-                                    ) { Text(panel, fontSize = 10.sp, fontWeight = FontWeight.SemiBold) }
+                                        contentPadding = PaddingValues(horizontal = 3.dp, vertical = 3.dp)
+                                    ) { Text(panel, fontSize = 10.sp, fontWeight = FontWeight.SemiBold, maxLines = 1) }
                                 }
                             }
                             Text("Choose one AI editing group at a time to keep the workspace focused.", color = SoftText, fontSize = 10.sp, lineHeight = 14.sp)
@@ -1705,7 +1704,8 @@ private fun PhotoEditorHome() {
                                             }
                                             val result = PhotoAnalysisEngine.analyze(analysisBitmap!!)
                                             photoAnalysisResult = result
-                                            statusMessage = "Analysis complete. No edits were applied. Review the suggestion and choose whether to apply it."
+                                            applyAiSuggestedEdit(result)
+                                            statusMessage = "AI edit applied. Review the preview, compare it with the original, and undo or adjust anything that looks unnatural."
                                         } catch (error: CancellationException) {
                                             throw error
                                         } catch (error: Exception) {
@@ -1735,54 +1735,11 @@ private fun PhotoEditorHome() {
                             } else {
                                 androidx.compose.material3.Icon(Icons.Rounded.ImageSearch, contentDescription = null)
                                 Text(
-                                    if (photoAnalysisResult == null) "  AI Analyse + Best Edit" else "  Analyse + Re-edit",
+                                    "  AI Edit",
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.Bold
                                 )
                             }
-                        }
-                        photoAnalysisResult?.let { result ->
-                            Card(
-                                modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
-                                colors = CardDefaults.cardColors(containerColor = Color(0xFF202929)),
-                                shape = RoundedCornerShape(14.dp)
-                            ) {
-                                Column(
-                                    modifier = Modifier.fillMaxWidth().padding(12.dp),
-                                    verticalArrangement = Arrangement.spacedBy(7.dp)
-                                ) {
-                                    Text("AI PHOTO ANALYSIS", color = Mint, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                    Text("${result.width} × ${result.height} px · ${result.faceCount} detected face(s)",
-                                        color = BrightText, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-                                    Text(result.subjectSummary, color = BrightText, fontSize = 12.sp, lineHeight = 17.sp)
-                                    Text("SCENE LABELS", color = Mint, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                                    Text(
-                                        result.labels.takeIf { it.isNotEmpty() }?.joinToString(" · ")
-                                            ?: "No confident scene labels returned. This is not proof that the image has no subject.",
-                                        color = SoftText, fontSize = 11.sp, lineHeight = 16.sp
-                                    )
-                                    Text("LIGHTING CHECK", color = Mint, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                                    Text(result.lightingSummary, color = SoftText, fontSize = 11.sp, lineHeight = 16.sp)
-                                    Text("SUGGESTED NEXT STEPS", color = Mint, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                                    result.recommendations.forEach { recommendation ->
-                                        Text("• $recommendation", color = BrightText, fontSize = 11.sp, lineHeight = 16.sp)
-                                    }
-                                    Button(
-                                        onClick = { applyAiSuggestedEdit(result) },
-                                        modifier = Modifier.fillMaxWidth(),
-                                        shape = RoundedCornerShape(10.dp),
-                                        colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Ink)
-                                    ) {
-                                        Text("Apply suggested " + suggestedStyleFor(result) + " edit", fontSize = 12.sp,
-                                            fontWeight = FontWeight.Bold)
-                                    }
-                                    Text(
-                                        "Analysis does not change your photo. The suggested edit is a reversible basic color adjustment, not generative object removal, skin retouching, or true detail reconstruction.",
-                                        color = SoftText, fontSize = 10.sp, lineHeight = 14.sp
-                                    )
-                                }
-                            }
-                        }
                         }
                         if (activeEditorPanel == "Universal Edit") {
                             Text("UNIVERSAL EDIT · STANDARD CONTROLS", color = Mint, fontSize = 11.sp, fontWeight = FontWeight.Bold)
@@ -1949,7 +1906,7 @@ private fun PhotoEditorHome() {
                                 AsyncImage(model = photo.uri, contentDescription = "Photo",
                                     modifier = Modifier.fillMaxWidth().aspectRatio(0.82f)
                                         .clip(RoundedCornerShape(9.dp)),
-                                    contentScale = ContentScale.Crop)
+                                    contentScale = ContentScale.Fit)
                                 if (activePhoto?.uri == photo.uri) {
                                     androidx.compose.material3.Icon(
                                         imageVector = Icons.Rounded.CheckCircle,

@@ -166,6 +166,7 @@ private fun PhotoEditorHome() {
     var isShowingOriginalOnHold by remember { mutableStateOf(false) }
     var previewWidthPx by remember { mutableIntStateOf(0) }
     var previewHeightPx by remember { mutableIntStateOf(0) }
+    var editedQualityScore by remember { mutableIntStateOf(0) }
     var isPreparingPreview by remember { mutableStateOf(false) }
     var showEnhanced by remember { mutableStateOf(true) }
     var compareBeforeAfter by remember { mutableStateOf(false) }
@@ -260,6 +261,30 @@ private fun PhotoEditorHome() {
             .putFloat("crop_offset_y", cropOffsetY)
             .putString("selected_style", selectedStyle)
             .apply()
+    }
+
+    LaunchedEffect(previewBitmap) {
+        val currentBitmap = previewBitmap
+        if (currentBitmap != null && !currentBitmap.isRecycled) {
+            val snapshot = try { currentBitmap.copy(Bitmap.Config.ARGB_8888, false) } catch (_: Exception) { null }
+            if (snapshot != null) {
+                editedQualityScore = withContext(Dispatchers.Default) {
+                    val maxSide = 240
+                    val ratio = minOf(1f, maxSide.toFloat() / maxOf(snapshot.width, snapshot.height).toFloat())
+                    val width = (snapshot.width * ratio).toInt().coerceAtLeast(3)
+                    val height = (snapshot.height * ratio).toInt().coerceAtLeast(3)
+                    val scaled = Bitmap.createScaledBitmap(snapshot, width, height, true)
+                    try {
+                        val pixels = IntArray(width * height)
+                        scaled.getPixels(pixels, 0, width, 0, 0, width, height)
+                        PhotoQualityScoring.scorePixels(pixels, width, height).score
+                    } finally {
+                        if (scaled !== snapshot && !scaled.isRecycled) scaled.recycle()
+                        if (!snapshot.isRecycled) snapshot.recycle()
+                    }
+                }
+            }
+        }
     }
 
     val previewTransformState = rememberTransformableState { zoomChange, panChange, _ ->
@@ -1101,6 +1126,7 @@ private fun PhotoEditorHome() {
                                                     val holdJob = launch {
                                                         delay(450)
                                                         isShowingOriginalOnHold = true
+                                                        compareBeforeAfter = false
                                                         showEnhanced = false
                                                     }
                                                     tryAwaitRelease()
@@ -1195,8 +1221,11 @@ private fun PhotoEditorHome() {
                         }
                         val current = activePhoto
                         if (current != null && current.score != null) {
-                            Text("TECHNICAL SCORE  " + current.score + "/100",
-                                color = Mint, fontSize = 11.sp, fontWeight = FontWeight.Bold,
+                            val scoreDelta = editedQualityScore - current.score
+                            Text("ORIGINAL " + current.score + "/100  ·  EDITED " + editedQualityScore +
+                                "/100  ·  " + (if (scoreDelta > 0) "+" else "") + scoreDelta,
+                                color = if (scoreDelta > 0) Mint else if (scoreDelta < 0) Color(0xFFFFC078) else SoftText,
+                                fontSize = 11.sp, fontWeight = FontWeight.Bold,
                                 modifier = Modifier.padding(top = 7.dp))
                             Text("Sharpness " + current.sharpness + "  ·  Exposure " + current.exposure +
                                 "  ·  Contrast " + current.contrast,

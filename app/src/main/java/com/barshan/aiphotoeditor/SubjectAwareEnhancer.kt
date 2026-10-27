@@ -94,17 +94,22 @@ object SubjectAwareEnhancer {
                 }
                 if (settings.makeupIntensity > 0f) {
                     try {
-                        applyNaturalMakeup(enhanced, source, settings)
+                        val detectedFaces = applyNaturalMakeup(enhanced, source, settings)
+                        if (detectedFaces == 0) {
+                            makeupWarning = "No clear face contours were detected; makeup was skipped. Other adjustments were kept."
+                        }
                     } catch (_: Exception) {
                         makeupWarning = "Face-contour makeup was unavailable; the other portrait adjustments were kept."
                     }
                 }
+                val fallbackWarning = if (!usedMulticlassModel) {
+                    "Fallback person segmentation was used. Skin-only lightening and softening are disabled because the skin-mask model did not initialize."
+                } else null
+                val combinedWarning = listOfNotNull(fallbackWarning, makeupWarning).joinToString(" ").ifBlank { null }
                 return Result(
                     bitmap = enhanced,
                     usedAi = usedMulticlassModel,
-                    message = if (!usedMulticlassModel) {
-                        "Portrait blur used fallback person segmentation. Skin-only lightening is disabled because the skin mask model did not initialize."
-                    } else makeupWarning
+                    message = combinedWarning
                 )
             } catch (error: Exception) {
                 if (!enhanced.isRecycled) enhanced.recycle()
@@ -196,8 +201,8 @@ object SubjectAwareEnhancer {
 
 
     /** Applies a subtle contour-guided lip and cheek tint; no face image leaves the device. */
-    private suspend fun applyNaturalMakeup(bitmap: Bitmap, source: Bitmap, settings: EditSettings) {
-        if (settings.makeupIntensity <= 0f || settings.cropRatio != null || bitmap.width != source.width || bitmap.height != source.height) return
+    private suspend fun applyNaturalMakeup(bitmap: Bitmap, source: Bitmap, settings: EditSettings): Int {
+        if (settings.makeupIntensity <= 0f || settings.cropRatio != null || bitmap.width != source.width || bitmap.height != source.height) return 0
         val options = FaceDetectorOptions.Builder()
             .setContourMode(FaceDetectorOptions.CONTOUR_MODE_ALL)
             .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_ACCURATE)
@@ -213,7 +218,7 @@ object SubjectAwareEnhancer {
         } finally {
             detector.close()
         }
-        if (faces.isEmpty()) return
+        if (faces.isEmpty()) return 0
         withContext(Dispatchers.Default) {
             val strength = settings.makeupIntensity.coerceIn(0f, 10f) / 10f
             val canvas = Canvas(bitmap)
@@ -257,6 +262,7 @@ object SubjectAwareEnhancer {
                 cheekPaint.shader = null
             }
         }
+        return faces.size
     }
 
     private data class PersonMask(

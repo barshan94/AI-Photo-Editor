@@ -12,6 +12,8 @@ data class EditSettings(
     val cropOffsetY: Float = 0f,
     /** 0..20 approximate background blur strength; requires person segmentation. */
     val backgroundBlur: Float = 0f,
+    /** 0..10 scene-aware contrast and color lift applied only outside the detected person mask. */
+    val backgroundEnhancement: Float = 0f,
     /** 0..25 neutral brightness lift applied to detected skin pixels (face and body skin). */
     val subjectBrightness: Float = 0f,
     /** 0..30 adaptive lift that targets darker skin pixels more strongly than already-bright skin. */

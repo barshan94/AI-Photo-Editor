@@ -1300,7 +1300,7 @@ private fun PhotoEditorHome() {
                         ) {
                             Column(modifier = Modifier.fillMaxWidth().padding(12.dp)) {
                                 Text("AI TOOLBOX", color = Mint, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                                Text("Your basic editor stays available. Advanced tools are being added as real workflows, not pretend buttons.", color = SoftText, fontSize = 10.sp, lineHeight = 14.sp, modifier = Modifier.padding(top = 3.dp, bottom = 8.dp))
+                                Text("On-device workflows: ESRGAN upscale, LaMa removal, subject-aware retouch, and private edit preferences.", color = SoftText, fontSize = 10.sp, lineHeight = 14.sp, modifier = Modifier.padding(top = 3.dp, bottom = 8.dp))
                                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                     Column(modifier = Modifier.weight(1f)) {
                                         Text("Background blur", color = BrightText, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
@@ -1752,16 +1752,16 @@ private fun PhotoEditorHome() {
                                 }
                             }
                         }
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            }
-                        if (activeEditorPanel == "Universal Edit") {
-                        Text("UNIVERSAL EDIT · STANDARD CONTROLS", color = Mint, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                        Text("Brightness, contrast, saturation, warmth, and crop apply alongside any active AI adjustment.", color = SoftText, fontSize = 10.sp, lineHeight = 14.sp)
-                        Text("MANUAL ADJUSTMENTS", color = BrightText, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                            Spacer(modifier = Modifier.weight(1f))
-                            Text(if (showCropGuides) "Guides on" else "Guides off", color = Mint, fontSize = 10.sp,
-                                modifier = Modifier.clickable { showCropGuides = !showCropGuides }.padding(4.dp))
                         }
+                        if (activeEditorPanel == "Universal Edit") {
+                            Text("UNIVERSAL EDIT · STANDARD CONTROLS", color = Mint, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            Text("Brightness, contrast, saturation, warmth, and crop apply alongside any active AI adjustment.", color = SoftText, fontSize = 10.sp, lineHeight = 14.sp)
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text("MANUAL ADJUSTMENTS", color = BrightText, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                Spacer(modifier = Modifier.weight(1f))
+                                Text(if (showCropGuides) "Guides on" else "Guides off", color = Mint, fontSize = 10.sp,
+                                    modifier = Modifier.clickable { showCropGuides = !showCropGuides }.padding(4.dp))
+                            }
                         Text("BRIGHTNESS  " + brightness.toInt(), color = SoftText, fontSize = 11.sp)
                         Slider(value = brightness, onValueChange = {
                             recordEditChange()

@@ -174,6 +174,7 @@ private fun PhotoEditorHome() {
     var cropOffsetY by remember { mutableFloatStateOf(0f) }
     var selectedStyle by remember { mutableStateOf("Auto") }
     var activeEditorPanel by remember { mutableStateOf("Universal Edit") }
+    var activeAiSubpanel by remember { mutableStateOf("Subject") }
     var editedScore by remember { mutableStateOf<PhotoQualityScoring.Score?>(null) }
     var statusMessage by remember { mutableStateOf("Choose photos to begin. Analysis and edits run on this device.") }
     var photoAnalysisResult by remember { mutableStateOf<PhotoAnalysisResult?>(null) }
@@ -1331,7 +1332,25 @@ private fun PhotoEditorHome() {
                                     ) { Text(panel, fontSize = 10.sp, fontWeight = FontWeight.SemiBold) }
                                 }
                             }
-                            Text("Only the selected tool group is expanded. Universal Edit keeps the standard controls together.", color = SoftText, fontSize = 10.sp, lineHeight = 14.sp)
+                            Text("Choose one AI editing group at a time to keep the workspace focused.", color = SoftText, fontSize = 10.sp, lineHeight = 14.sp)
+                            if (activeEditorPanel == "AI Edit") {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(top = 6.dp, bottom = 8.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    listOf("Subject", "Background", "Remove", "Enhance").forEach { group ->
+                                        Button(
+                                            onClick = { activeAiSubpanel = group; compareBeforeAfter = false },
+                                            shape = RoundedCornerShape(10.dp),
+                                            colors = ButtonDefaults.buttonColors(
+                                                containerColor = if (activeAiSubpanel == group) Mint else Color(0xFF293333),
+                                                contentColor = if (activeAiSubpanel == group) Ink else BrightText
+                                            ),
+                                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 3.dp)
+                                        ) { Text(group, fontSize = 10.sp, fontWeight = FontWeight.SemiBold) }
+                                    }
+                                }
+                            }
                         if (activeEditorPanel == "AI Edit") {
                         Card(
                             modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
@@ -1341,6 +1360,7 @@ private fun PhotoEditorHome() {
                             Column(modifier = Modifier.fillMaxWidth().padding(12.dp)) {
                                 Text("AI EDIT ACTIONS", color = Mint, fontSize = 13.sp, fontWeight = FontWeight.Bold)
                                 Text("Improve detail, remove unwanted objects, inspect the scene, and build a personal editing style.", color = SoftText, fontSize = 10.sp, lineHeight = 14.sp, modifier = Modifier.padding(top = 3.dp, bottom = 8.dp))
+                                if (activeAiSubpanel == "Enhance") {
                                 Button(
                                     onClick = {
                                         val photo = activePhoto
@@ -1364,6 +1384,8 @@ private fun PhotoEditorHome() {
                                         modifier = Modifier.padding(top = 3.dp))
                                 }
                                 Text("AI upscaling processes image tiles on this device. The input is memory-bounded to about 1024 px on its longest edge, then reconstructed at 4×. The source photo is never overwritten.", color = SoftText, fontSize = 10.sp, lineHeight = 14.sp)
+                                }
+                                if (activeAiSubpanel == "Remove") {
                                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                     Button(
                                         onClick = {
@@ -1395,6 +1417,8 @@ private fun PhotoEditorHome() {
                                         colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Ink)
                                     ) { Text(if (isExporting) "Removing object…" else "Remove marked area") }
                                 }
+                                }
+                                if (activeAiSubpanel == "Enhance") {
                                 Text("PERSONAL EDIT LEARNING · PRIVATE ON THIS DEVICE", color = Mint, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                                 Text(
                                     if (learnedProfile.acceptedEdits == 0) "No accepted edits learned yet. Export an edit you like; the app will remember its settings locally and use them as your personal starting point."
@@ -1442,6 +1466,7 @@ private fun PhotoEditorHome() {
                                     ) { Text("Reset learning", fontSize = 10.sp) }
                                 }
                                 Text("Your editing preferences stay on this device. Photos are not stored for learning.", color = SoftText, fontSize = 9.sp, lineHeight = 12.sp)
+                                }
                             }
                         }
                         }
@@ -1452,7 +1477,8 @@ private fun PhotoEditorHome() {
                             shape = RoundedCornerShape(14.dp)
                         ) {
                             Column(modifier = Modifier.fillMaxWidth().padding(12.dp)) {
-                                Text("PORTRAIT EFFECTS · ON DEVICE", color = Mint, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                if (activeAiSubpanel == "Background") {
+                                Text("BACKGROUND EDITING", color = Mint, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                                 Text("Use the slider to blur the background while keeping the detected person clearer. Best for portraits and couples.", color = SoftText, fontSize = 10.sp, lineHeight = 14.sp)
                                 Text("BACKGROUND ENHANCE · SCENE-AWARE  " + backgroundEnhancement.toInt(), color = SoftText, fontSize = 11.sp)
                                 Slider(value = backgroundEnhancement, onValueChange = {
@@ -1469,6 +1495,9 @@ private fun PhotoEditorHome() {
                                     selectedStyle = if (it > 0f || subjectBrightness > 0f) "AI Portrait" else "Custom"
                                     showEnhanced = true
                                 }, valueRange = 0f..20f)
+                                }
+                                if (activeAiSubpanel == "Subject") {
+                                Text("SUBJECT RETOUCH", color = Mint, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                                 Text("DARKER SKIN AREAS · ADAPTIVE LIFT  " + darkerAreaLift.toInt(), color = SoftText, fontSize = 11.sp)
                                 Slider(value = darkerAreaLift, onValueChange = {
                                     recordEditChange()
@@ -1501,6 +1530,7 @@ private fun PhotoEditorHome() {
                                     showEnhanced = true
                                 }, valueRange = 0f..10f)
                                 Text("Uses detected face contours for a stronger but still translucent lip tint and softly feathered cheek color. It is optional and remains off at zero.", color = SoftText, fontSize = 10.sp, lineHeight = 14.sp)
+                                }
                             }
                         }
                         }
@@ -1656,7 +1686,7 @@ private fun PhotoEditorHome() {
                             }
                         }
                         Spacer(modifier = Modifier.height(12.dp))
-                        if (activeEditorPanel == "AI Tools") {
+                        if (activeEditorPanel == "AI Edit" && activeAiSubpanel == "Enhance") {
                         Button(
                             onClick = {
                                 val photo = activePhoto

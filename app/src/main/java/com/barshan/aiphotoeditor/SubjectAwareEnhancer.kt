@@ -7,6 +7,8 @@ import android.graphics.Color as AndroidColor
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RectF
+import android.graphics.RadialGradient
+import android.graphics.Shader
 import android.renderscript.Allocation
 import android.renderscript.Element
 import android.renderscript.RenderScript
@@ -216,11 +218,11 @@ object SubjectAwareEnhancer {
             val strength = settings.makeupIntensity.coerceIn(0f, 10f) / 10f
             val canvas = Canvas(bitmap)
             val lipPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = AndroidColor.argb((strength * 62f).toInt().coerceIn(0, 62), 176, 62, 94)
+                // Visible at normal viewing size, but still translucent enough to retain lip detail.
+                color = AndroidColor.argb((strength * 96f).toInt().coerceIn(0, 96), 176, 62, 94)
                 style = Paint.Style.FILL
             }
             val cheekPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = AndroidColor.argb((strength * 24f).toInt().coerceIn(0, 24), 226, 92, 112)
                 style = Paint.Style.FILL
             }
             for (face in faces) {
@@ -235,15 +237,24 @@ object SubjectAwareEnhancer {
                     }
                     canvas.drawPath(lipPath, lipPaint)
                 }
-                val radius = face.boundingBox.width() * 0.065f
+                val radius = face.boundingBox.width() * 0.085f
                 for (contourType in listOf(FaceContour.LEFT_CHEEK, FaceContour.RIGHT_CHEEK)) {
                     val points = face.getContour(contourType)?.points.orEmpty()
                     if (points.isNotEmpty() && radius > 1f) {
                         val centerX = points.map { it.x }.average().toFloat()
                         val centerY = points.map { it.y }.average().toFloat()
-                        canvas.drawOval(RectF(centerX - radius, centerY - radius * 0.55f, centerX + radius, centerY + radius * 0.55f), cheekPaint)
+                        val peakAlpha = (strength * 58f).toInt().coerceIn(0, 58)
+                        cheekPaint.shader = RadialGradient(
+                            centerX, centerY, radius,
+                            intArrayOf(
+                                AndroidColor.argb(peakAlpha, 226, 76, 112),
+                                AndroidColor.argb(0, 226, 76, 112)
+                            ), floatArrayOf(0f, 1f), Shader.TileMode.CLAMP
+                        )
+                        canvas.drawOval(RectF(centerX - radius, centerY - radius * 0.58f, centerX + radius, centerY + radius * 0.58f), cheekPaint)
                     }
                 }
+                cheekPaint.shader = null
             }
         }
     }
@@ -376,7 +387,7 @@ object SubjectAwareEnhancer {
                 var red = (pixel shr 16 and 0xFF).toDouble()
                 var green = (pixel shr 8 and 0xFF).toDouble()
                 var blue = (pixel and 0xFF).toDouble()
-                val smoothMix = (settings.skinSmoothing.coerceIn(0f, 10f) / 10f * 0.42f * skin).toDouble()
+                val smoothMix = (settings.skinSmoothing.coerceIn(0f, 10f) / 10f * 0.72f * skin).toDouble()
                 if (smoothMix > 0.001) {
                     var sumRed = 0.0; var sumGreen = 0.0; var sumBlue = 0.0
                     for (dy in -1..1) {
@@ -404,9 +415,25 @@ object SubjectAwareEnhancer {
                 val baseRed = luma + (red - luma) + brightness
                 val baseGreen = luma + (green - luma) + brightness
                 val baseBlue = luma + (blue - luma) + brightness
-                val outRed = (baseRed * (1.0 - blurMix) + bgRed * blurMix).toInt().coerceIn(0, 255)
-                val outGreen = (baseGreen * (1.0 - blurMix) + bgGreen * blurMix).toInt().coerceIn(0, 255)
-                val outBlue = (baseBlue * (1.0 - blurMix) + bgBlue * blurMix).toInt().coerceIn(0, 255)
+                // Scene-aware background enhancement is restricted to the non-person mask.
+                // It adds restrained local contrast, color separation, and a small exposure lift.
+                val sceneStrength = settings.backgroundEnhancement.coerceIn(0f, 10f).toDouble()
+                val sceneMix = (sceneStrength / 10.0 * (1.0 - subject)).coerceIn(0.0, 1.0)
+                val sceneLuma = 0.2126 * baseRed + 0.7152 * baseGreen + 0.0722 * baseBlue
+                val sceneContrast = 1.0 + sceneStrength * 0.025
+                val sceneSaturation = 1.0 + sceneStrength * 0.10
+                val contrastRed = (baseRed - 128.0) * sceneContrast + 128.0
+                val contrastGreen = (baseGreen - 128.0) * sceneContrast + 128.0
+                val contrastBlue = (baseBlue - 128.0) * sceneContrast + 128.0
+                val enhancedSceneRed = sceneLuma + (contrastRed - sceneLuma) * sceneSaturation + sceneStrength * 0.35
+                val enhancedSceneGreen = sceneLuma + (contrastGreen - sceneLuma) * sceneSaturation + sceneStrength * 0.35
+                val enhancedSceneBlue = sceneLuma + (contrastBlue - sceneLuma) * sceneSaturation + sceneStrength * 0.35
+                val sceneRed = baseRed * (1.0 - sceneMix) + enhancedSceneRed * sceneMix
+                val sceneGreen = baseGreen * (1.0 - sceneMix) + enhancedSceneGreen * sceneMix
+                val sceneBlue = baseBlue * (1.0 - sceneMix) + enhancedSceneBlue * sceneMix
+                val outRed = (sceneRed * (1.0 - blurMix) + bgRed * blurMix).toInt().coerceIn(0, 255)
+                val outGreen = (sceneGreen * (1.0 - blurMix) + bgGreen * blurMix).toInt().coerceIn(0, 255)
+                val outBlue = (sceneBlue * (1.0 - blurMix) + bgBlue * blurMix).toInt().coerceIn(0, 255)
                 outputRow[x] = (alpha shl 24) or (outRed shl 16) or (outGreen shl 8) or outBlue
             }
             bitmap.setPixels(outputRow, 0, width, 0, y, width, 1)

@@ -166,7 +166,7 @@ object SubjectAwareEnhancer {
                 val bgRed = (backgroundPixel shr 16 and 0xFF).toDouble()
                 val bgGreen = (backgroundPixel shr 8 and 0xFF).toDouble()
                 val bgBlue = (backgroundPixel and 0xFF).toDouble()
-                val outRed = (128.0 + (luma + (red - luma) * saturation - 128.0) * contrast + brightness) * (1.0 - blurMix) + bgRed * blurMix
+                val outRed = ((128.0 + (luma + (red - luma) * saturation - 128.0) * contrast + brightness) * (1.0 - blurMix) + bgRed * blurMix)
                     .toInt().coerceIn(0, 255)
                 val outGreen = ((128.0 + (luma + (green - luma) * saturation - 128.0) * contrast + brightness) * (1.0 - blurMix) + bgGreen * blurMix)
                     .toInt().coerceIn(0, 255)

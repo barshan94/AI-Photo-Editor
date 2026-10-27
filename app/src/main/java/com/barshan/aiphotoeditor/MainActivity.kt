@@ -890,6 +890,7 @@ private fun PhotoEditorHome() {
     Surface(modifier = Modifier.fillMaxSize(), color = Ink) {
         Column(
             modifier = Modifier.fillMaxSize().padding(horizontal = 18.dp, vertical = 14.dp)
+                .then(if (activePhoto != null) Modifier.verticalScroll(rememberScrollState()) else Modifier)
         ) {
             if (activePhoto == null) {
             Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -915,427 +916,10 @@ private fun PhotoEditorHome() {
             }
             }
 
-            if (activePhoto == null) {
-                Spacer(modifier = Modifier.height(18.dp))
-                Text("Your moments. At their best.", color = BrightText, fontSize = 27.sp,
-                    lineHeight = 32.sp, fontWeight = FontWeight.SemiBold)
-                Text(
-                    "Rank your shots, preview a gentle auto-edit, and export new copies.",
-                    modifier = Modifier.padding(top = 5.dp),
-                    color = SoftText, fontSize = 13.sp, lineHeight = 19.sp
-                )
-                Spacer(modifier = Modifier.height(14.dp))
-            }
-            if (activePhoto == null) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                Button(
-                    onClick = { photoPicker.launch(arrayOf("image/*")) },
-                    modifier = Modifier.weight(1f).height(48.dp),
-                    shape = RoundedCornerShape(14.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Ink),
-                    contentPadding = PaddingValues(horizontal = 8.dp)
-                ) {
-                    androidx.compose.material3.Icon(Icons.Rounded.AddPhotoAlternate, contentDescription = null)
-                    Text("  Choose photos", fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                }
-                Button(
-                    onClick = {
-                        if (!isExporting && !isAnalyzing && selectedPhotos.isNotEmpty()) {
-                            isExporting = true
-                            exportProgress = 0
-                            statusMessage = "Enhancing and exporting the batch…"
-                            val settingsForBatch = if (batchPreset == "Current edits") currentSettings() else BatchExportPolicy.settingsForPreset(batchPreset)
-                            val useAiPortrait = batchPreset == "AI Edit" || batchPreset == "AI Portrait" ||
-                                settingsForBatch.backgroundBlur > 0f || settingsForBatch.backgroundEnhancement > 0f ||
-                                settingsForBatch.subjectBrightness > 0f || settingsForBatch.darkerAreaLift > 0f ||
-                                settingsForBatch.skinSmoothing > 0f || settingsForBatch.makeupIntensity > 0f
-                            scope.launch {
-                                var succeeded = 0
-                                var failed = 0
-                                var aiFallbacks = 0
-                                val failedNames = mutableListOf<String>()
-                                val batch = selectedPhotos.filter { it.decision != "Reject" }
-                                val skipped = selectedPhotos.size - batch.size
-                                batchSummary = null
-                                try {
-                                    for ((index, photo) in batch.withIndex()) {
-                                        var original: Bitmap? = null
-                                        var enhanced: Bitmap? = null
-                                        try {
-                                            original = withContext(Dispatchers.IO) {
-                                                AutoEnhancer.decodeForEditing(
-                                                    context.contentResolver, photo.uri, maxDimension = Int.MAX_VALUE
-                                                )
-                                            }
-                                            val photoSettings = if (batchPreset == "AI Edit") {
-                                                aiSettingsFor(PhotoAnalysisEngine.analyze(original!!))
-                                            } else {
-                                                settingsForBatch
-                                            }
-                                            if (useAiPortrait) {
-                                                val aiResult = SubjectAwareEnhancer.enhance(original!!, photoSettings, context)
-                                                enhanced = aiResult.bitmap
-                                                if (!aiResult.usedAi) aiFallbacks++
-                                            } else {
-                                                enhanced = withContext(Dispatchers.Default) {
-                                                    AutoEnhancer.enhance(original!!, photoSettings)
-                                                }
-                                            }
-                                            withContext(Dispatchers.IO) {
-                                                AutoEnhancer.saveJpeg(context.contentResolver, enhanced!!)
-                                            }
-                                            succeeded++
-                                        } catch (error: CancellationException) {
-                                            statusMessage = "Batch export cancelled. Previously saved copies remain available; originals are untouched."
-                                            throw error
-                                        } catch (error: OutOfMemoryError) {
-                                            failed++
-                                            failedNames.add((photo.uri.lastPathSegment ?: "Photo " + (index + 1)) + " (not enough memory)")
-                                        } catch (error: Exception) {
-                                            failed++
-                                            failedNames.add(photo.uri.lastPathSegment ?: "Photo " + (index + 1))
-                                        } finally {
-                                            enhanced?.let { if (!it.isRecycled) it.recycle() }
-                                            original?.let { if (!it.isRecycled) it.recycle() }
-                                        }
-                                        exportProgress = index + 1
-                                        statusMessage = BatchExportPolicy.progressLabel(index + 1, batch.size, succeeded, failed)
-                                    }
-                                    batchSummary = BatchExportPolicy.summary(succeeded, failed, skipped, batchPreset, failedNames) +
-                                        if (aiFallbacks > 0) "\nAI fallback used for $aiFallbacks photo(s) because person segmentation was unavailable." else ""
-                                    statusMessage = (batchSummary ?: "Batch export finished.") + " Originals are untouched."
-                                } finally {
-                                    isExporting = false
-                                }
-                            }
-                        }
-                    },
-                    enabled = selectedPhotos.any { it.decision != "Reject" } && !isAnalyzing && !isExporting,
-                    modifier = Modifier.weight(1f).height(48.dp),
-                    shape = RoundedCornerShape(14.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Panel, contentColor = Mint,
-                        disabledContainerColor = Panel, disabledContentColor = SoftText
-                    ),
-                    contentPadding = PaddingValues(horizontal = 6.dp)
-                ) {
-                    androidx.compose.material3.Icon(Icons.Rounded.AutoAwesome, contentDescription = null)
-                    Text("  Save all", fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                }
-            }
-            }
-
-            if (activePhoto == null && selectedPhotos.isNotEmpty()) {
-                Row(modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically) {
-                    Text("BATCH PRESET", color = BrightText, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                    Spacer(modifier = Modifier.weight(1f))
-                    Button(
-                        onClick = {
-                            previewBatchPreset("AI Edit")
-                        },
-                        enabled = !isExporting && !isAnalyzing && selectedPhotos.any { it.decision != "Reject" },
-                        shape = RoundedCornerShape(10.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Ink),
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 3.dp)
-                    ) { Text("✦ AI Edit all", fontSize = 11.sp, fontWeight = FontWeight.Bold) }
-                }
-                Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    BatchExportPolicy.presetNames.forEach { preset ->
-                        Button(onClick = { previewBatchPreset(preset) },
-                            enabled = !isExporting && !isAnalyzing && !isPreparingBatchPreview && selectedPhotos.any { it.decision != "Reject" },
-                            shape = RoundedCornerShape(10.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = if (batchPreset == preset) Mint else Color(0xFF293333),
-                                contentColor = if (batchPreset == preset) Ink else BrightText
-                            ), contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp)
-                        ) { Text(preset, fontSize = 10.sp) }
-                    }
-                }
-                Column(modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
-                    verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                    Text(selectedPhotos.count { it.decision != "Reject" }.toString() + " photos to export · " +
-                        selectedPhotos.count { it.decision == "Reject" } + " rejected will be skipped",
-                        color = SoftText, fontSize = 10.sp)
-                    Text(if (batchPreset == "Current edits") "Uses the settings currently open in the editor." else
-                        "Applies " + batchPreset + " consistently to every eligible photo.",
-                        color = SoftText, fontSize = 10.sp)
-                }
-                if (isPreparingBatchPreview) {
-                    LinearProgressIndicator(
-                        progress = { if (selectedPhotos.none { it.decision != "Reject" }) 0f else batchPreviewProgress.toFloat() / selectedPhotos.count { it.decision != "Reject" } },
-                        modifier = Modifier.fillMaxWidth().padding(top = 5.dp), color = Mint
-                    )
-                    Text("Live previews $batchPreviewProgress / ${selectedPhotos.count { it.decision != "Reject" }} · images and scores update as each photo finishes",
-                        color = SoftText, fontSize = 10.sp, modifier = Modifier.padding(top = 3.dp))
-                } else if (batchPreviewScores.isNotEmpty()) {
-                    Text("LIVE PREVIEW · ${batchPreviewScores.size} photos updated · scores show measured changes, not guaranteed improvement",
-                        color = Mint, fontSize = 10.sp, lineHeight = 14.sp,
-                        modifier = Modifier.fillMaxWidth().padding(top = 5.dp))
-                }
-                if (batchSummary != null) {
-                    Text(batchSummary!!, color = Mint, fontSize = 10.sp, lineHeight = 14.sp,
-                        modifier = Modifier.fillMaxWidth().padding(top = 5.dp))
-                }
-            }
-
-            val keptCount = selectedPhotos.count { it.decision == "Keep" }
-            val reviewCount = selectedPhotos.count { it.decision == "Review" }
-            val rejectedCount = selectedPhotos.count { it.decision == "Reject" }
-            val exactDuplicateCount = selectedPhotos.count { it.isExactDuplicate }
-            val nearDuplicateCount = selectedPhotos.count { it.isNearDuplicate }
-            val burstGroups = selectedPhotos.filter { it.burstGroupId != null }
-                .groupBy { it.burstGroupId }
-            val burstExtraCount = burstGroups.values.sumOf { group -> (group.size - 1).coerceAtLeast(0) }
-            if (activePhoto == null && exactDuplicateCount > 0) {
-                Button(
-                    onClick = {
-                        selectedPhotos.removeAll { it.isExactDuplicate }
-                        statusMessage = "Removed " + exactDuplicateCount +
-                            " exact duplicate file(s) from this selection. Your originals are untouched."
-                    },
-                    enabled = !isAnalyzing && !isExporting,
-                    modifier = Modifier.fillMaxWidth().padding(top = 7.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFF293333), contentColor = Mint
-                    )
-                ) { Text("Remove " + exactDuplicateCount + " exact duplicate(s)") }
-            }
-
-            if (activePhoto == null && burstGroups.values.any { it.size >= 2 }) {
-                Button(
-                    onClick = {
-                        showBurstGroupPicker = true
-                    },
-                    enabled = !isAnalyzing && !isExporting && burstGroups.values.any { it.size >= 2 },
-                    modifier = Modifier.fillMaxWidth().padding(top = 5.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFF293333), contentColor = Mint
-                    )
-                ) { Text("Choose burst group to compare") }
-            }
-
-            if (activePhoto == null && burstExtraCount > 0) {
-                Button(
-                    onClick = {
-                        val keepUris = burstGroups.values.mapNotNull { group ->
-                            group.maxByOrNull { it.score ?: -1 }?.uri
-                        }.toSet()
-                        val removeUris = burstGroups.values.flatten()
-                            .filter { it.uri !in keepUris }
-                            .map { it.uri }
-                            .toSet()
-                        selectedPhotos.removeAll { it.uri in removeUris }
-                        statusMessage = "Kept the highest-scoring photo in each time-based burst candidate set. Removed " +
-                            removeUris.size + " item(s) from this selection only; originals are untouched."
-                    },
-                    enabled = !isAnalyzing && !isExporting,
-                    modifier = Modifier.fillMaxWidth().padding(top = 5.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFF293333), contentColor = Mint
-                    )
-                ) { Text("Keep best from burst candidates · remove " + burstExtraCount) }
-            }
-
-            if (activePhoto == null && nearDuplicateCount > 0) {
-                Button(
-                    onClick = {
-                        selectedPhotos.removeAll { it.isNearDuplicate }
-                        statusMessage = "Removed " + nearDuplicateCount +
-                            " visually similar photo(s) from this selection. Your originals are untouched."
-                    },
-                    enabled = !isAnalyzing && !isExporting,
-                    modifier = Modifier.fillMaxWidth().padding(top = 5.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFF293333), contentColor = Mint
-                    )
-                ) { Text("Remove " + nearDuplicateCount + " visually similar photo(s)") }
-            }
-
-            if (isAnalyzing) {
-                Spacer(modifier = Modifier.height(8.dp))
-                LinearProgressIndicator(
-                    progress = { if (selectedPhotos.isEmpty()) 0f else analysisProgress.toFloat() / selectedPhotos.size },
-                    modifier = Modifier.fillMaxWidth(), color = Mint
-                )
-                Text("Analysing " + analysisProgress + " / " + selectedPhotos.size,
-                    color = SoftText, fontSize = 11.sp, modifier = Modifier.padding(top = 3.dp))
-            }
-            if (isExporting) {
-                Spacer(modifier = Modifier.height(8.dp))
-                LinearProgressIndicator(
-                    progress = { if (selectedPhotos.none { it.decision != "Reject" }) 0f else exportProgress.toFloat() / selectedPhotos.count { it.decision != "Reject" } },
-                    modifier = Modifier.fillMaxWidth(), color = Mint
-                )
-                Text("Exporting " + exportProgress + " / " + selectedPhotos.count { it.decision != "Reject" } + " (rejected photos skipped)",
-                    color = SoftText, fontSize = 11.sp, modifier = Modifier.padding(top = 3.dp))
-            }
-
-            if (activePhoto == null && showBurstGroupPicker && !showBurstComparison) {
-                val availableBurstGroups = burstGroups.entries
-                    .filter { it.value.size >= 2 }
-                    .sortedBy { entry -> entry.value.mapNotNull { it.captureTimeMillis }.minOrNull() ?: Long.MAX_VALUE }
-                Spacer(modifier = Modifier.height(12.dp))
-                Card(
-                    modifier = Modifier.fillMaxWidth().weight(1f),
-                    shape = RoundedCornerShape(20.dp),
-                    colors = CardDefaults.cardColors(containerColor = Panel)
-                ) {
-                    Column(
-                        modifier = Modifier.fillMaxSize().padding(12.dp)
-                            .verticalScroll(rememberScrollState()),
-                        verticalArrangement = Arrangement.spacedBy(9.dp)
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text("CHOOSE A BURST GROUP", color = BrightText, fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp)
-                                Text("Pick the moment you want to compare. Nothing is removed.",
-                                    color = SoftText, fontSize = 10.sp, lineHeight = 14.sp)
-                            }
-                            Button(
-                                onClick = { showBurstGroupPicker = false },
-                                shape = RoundedCornerShape(10.dp),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = Color(0xFF293333), contentColor = BrightText
-                                ),
-                                contentPadding = PaddingValues(horizontal = 9.dp, vertical = 1.dp)
-                            ) { Text("Back", fontSize = 10.sp) }
-                        }
-                        availableBurstGroups.forEachIndexed { index, entry ->
-                            val groupPhotos = entry.value.sortedByDescending { it.score ?: -1 }
-                            val bestScore = groupPhotos.firstOrNull()?.score
-                            val captureTime = groupPhotos.mapNotNull { it.captureTimeMillis }.minOrNull()
-                            val timeLabel = if (captureTime != null) {
-                                java.text.SimpleDateFormat("MMM d, HH:mm:ss", java.util.Locale.getDefault())
-                                    .format(java.util.Date(captureTime))
-                            } else {
-                                "Capture time unavailable"
-                            }
-                            Button(
-                                onClick = {
-                                    comparisonGroupId = entry.key
-                                    showBurstGroupPicker = false
-                                    showBurstComparison = true
-                                },
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(12.dp),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = Color(0xFF293333), contentColor = BrightText
-                                ),
-                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp)
-                            ) {
-                                Column(modifier = Modifier.fillMaxWidth()) {
-                                    Text("Group " + (index + 1) + " · " + groupPhotos.size + " photos",
-                                        color = Mint, fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                                    Text(timeLabel + "  ·  Best score " + (bestScore ?: "—") + "/100",
-                                        color = SoftText, fontSize = 10.sp)
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            if (activePhoto == null && showBurstComparison) {
-                val comparisonPhotos = selectedPhotos
-                    .filter { it.burstGroupId == comparisonGroupId }
-                    .sortedByDescending { it.score ?: -1 }
-                    .take(2)
-                Spacer(modifier = Modifier.height(12.dp))
-                Card(
-                    modifier = Modifier.fillMaxWidth().weight(1f),
-                    shape = RoundedCornerShape(20.dp),
-                    colors = CardDefaults.cardColors(containerColor = Panel)
-                ) {
-                    Column(
-                        modifier = Modifier.fillMaxSize().padding(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text("BURST COMPARISON", color = BrightText, fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp)
-                                Text("Choose the frame you prefer. Scores are only technical guidance.",
-                                    color = SoftText, fontSize = 10.sp, lineHeight = 14.sp)
-                            }
-                            Button(
-                                onClick = { showBurstComparison = false; comparisonGroupId = null },
-                                shape = RoundedCornerShape(10.dp),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = Color(0xFF293333), contentColor = BrightText
-                                ),
-                                contentPadding = PaddingValues(horizontal = 9.dp, vertical = 1.dp)
-                            ) { Text("Back", fontSize = 10.sp) }
-                        }
-                        if (comparisonPhotos.size == 2) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth().weight(1f),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                comparisonPhotos.forEachIndexed { index, candidate ->
-                                    Column(
-                                        modifier = Modifier.weight(1f).clip(RoundedCornerShape(14.dp))
-                                            .background(Color(0xFF111616)).padding(7.dp),
-                                        verticalArrangement = Arrangement.spacedBy(7.dp)
-                                    ) {
-                                        AsyncImage(
-                                            model = candidate.uri,
-                                            contentDescription = "Burst candidate " + (index + 1),
-                                            modifier = Modifier.fillMaxWidth().weight(1f)
-                                                .clip(RoundedCornerShape(10.dp)),
-                                            contentScale = ContentScale.Fit
-                                        )
-                                        Text(
-                                            (if (index == 0) "HIGHER SCORE" else "ALTERNATIVE") +
-                                                "\nScore: " + (candidate.score ?: "—") + "/100",
-                                            color = if (index == 0) Mint else BrightText,
-                                            fontSize = 10.sp, fontWeight = FontWeight.Bold,
-                                            lineHeight = 15.sp
-                                        )
-                                        Text(candidate.note, color = SoftText, fontSize = 9.sp,
-                                            lineHeight = 12.sp, maxLines = 3)
-                                        Button(
-                                            onClick = {
-                                                openEditor(candidate)
-                                                showBurstComparison = false
-                                                comparisonGroupId = null
-                                            },
-                                            modifier = Modifier.fillMaxWidth(),
-                                            shape = RoundedCornerShape(10.dp),
-                                            colors = ButtonDefaults.buttonColors(
-                                                containerColor = if (index == 0) Mint else Color(0xFF293333),
-                                                contentColor = if (index == 0) Ink else BrightText
-                                            ),
-                                            contentPadding = PaddingValues(horizontal = 5.dp, vertical = 3.dp)
-                                        ) {
-                                            Text("Edit this photo", fontSize = 10.sp,
-                                                fontWeight = FontWeight.Bold)
-                                        }
-                                    }
-                                }
-                            }
-                            Text(
-                                "Nothing is deleted here. Choose a frame to edit, then return to the grid when ready.",
-                                color = SoftText, fontSize = 10.sp, lineHeight = 14.sp
-                            )
-                        } else {
-                            Text("These burst candidates are no longer both in the current selection.",
-                                color = SoftText, fontSize = 12.sp)
-                        }
-                    }
-                }
-            }
-
             if (activePhoto != null) {
                 Spacer(modifier = Modifier.height(3.dp))
                 Card(
-                    modifier = Modifier.fillMaxWidth().weight(1f),
+                    modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(20.dp),
                     colors = CardDefaults.cardColors(containerColor = Panel)
                 ) {
@@ -1357,9 +941,39 @@ private fun PhotoEditorHome() {
                                 contentPadding = PaddingValues(horizontal = 9.dp, vertical = 1.dp)
                             ) { Text("All photos", fontSize = 10.sp) }
                         }
+                        val scorePhoto = activePhoto
+                        if (scorePhoto != null) {
+                            val live = editedScore
+                            val baseline = originalPreviewScore
+                            val displayed = if (isShowingOriginal) baseline else live
+                            val delta = if (live != null && baseline != null) live.score - baseline.score else null
+                            Column(
+                                modifier = Modifier.fillMaxWidth().padding(top = 7.dp, bottom = 2.dp)
+                                    .clip(RoundedCornerShape(10.dp)).background(Color(0xFF111818)).padding(9.dp)
+                            ) {
+                                Text(
+                                    if (displayed == null || baseline == null) "TECHNICAL SCORE · CALCULATING…" else if (isShowingOriginal)
+                                        "ORIGINAL SCORE  ${displayed.score}/100" else
+                                        "EDITED SCORE  ${displayed.score}/100  (Δ ${if (delta!! > 0) "+" else ""}$delta · original ${baseline.score})",
+                                    color = when { !isShowingOriginal && delta != null && delta > 0 -> Mint; !isShowingOriginal && delta != null && delta < 0 -> Color(0xFFFF8B8B); else -> BrightText },
+                                    fontSize = 11.sp, fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    if (displayed == null) "Measuring the current preview…" else
+                                        "Sharpness ${displayed.sharpness} · Exposure ${displayed.exposure} · Contrast ${displayed.contrast}",
+                                    color = SoftText, fontSize = 10.sp, modifier = Modifier.padding(top = 3.dp)
+                                )
+                                Text(
+                                    if (displayed == null) scorePhoto.note else "Reason: ${displayed.note}",
+                                    color = SoftText, fontSize = 9.sp, lineHeight = 12.sp,
+                                    modifier = Modifier.padding(top = 2.dp)
+                                )
+                            }
+                        }
+
                         Spacer(modifier = Modifier.height(8.dp))
                         Box(
-                            modifier = Modifier.fillMaxWidth().height(285.dp)
+                            modifier = Modifier.fillMaxWidth().height(250.dp)
                                 .clip(RoundedCornerShape(14.dp)).background(Ink)
                                 .onSizeChanged { size ->
                                     previewWidthPx = size.width
@@ -1498,33 +1112,6 @@ private fun PhotoEditorHome() {
                                 }
                             }
                             if (isPreparingPreview) CircularProgressIndicator(color = Mint)
-                        }
-                        val scorePhoto = activePhoto
-                        if (scorePhoto != null) {
-                            val live = editedScore
-                            val baseline = originalPreviewScore
-                            val delta = if (live != null && baseline != null) live.score - baseline.score else null
-                            Column(
-                                modifier = Modifier.fillMaxWidth().padding(top = 7.dp, bottom = 2.dp)
-                                    .clip(RoundedCornerShape(10.dp)).background(Color(0xFF111818)).padding(9.dp)
-                            ) {
-                                Text(
-                                    if (live == null || baseline == null) "TECHNICAL SCORE · CALCULATING…" else
-                                        "EDITED SCORE  ${live.score}/100  (${if (delta!! > 0) "+" else ""}$delta vs original ${baseline.score})",
-                                    color = when { delta != null && delta > 0 -> Mint; delta != null && delta < 0 -> Color(0xFFFF8B8B); else -> BrightText },
-                                    fontSize = 11.sp, fontWeight = FontWeight.Bold
-                                )
-                                Text(
-                                    if (live == null) "Measuring the current preview…" else
-                                        "Sharpness ${live.sharpness} · Exposure ${live.exposure} · Contrast ${live.contrast}",
-                                    color = SoftText, fontSize = 10.sp, modifier = Modifier.padding(top = 3.dp)
-                                )
-                                Text(
-                                    if (live == null) scorePhoto.note else "Reason: ${live.note}",
-                                    color = SoftText, fontSize = 9.sp, lineHeight = 12.sp,
-                                    modifier = Modifier.padding(top = 2.dp)
-                                )
-                            }
                         }
                         if (compareBeforeAfter) {
                             Text("COMPARISON POSITION  " + (comparePosition * 100).toInt() + "%",
@@ -2035,6 +1622,425 @@ private fun PhotoEditorHome() {
                 }
             }
 
+            if (activePhoto == null) {
+                Spacer(modifier = Modifier.height(18.dp))
+                Text("Your moments. At their best.", color = BrightText, fontSize = 27.sp,
+                    lineHeight = 32.sp, fontWeight = FontWeight.SemiBold)
+                Text(
+                    "Rank your shots, preview a gentle auto-edit, and export new copies.",
+                    modifier = Modifier.padding(top = 5.dp),
+                    color = SoftText, fontSize = 13.sp, lineHeight = 19.sp
+                )
+                Spacer(modifier = Modifier.height(14.dp))
+            }
+            if (activePhoto == null) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                Button(
+                    onClick = { photoPicker.launch(arrayOf("image/*")) },
+                    modifier = Modifier.weight(1f).height(48.dp),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Ink),
+                    contentPadding = PaddingValues(horizontal = 8.dp)
+                ) {
+                    androidx.compose.material3.Icon(Icons.Rounded.AddPhotoAlternate, contentDescription = null)
+                    Text("  Choose photos", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                }
+                Button(
+                    onClick = {
+                        if (!isExporting && !isAnalyzing && selectedPhotos.isNotEmpty()) {
+                            isExporting = true
+                            exportProgress = 0
+                            statusMessage = "Enhancing and exporting the batch…"
+                            val settingsForBatch = if (batchPreset == "Current edits") currentSettings() else BatchExportPolicy.settingsForPreset(batchPreset)
+                            val useAiPortrait = batchPreset == "AI Edit" || batchPreset == "AI Portrait" ||
+                                settingsForBatch.backgroundBlur > 0f || settingsForBatch.backgroundEnhancement > 0f ||
+                                settingsForBatch.subjectBrightness > 0f || settingsForBatch.darkerAreaLift > 0f ||
+                                settingsForBatch.skinSmoothing > 0f || settingsForBatch.makeupIntensity > 0f
+                            scope.launch {
+                                var succeeded = 0
+                                var failed = 0
+                                var aiFallbacks = 0
+                                val failedNames = mutableListOf<String>()
+                                val batch = selectedPhotos.filter { it.decision != "Reject" }
+                                val skipped = selectedPhotos.size - batch.size
+                                batchSummary = null
+                                try {
+                                    for ((index, photo) in batch.withIndex()) {
+                                        var original: Bitmap? = null
+                                        var enhanced: Bitmap? = null
+                                        try {
+                                            original = withContext(Dispatchers.IO) {
+                                                AutoEnhancer.decodeForEditing(
+                                                    context.contentResolver, photo.uri, maxDimension = Int.MAX_VALUE
+                                                )
+                                            }
+                                            val photoSettings = if (batchPreset == "AI Edit") {
+                                                aiSettingsFor(PhotoAnalysisEngine.analyze(original!!))
+                                            } else {
+                                                settingsForBatch
+                                            }
+                                            if (useAiPortrait) {
+                                                val aiResult = SubjectAwareEnhancer.enhance(original!!, photoSettings, context)
+                                                enhanced = aiResult.bitmap
+                                                if (!aiResult.usedAi) aiFallbacks++
+                                            } else {
+                                                enhanced = withContext(Dispatchers.Default) {
+                                                    AutoEnhancer.enhance(original!!, photoSettings)
+                                                }
+                                            }
+                                            withContext(Dispatchers.IO) {
+                                                AutoEnhancer.saveJpeg(context.contentResolver, enhanced!!)
+                                            }
+                                            succeeded++
+                                        } catch (error: CancellationException) {
+                                            statusMessage = "Batch export cancelled. Previously saved copies remain available; originals are untouched."
+                                            throw error
+                                        } catch (error: OutOfMemoryError) {
+                                            failed++
+                                            failedNames.add((photo.uri.lastPathSegment ?: "Photo " + (index + 1)) + " (not enough memory)")
+                                        } catch (error: Exception) {
+                                            failed++
+                                            failedNames.add(photo.uri.lastPathSegment ?: "Photo " + (index + 1))
+                                        } finally {
+                                            enhanced?.let { if (!it.isRecycled) it.recycle() }
+                                            original?.let { if (!it.isRecycled) it.recycle() }
+                                        }
+                                        exportProgress = index + 1
+                                        statusMessage = BatchExportPolicy.progressLabel(index + 1, batch.size, succeeded, failed)
+                                    }
+                                    batchSummary = BatchExportPolicy.summary(succeeded, failed, skipped, batchPreset, failedNames) +
+                                        if (aiFallbacks > 0) "\nAI fallback used for $aiFallbacks photo(s) because person segmentation was unavailable." else ""
+                                    statusMessage = (batchSummary ?: "Batch export finished.") + " Originals are untouched."
+                                } finally {
+                                    isExporting = false
+                                }
+                            }
+                        }
+                    },
+                    enabled = selectedPhotos.any { it.decision != "Reject" } && !isAnalyzing && !isExporting,
+                    modifier = Modifier.weight(1f).height(48.dp),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Panel, contentColor = Mint,
+                        disabledContainerColor = Panel, disabledContentColor = SoftText
+                    ),
+                    contentPadding = PaddingValues(horizontal = 6.dp)
+                ) {
+                    androidx.compose.material3.Icon(Icons.Rounded.AutoAwesome, contentDescription = null)
+                    Text("  Save all", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                }
+            }
+            }
+
+            if (activePhoto == null && selectedPhotos.isNotEmpty()) {
+                Row(modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically) {
+                    Text("BATCH PRESET", color = BrightText, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    Spacer(modifier = Modifier.weight(1f))
+                    Button(
+                        onClick = {
+                            previewBatchPreset("AI Edit")
+                        },
+                        enabled = !isExporting && !isAnalyzing && selectedPhotos.any { it.decision != "Reject" },
+                        shape = RoundedCornerShape(10.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Ink),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 3.dp)
+                    ) { Text("✦ AI Edit all", fontSize = 11.sp, fontWeight = FontWeight.Bold) }
+                }
+                Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    BatchExportPolicy.presetNames.forEach { preset ->
+                        Button(onClick = { previewBatchPreset(preset) },
+                            enabled = !isExporting && !isAnalyzing && !isPreparingBatchPreview && selectedPhotos.any { it.decision != "Reject" },
+                            shape = RoundedCornerShape(10.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (batchPreset == preset) Mint else Color(0xFF293333),
+                                contentColor = if (batchPreset == preset) Ink else BrightText
+                            ), contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp)
+                        ) { Text(preset, fontSize = 10.sp) }
+                    }
+                }
+                Column(modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                    verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    Text(selectedPhotos.count { it.decision != "Reject" }.toString() + " photos to export · " +
+                        selectedPhotos.count { it.decision == "Reject" } + " rejected will be skipped",
+                        color = SoftText, fontSize = 10.sp)
+                    Text(if (batchPreset == "Current edits") "Uses the settings currently open in the editor." else
+                        "Applies " + batchPreset + " consistently to every eligible photo.",
+                        color = SoftText, fontSize = 10.sp)
+                }
+                if (isPreparingBatchPreview) {
+                    LinearProgressIndicator(
+                        progress = { if (selectedPhotos.none { it.decision != "Reject" }) 0f else batchPreviewProgress.toFloat() / selectedPhotos.count { it.decision != "Reject" } },
+                        modifier = Modifier.fillMaxWidth().padding(top = 5.dp), color = Mint
+                    )
+                    Text("Live previews $batchPreviewProgress / ${selectedPhotos.count { it.decision != "Reject" }} · images and scores update as each photo finishes",
+                        color = SoftText, fontSize = 10.sp, modifier = Modifier.padding(top = 3.dp))
+                } else if (batchPreviewScores.isNotEmpty()) {
+                    Text("LIVE PREVIEW · ${batchPreviewScores.size} photos updated · scores show measured changes, not guaranteed improvement",
+                        color = Mint, fontSize = 10.sp, lineHeight = 14.sp,
+                        modifier = Modifier.fillMaxWidth().padding(top = 5.dp))
+                }
+                if (batchSummary != null) {
+                    Text(batchSummary!!, color = Mint, fontSize = 10.sp, lineHeight = 14.sp,
+                        modifier = Modifier.fillMaxWidth().padding(top = 5.dp))
+                }
+            }
+
+            val keptCount = selectedPhotos.count { it.decision == "Keep" }
+            val reviewCount = selectedPhotos.count { it.decision == "Review" }
+            val rejectedCount = selectedPhotos.count { it.decision == "Reject" }
+            val exactDuplicateCount = selectedPhotos.count { it.isExactDuplicate }
+            val nearDuplicateCount = selectedPhotos.count { it.isNearDuplicate }
+            val burstGroups = selectedPhotos.filter { it.burstGroupId != null }
+                .groupBy { it.burstGroupId }
+            val burstExtraCount = burstGroups.values.sumOf { group -> (group.size - 1).coerceAtLeast(0) }
+            if (activePhoto == null && exactDuplicateCount > 0) {
+                Button(
+                    onClick = {
+                        selectedPhotos.removeAll { it.isExactDuplicate }
+                        statusMessage = "Removed " + exactDuplicateCount +
+                            " exact duplicate file(s) from this selection. Your originals are untouched."
+                    },
+                    enabled = !isAnalyzing && !isExporting,
+                    modifier = Modifier.fillMaxWidth().padding(top = 7.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFF293333), contentColor = Mint
+                    )
+                ) { Text("Remove " + exactDuplicateCount + " exact duplicate(s)") }
+            }
+
+            if (activePhoto == null && burstGroups.values.any { it.size >= 2 }) {
+                Button(
+                    onClick = {
+                        showBurstGroupPicker = true
+                    },
+                    enabled = !isAnalyzing && !isExporting && burstGroups.values.any { it.size >= 2 },
+                    modifier = Modifier.fillMaxWidth().padding(top = 5.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFF293333), contentColor = Mint
+                    )
+                ) { Text("Choose burst group to compare") }
+            }
+
+            if (activePhoto == null && burstExtraCount > 0) {
+                Button(
+                    onClick = {
+                        val keepUris = burstGroups.values.mapNotNull { group ->
+                            group.maxByOrNull { it.score ?: -1 }?.uri
+                        }.toSet()
+                        val removeUris = burstGroups.values.flatten()
+                            .filter { it.uri !in keepUris }
+                            .map { it.uri }
+                            .toSet()
+                        selectedPhotos.removeAll { it.uri in removeUris }
+                        statusMessage = "Kept the highest-scoring photo in each time-based burst candidate set. Removed " +
+                            removeUris.size + " item(s) from this selection only; originals are untouched."
+                    },
+                    enabled = !isAnalyzing && !isExporting,
+                    modifier = Modifier.fillMaxWidth().padding(top = 5.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFF293333), contentColor = Mint
+                    )
+                ) { Text("Keep best from burst candidates · remove " + burstExtraCount) }
+            }
+
+            if (activePhoto == null && nearDuplicateCount > 0) {
+                Button(
+                    onClick = {
+                        selectedPhotos.removeAll { it.isNearDuplicate }
+                        statusMessage = "Removed " + nearDuplicateCount +
+                            " visually similar photo(s) from this selection. Your originals are untouched."
+                    },
+                    enabled = !isAnalyzing && !isExporting,
+                    modifier = Modifier.fillMaxWidth().padding(top = 5.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFF293333), contentColor = Mint
+                    )
+                ) { Text("Remove " + nearDuplicateCount + " visually similar photo(s)") }
+            }
+
+            if (isAnalyzing) {
+                Spacer(modifier = Modifier.height(8.dp))
+                LinearProgressIndicator(
+                    progress = { if (selectedPhotos.isEmpty()) 0f else analysisProgress.toFloat() / selectedPhotos.size },
+                    modifier = Modifier.fillMaxWidth(), color = Mint
+                )
+                Text("Analysing " + analysisProgress + " / " + selectedPhotos.size,
+                    color = SoftText, fontSize = 11.sp, modifier = Modifier.padding(top = 3.dp))
+            }
+            if (isExporting) {
+                Spacer(modifier = Modifier.height(8.dp))
+                LinearProgressIndicator(
+                    progress = { if (selectedPhotos.none { it.decision != "Reject" }) 0f else exportProgress.toFloat() / selectedPhotos.count { it.decision != "Reject" } },
+                    modifier = Modifier.fillMaxWidth(), color = Mint
+                )
+                Text("Exporting " + exportProgress + " / " + selectedPhotos.count { it.decision != "Reject" } + " (rejected photos skipped)",
+                    color = SoftText, fontSize = 11.sp, modifier = Modifier.padding(top = 3.dp))
+            }
+
+            if (activePhoto == null && showBurstGroupPicker && !showBurstComparison) {
+                val availableBurstGroups = burstGroups.entries
+                    .filter { it.value.size >= 2 }
+                    .sortedBy { entry -> entry.value.mapNotNull { it.captureTimeMillis }.minOrNull() ?: Long.MAX_VALUE }
+                Spacer(modifier = Modifier.height(12.dp))
+                Card(
+                    modifier = Modifier.fillMaxWidth().weight(1f),
+                    shape = RoundedCornerShape(20.dp),
+                    colors = CardDefaults.cardColors(containerColor = Panel)
+                ) {
+                    Column(
+                        modifier = Modifier.fillMaxSize().padding(12.dp)
+                            .verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(9.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("CHOOSE A BURST GROUP", color = BrightText, fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp)
+                                Text("Pick the moment you want to compare. Nothing is removed.",
+                                    color = SoftText, fontSize = 10.sp, lineHeight = 14.sp)
+                            }
+                            Button(
+                                onClick = { showBurstGroupPicker = false },
+                                shape = RoundedCornerShape(10.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = Color(0xFF293333), contentColor = BrightText
+                                ),
+                                contentPadding = PaddingValues(horizontal = 9.dp, vertical = 1.dp)
+                            ) { Text("Back", fontSize = 10.sp) }
+                        }
+                        availableBurstGroups.forEachIndexed { index, entry ->
+                            val groupPhotos = entry.value.sortedByDescending { it.score ?: -1 }
+                            val bestScore = groupPhotos.firstOrNull()?.score
+                            val captureTime = groupPhotos.mapNotNull { it.captureTimeMillis }.minOrNull()
+                            val timeLabel = if (captureTime != null) {
+                                java.text.SimpleDateFormat("MMM d, HH:mm:ss", java.util.Locale.getDefault())
+                                    .format(java.util.Date(captureTime))
+                            } else {
+                                "Capture time unavailable"
+                            }
+                            Button(
+                                onClick = {
+                                    comparisonGroupId = entry.key
+                                    showBurstGroupPicker = false
+                                    showBurstComparison = true
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = Color(0xFF293333), contentColor = BrightText
+                                ),
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp)
+                            ) {
+                                Column(modifier = Modifier.fillMaxWidth()) {
+                                    Text("Group " + (index + 1) + " · " + groupPhotos.size + " photos",
+                                        color = Mint, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                    Text(timeLabel + "  ·  Best score " + (bestScore ?: "—") + "/100",
+                                        color = SoftText, fontSize = 10.sp)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (activePhoto == null && showBurstComparison) {
+                val comparisonPhotos = selectedPhotos
+                    .filter { it.burstGroupId == comparisonGroupId }
+                    .sortedByDescending { it.score ?: -1 }
+                    .take(2)
+                Spacer(modifier = Modifier.height(12.dp))
+                Card(
+                    modifier = Modifier.fillMaxWidth().weight(1f),
+                    shape = RoundedCornerShape(20.dp),
+                    colors = CardDefaults.cardColors(containerColor = Panel)
+                ) {
+                    Column(
+                        modifier = Modifier.fillMaxSize().padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("BURST COMPARISON", color = BrightText, fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp)
+                                Text("Choose the frame you prefer. Scores are only technical guidance.",
+                                    color = SoftText, fontSize = 10.sp, lineHeight = 14.sp)
+                            }
+                            Button(
+                                onClick = { showBurstComparison = false; comparisonGroupId = null },
+                                shape = RoundedCornerShape(10.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = Color(0xFF293333), contentColor = BrightText
+                                ),
+                                contentPadding = PaddingValues(horizontal = 9.dp, vertical = 1.dp)
+                            ) { Text("Back", fontSize = 10.sp) }
+                        }
+                        if (comparisonPhotos.size == 2) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().weight(1f),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                comparisonPhotos.forEachIndexed { index, candidate ->
+                                    Column(
+                                        modifier = Modifier.weight(1f).clip(RoundedCornerShape(14.dp))
+                                            .background(Color(0xFF111616)).padding(7.dp),
+                                        verticalArrangement = Arrangement.spacedBy(7.dp)
+                                    ) {
+                                        AsyncImage(
+                                            model = candidate.uri,
+                                            contentDescription = "Burst candidate " + (index + 1),
+                                            modifier = Modifier.fillMaxWidth().weight(1f)
+                                                .clip(RoundedCornerShape(10.dp)),
+                                            contentScale = ContentScale.Fit
+                                        )
+                                        Text(
+                                            (if (index == 0) "HIGHER SCORE" else "ALTERNATIVE") +
+                                                "\nScore: " + (candidate.score ?: "—") + "/100",
+                                            color = if (index == 0) Mint else BrightText,
+                                            fontSize = 10.sp, fontWeight = FontWeight.Bold,
+                                            lineHeight = 15.sp
+                                        )
+                                        Text(candidate.note, color = SoftText, fontSize = 9.sp,
+                                            lineHeight = 12.sp, maxLines = 3)
+                                        Button(
+                                            onClick = {
+                                                openEditor(candidate)
+                                                showBurstComparison = false
+                                                comparisonGroupId = null
+                                            },
+                                            modifier = Modifier.fillMaxWidth(),
+                                            shape = RoundedCornerShape(10.dp),
+                                            colors = ButtonDefaults.buttonColors(
+                                                containerColor = if (index == 0) Mint else Color(0xFF293333),
+                                                contentColor = if (index == 0) Ink else BrightText
+                                            ),
+                                            contentPadding = PaddingValues(horizontal = 5.dp, vertical = 3.dp)
+                                        ) {
+                                            Text("Edit this photo", fontSize = 10.sp,
+                                                fontWeight = FontWeight.Bold)
+                                        }
+                                    }
+                                }
+                            }
+                            Text(
+                                "Nothing is deleted here. Choose a frame to edit, then return to the grid when ready.",
+                                color = SoftText, fontSize = 10.sp, lineHeight = 14.sp
+                            )
+                        } else {
+                            Text("These burst candidates are no longer both in the current selection.",
+                                color = SoftText, fontSize = 12.sp)
+                        }
+                    }
+                }
+            }
+
+
+
             if (activePhoto == null && !showBurstComparison && !showBurstGroupPicker) {
                 Spacer(modifier = Modifier.height(10.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -2139,7 +2145,7 @@ private fun PhotoEditorHome() {
                             val scoreDelta = if (liveScore != null && baselineScore != null) liveScore.score - baselineScore.score else null
                             Text(
                                 if (liveScore != null) "EDITED ${liveScore.score}/100" +
-                                    (scoreDelta?.let { " (${if (it > 0) "+" else ""}$it)" } ?: "")
+                                    (scoreDelta?.let { if (it == 0) " (Δ 0 · unchanged)" else " (Δ ${if (it > 0) "+" else ""}$it)" } ?: "")
                                 else if (photo.score == null) "Analysing…" else "#$photoRank · Score ${photo.score}/100",
                                 color = when {
                                     scoreDelta != null && scoreDelta > 0 -> Mint
@@ -2157,7 +2163,7 @@ private fun PhotoEditorHome() {
                             val formats = batchPreviewFormats[photo.uri]
                                 ?: if (photo.width > 0 && photo.height > 0) recommendedFormats(photo.width, photo.height) else emptyList()
                             if (formats.isNotEmpty()) {
-                                Text(formats.joinToString(" · "), color = Color(0xFF9CC8FF),
+                                Text("BEST FIT · " + formats.joinToString(" · "), color = Color(0xFF9CC8FF),
                                     fontSize = 8.sp, fontWeight = FontWeight.Bold,
                                     modifier = Modifier.padding(top = 3.dp, start = 2.dp))
                             }

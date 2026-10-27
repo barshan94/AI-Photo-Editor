@@ -1268,8 +1268,8 @@ private fun PhotoEditorHome() {
                                         Text("MEDIAPIPE SEGMENTATION + BLUR", color = Mint, fontSize = 9.sp)
                                     }
                                     Column(modifier = Modifier.weight(1f)) {
-                                        Text("Skin tone balancing", color = BrightText, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
-                                        Text("SKIN MASK + DUAL LIGHTING CONTROLS", color = Mint, fontSize = 9.sp)
+                                        Text("Skin retouch + natural makeup", color = BrightText, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                                        Text("SKIN MASK + SOFTENING + FACE CONTOURS", color = Mint, fontSize = 9.sp)
                                     }
                                 }
                                 androidx.compose.material3.HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = Color(0xFF344040))

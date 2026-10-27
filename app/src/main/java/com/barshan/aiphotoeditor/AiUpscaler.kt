@@ -41,7 +41,7 @@ internal object AiUpscaler {
 
         var interpreter: Interpreter? = null
         try {
-            onProgress(3, "Loading ESRGAN neural model")
+            onProgress(3, "Loading AI upscaling engine")
             val modelBytes = context.assets.open("ESRGAN.tflite").use { it.readBytes() }
             val modelBuffer = ByteBuffer.allocateDirect(modelBytes.size).order(ByteOrder.nativeOrder())
             modelBuffer.put(modelBytes)
@@ -54,7 +54,7 @@ internal object AiUpscaler {
             require(inputShape.size == 4 && outputShape.size == 4 &&
                 inputShape[0] == 1 && inputShape[3] == 3 &&
                 outputShape[0] == 1 && outputShape[3] == 3) {
-                "The downloaded ESRGAN model has an unsupported input/output shape."
+                "The upscaling engine has an unsupported input/output shape."
             }
             val tileSize = inputShape[1]
             val tileWidth = inputShape[2]
@@ -62,7 +62,7 @@ internal object AiUpscaler {
             val outputTileWidth = outputShape[2]
             require(tileSize == tileWidth && outputTileWidth % tileWidth == 0 &&
                 outputTileHeight % tileSize == 0) {
-                "The downloaded ESRGAN model uses an unsupported tile shape."
+                "The upscaling engine uses an unsupported tile shape."
             }
             val scaleX = outputTileWidth / tileWidth
             val scaleY = outputTileHeight / tileSize

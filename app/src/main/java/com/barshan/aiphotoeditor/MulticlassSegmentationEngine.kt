@@ -3,6 +3,7 @@ package com.barshan.aiphotoeditor
 import android.content.Context
 import android.graphics.Bitmap
 import com.google.mediapipe.framework.image.BitmapImageBuilder
+import com.google.mediapipe.framework.image.ByteBufferExtractor
 import com.google.mediapipe.framework.image.MPImage
 import com.google.mediapipe.tasks.core.BaseOptions
 import com.google.mediapipe.tasks.vision.core.RunningMode
@@ -64,7 +65,7 @@ internal object MulticlassSegmentationEngine {
                 val categoryMask = result.categoryMask().orElseThrow {
                     IllegalStateException("The segmentation model did not return a category mask.")
                 }
-                val buffer: ByteBuffer = categoryMask.buffer
+                val buffer: ByteBuffer = ByteBufferExtractor.extract(categoryMask)
                 buffer.rewind()
                 val count = categoryMask.width * categoryMask.height
                 require(count > 0 && buffer.remaining() >= count) {
@@ -72,6 +73,7 @@ internal object MulticlassSegmentationEngine {
                 }
                 val classes = ByteArray(count)
                 buffer.get(classes, 0, count)
+                categoryMask.close()
                 SegmentationMap(categoryMask.width, categoryMask.height, classes)
             } finally {
                 image?.close()

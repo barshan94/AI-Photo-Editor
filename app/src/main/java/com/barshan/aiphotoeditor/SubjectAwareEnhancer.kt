@@ -2,11 +2,20 @@ package com.barshan.aiphotoeditor
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Color as AndroidColor
+import android.graphics.Paint
+import android.graphics.Path
+import android.graphics.RectF
 import android.renderscript.Allocation
 import android.renderscript.Element
 import android.renderscript.RenderScript
 import android.renderscript.ScriptIntrinsicBlur
 import com.google.mlkit.vision.common.InputImage
+import com.google.mlkit.vision.face.Face
+import com.google.mlkit.vision.face.FaceContour
+import com.google.mlkit.vision.face.FaceDetection
+import com.google.mlkit.vision.face.FaceDetectorOptions
 import com.google.mlkit.vision.segmentation.Segmentation
 import com.google.mlkit.vision.segmentation.SegmentationMask
 import com.google.mlkit.vision.segmentation.selfie.SelfieSegmenterOptions
@@ -80,6 +89,7 @@ object SubjectAwareEnhancer {
                         blurredBackground = blurredBackground
                     )
                 }
+                if (settings.makeupIntensity > 0f) applyNaturalMakeup(enhanced, source, settings)
                 return Result(
                     bitmap = enhanced,
                     usedAi = usedMulticlassModel,
@@ -171,6 +181,62 @@ object SubjectAwareEnhancer {
             input?.destroy()
             rs?.destroy()
             if (small !== source && !small.isRecycled) small.recycle()
+        }
+    }
+
+
+    /** Applies a subtle contour-guided lip and cheek tint; no face image leaves the device. */
+    private suspend fun applyNaturalMakeup(bitmap: Bitmap, source: Bitmap, settings: EditSettings) {
+        if (settings.makeupIntensity <= 0f || settings.cropRatio != null || bitmap.width != source.width || bitmap.height != source.height) return
+        val options = FaceDetectorOptions.Builder()
+            .setContourMode(FaceDetectorOptions.CONTOUR_MODE_ALL)
+            .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_ACCURATE)
+            .build()
+        val detector = FaceDetection.getClient(options)
+        val faces = try {
+            suspendCancellableCoroutine<List<Face>> { continuation ->
+                detector.process(InputImage.fromBitmap(source, 0))
+                    .addOnSuccessListener { result -> if (continuation.isActive) continuation.resume(result) }
+                    .addOnFailureListener { error -> if (continuation.isActive) continuation.resumeWithException(error) }
+                continuation.invokeOnCancellation { detector.close() }
+            }
+        } finally {
+            detector.close()
+        }
+        if (faces.isEmpty()) return
+        withContext(Dispatchers.Default) {
+            val strength = settings.makeupIntensity.coerceIn(0f, 10f) / 10f
+            val canvas = Canvas(bitmap)
+            val lipPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = AndroidColor.argb((strength * 62f).toInt().coerceIn(0, 62), 176, 62, 94)
+                style = Paint.Style.FILL
+            }
+            val cheekPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = AndroidColor.argb((strength * 24f).toInt().coerceIn(0, 24), 226, 92, 112)
+                style = Paint.Style.FILL
+            }
+            for (face in faces) {
+                val upper = face.getContour(FaceContour.UPPER_LIP_TOP)?.points.orEmpty()
+                val lower = face.getContour(FaceContour.LOWER_LIP_BOTTOM)?.points.orEmpty()
+                if (upper.size >= 3 && lower.size >= 3) {
+                    val lipPath = Path().apply {
+                        moveTo(upper.first().x, upper.first().y)
+                        upper.drop(1).forEach { lineTo(it.x, it.y) }
+                        lower.asReversed().forEach { lineTo(it.x, it.y) }
+                        close()
+                    }
+                    canvas.drawPath(lipPath, lipPaint)
+                }
+                val radius = face.boundingBox.width() * 0.065f
+                for (contourType in listOf(FaceContour.LEFT_CHEEK, FaceContour.RIGHT_CHEEK)) {
+                    val points = face.getContour(contourType)?.points.orEmpty()
+                    if (points.isNotEmpty() && radius > 1f) {
+                        val centerX = points.map { it.x }.average().toFloat()
+                        val centerY = points.map { it.y }.average().toFloat()
+                        canvas.drawOval(RectF(centerX - radius, centerY - radius * 0.55f, centerX + radius, centerY + radius * 0.55f), cheekPaint)
+                    }
+                }
+            }
         }
     }
 

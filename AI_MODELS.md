@@ -12,7 +12,7 @@ The model files are fetched as Gradle preBuild dependencies and packaged in the 
 
 1. Open a photo. Opening it still starts on Original and does not auto-edit it.
 2. Choose AI Portrait for a visible starting level of background blur, then adjust Background blur below.
-3. Use Darker skin areas · adaptive lift to lift shadowed skin more strongly (for example, hands). Use Overall skin lightening independently to balance detected face/body skin. The skin controls are applied only when the multiclass skin mask model initializes; if it fails, the app reports that skin-only lightening is disabled rather than brightening the whole person.
+3. Use Darker skin areas · adaptive lift to lift shadowed skin more strongly (for example, hands). Use Overall skin lightening independently to balance detected face/body skin. Skin softening applies a restrained blur only inside the skin mask, and Natural makeup uses ML Kit face contours for optional lip/cheek tint. Skin-only lighting and softening are disabled if the multiclass skin mask model fails rather than brightening the whole person.
 4. Under the AI toolbox, tap Mark object, paint red over the unwanted object/person (include the shadow), adjust brush size, and tap Remove marked area with LaMa. The result is saved as a new copy.
 5. Tap Run AI Upscale 4× for ESRGAN super-resolution. For memory safety, large input images are reduced before inference; the source photo is never overwritten.
 

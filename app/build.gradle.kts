@@ -71,7 +71,7 @@ tasks.register("downloadLamaInpaintingModel") {
         if (!model.exists() || model.length() < 20_000_000L) {
             model.parentFile.mkdirs()
             val temp = File(model.parentFile, model.name + ".download")
-            URL("https://huggingface.co/g-ronimo/lama/resolve/0985db06d44780af925c1d81857a3ef5f025bedd/lama_512_int8.onnx").openStream().use { input ->
+            URL("https://huggingface.co/g-ronimo/lama/resolve/main/lama_512_int8.onnx").openStream().use { input ->
                 temp.outputStream().use { output -> input.copyTo(output) }
             }
             check(temp.length() > 20_000_000L) { "LaMa inpainting model download was incomplete." }

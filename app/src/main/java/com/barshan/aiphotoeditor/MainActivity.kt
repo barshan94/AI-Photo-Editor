@@ -1868,6 +1868,39 @@ private fun PhotoEditorHome() {
                 color = SoftText, fontSize = 10.sp, lineHeight = 14.sp,
                 modifier = Modifier.padding(top = 3.dp, bottom = 7.dp)
             )
+            if (selectedPhotos.isNotEmpty()) {
+                Button(
+                    onClick = { showRankingDetails = !showRankingDetails },
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 5.dp),
+                    shape = RoundedCornerShape(10.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = Mint),
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 5.dp)
+                ) { Text(if (showRankingDetails) "Hide ranking explanation" else "Explain top 6 shortlist and top 3", fontSize = 11.sp) }
+                if (showRankingDetails) {
+                    val ranked = selectedPhotos.sortedByDescending { it.score ?: -1 }
+                    Card(modifier = Modifier.fillMaxWidth().height(190.dp).padding(bottom = 6.dp),
+                        colors = CardDefaults.cardColors(containerColor = Panel), shape = RoundedCornerShape(12.dp)) {
+                        Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(10.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text("TOP 3 · DETAILED REASONS", color = Mint, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            ranked.take(3).forEachIndexed { index, photo ->
+                                val weakest = listOf("sharpness" to photo.sharpness, "exposure" to photo.exposure, "contrast" to photo.contrast).minByOrNull { it.second }
+                                Text("#${index + 1} · Score ${photo.score ?: 0}/100", color = BrightText, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                Text("Sharpness ${photo.sharpness}/100 · Exposure ${photo.exposure}/100 · Contrast ${photo.contrast}/100", color = SoftText, fontSize = 10.sp)
+                                Text("Why: ${photo.note}. Lowest technical dimension: ${weakest?.first ?: "not available"} (${weakest?.second ?: 0}/100).", color = BrightText, fontSize = 10.sp, lineHeight = 14.sp)
+                            }
+                            if (ranked.size > 6) {
+                                Text("WHY RANKS 7–${ranked.size} ARE OUTSIDE THE TOP 6", color = Mint, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                ranked.drop(6).forEachIndexed { index, photo ->
+                                    val weakest = listOf("sharpness" to photo.sharpness, "exposure" to photo.exposure, "contrast" to photo.contrast).minByOrNull { it.second }
+                                    Text("Rank ${index + 7} · ${photo.score ?: 0}/100 — ${photo.note}; weakest dimension ${weakest?.first ?: "unknown"} (${weakest?.second ?: 0}/100).", color = SoftText, fontSize = 10.sp, lineHeight = 14.sp)
+                                }
+                            }
+                            Text("Important: all imported photos stay in the grid. Top 6 is a technical shortlist only; the app does not automatically reject or delete the remaining photos.", color = BrightText, fontSize = 10.sp, lineHeight = 14.sp)
+                        }
+                    }
+                }
+            }
             }
 
             if (activePhoto == null && !showBurstComparison && !showBurstGroupPicker && selectedPhotos.isEmpty()) {

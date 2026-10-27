@@ -60,28 +60,46 @@ internal object PhotoAnalysisEngine {
                 else -> "Average brightness looks broadly balanced; local shadows and highlights may still need review."
             }
 
+            val normalizedLabels = labels.map { it.substringBefore(" (").trim().lowercase() }
+            val hasLabel: (String) -> Boolean = { term ->
+                normalizedLabels.any { it == term || it.contains(term) }
+            }
+            val isSkyScene = hasLabel("sky") || hasLabel("cloud")
+            val isForestScene = hasLabel("forest") || hasLabel("tree") || hasLabel("woodland") ||
+                hasLabel("jungle") || hasLabel("plant")
+            val isWaterScene = hasLabel("water") || hasLabel("lake") || hasLabel("ocean") ||
+                hasLabel("river") || hasLabel("sea")
+            val isSunsetScene = hasLabel("sunset") || hasLabel("sunrise")
+            val isFoodScene = hasLabel("food") || hasLabel("dish") || hasLabel("meal")
+
             val recommendations = buildList {
                 if (faceCount == 1) {
-                    add("Portrait: inspect face exposure and background separation. AI Portrait remains an optional edit.")
-                    add("Retouching: review skin detail at full resolution; avoid smoothing away natural texture.")
+                    add("Portrait detected: prioritize balanced face exposure and natural skin color; keep real skin texture.")
+                    add("Optional portrait retouching: remove temporary blemishes lightly. Makeup and skin brightening should remain user-controlled.")
                 } else if (faceCount >= 2) {
-                    add("People/group: inspect every face at full size and keep all subjects inside the crop.")
-                    add("Light balance: compare exposure across faces before applying a stronger preset.")
+                    add("Multiple faces detected: check each face separately and keep everyone inside the crop.")
+                    add("Group lighting: avoid brightening one face so much that other faces lose natural color.")
                 } else {
-                    add("Scene/object: review the detected labels and decide whether the main subject or environment needs emphasis.")
+                    add("No clear face detected: prioritize the main scene or object instead of applying portrait effects.")
                 }
 
-                if (brightness < 62) add("Lighting: try a modest brightness lift first; avoid amplifying noise in dark areas.")
-                if (brightness > 196) add("Highlights: reduce brightness/exposure if bright details are losing texture.")
-                if (labels.any { it.contains("outdoor", true) || it.contains("sky", true) || it.contains("nature", true) }) {
-                    add("White balance: check neutral objects and skin tones before warming or cooling the whole image.")
+                when {
+                    isSkyScene -> add("Sky scene detected: protect bright cloud highlights and tune blue/cyan tones locally when possible; avoid a global filter that darkens the whole photo.")
+                    isForestScene -> add("Greenery detected: recover shadow detail and preserve varied greens; add texture only if the foliage is genuinely soft.")
+                    isWaterScene -> add("Water scene detected: preserve highlight reflections and tune blue/green tones gently.")
+                    isSunsetScene -> add("Warm-light scene detected: preserve the sunset's natural orange/pink gradient instead of warming every pixel.")
+                    isFoodScene -> add("Food scene detected: favor accurate warm color and local contrast; avoid oversaturating reds and oranges.")
+                    else -> add("Scene-aware edit: use the detected content as a guide, then compare the result with the untouched original.")
                 }
+
+                if (brightness < 62) add("Lighting: try a modest brightness lift first; dark areas may contain noise, so avoid aggressive sharpening.")
+                if (brightness > 196) add("Highlights: protect bright detail; increasing exposure further may wash out clouds, skin, or light-colored objects.")
                 if (bitmap.width < 1600 || bitmap.height < 1600) {
-                    add("Resolution: the image is under 1600 px on at least one side. Upscaling may enlarge it, but cannot restore detail that was never captured.")
+                    add("Resolution: ${bitmap.width} × ${bitmap.height} px. Consider upscaling for a larger output, but reconstructed detail may be estimated rather than recovered.")
                 } else {
-                    add("Detail: inspect sharpness at 100% before deciding whether sharpening or upscaling is needed.")
+                    add("Resolution: ${bitmap.width} × ${bitmap.height} px. Inspect at 100% before deciding whether denoising, sharpening, or upscaling is worthwhile.")
                 }
-                add("Cleanup: this analysis does not identify an unwanted person with certainty or remove objects. Review manually before using a removal tool.")
+                add("Limit: this pass labels the scene and detects faces; it does not yet remove objects, retouch skin, or reconstruct missing detail.")
             }
 
             return PhotoAnalysisResult(

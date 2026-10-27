@@ -421,7 +421,12 @@ private fun PhotoEditorHome() {
         return when {
             result.lightingSummary.contains("looks dark", ignoreCase = true) -> "Auto"
             result.faceCount > 0 -> "Natural"
-            sceneLabels.contains("sunset") || sceneLabels.contains("food") -> "Warm"
+            sceneLabels.contains("sunset") || sceneLabels.contains("sunrise") ||
+                sceneLabels.contains("food") -> "Warm"
+            sceneLabels.contains("sky") || sceneLabels.contains("cloud") ||
+                sceneLabels.contains("water") || sceneLabels.contains("ocean") -> "Cool"
+            sceneLabels.contains("forest") || sceneLabels.contains("tree") ||
+                sceneLabels.contains("nature") || sceneLabels.contains("plant") -> "Natural"
             else -> "Natural"
         }
     }

@@ -416,6 +416,19 @@ private fun PhotoEditorHome() {
         statusMessage = "Opening original photo… Choose an edit when you're ready."
     }
 
+    fun applyAiSuggestedEdit(result: PhotoAnalysisResult) {
+        val sceneLabels = result.labels.joinToString(" ").lowercase()
+        val suggestedStyle = when {
+            result.lightingSummary.contains("looks dark", ignoreCase = true) -> "Auto"
+            result.faceCount > 0 -> "Natural"
+            sceneLabels.contains("sunset") || sceneLabels.contains("food") -> "Warm"
+            else -> "Natural"
+        }
+        setStyle(suggestedStyle)
+        photoAnalysisResult = result
+        statusMessage = "AI suggested a $suggestedStyle edit using the detected scene, people and lighting. Review it, adjust manually, or return to Original."
+    }
+
     LaunchedEffect(activePhoto?.uri) {
         resetPreviewZoom()
         photoAnalysisResult = null
@@ -551,16 +564,17 @@ private fun PhotoEditorHome() {
                 Text("BETA 2.2", color = Mint, fontSize = 10.sp, fontWeight = FontWeight.Bold)
             }
 
-            Spacer(modifier = Modifier.height(18.dp))
-            Text("Your moments. At their best.", color = BrightText, fontSize = 27.sp,
-                lineHeight = 32.sp, fontWeight = FontWeight.SemiBold)
-            Text(
-                "Rank your shots, preview a gentle auto-edit, and export new copies.",
-                modifier = Modifier.padding(top = 5.dp),
-                color = SoftText, fontSize = 13.sp, lineHeight = 19.sp
-            )
-
-            Spacer(modifier = Modifier.height(14.dp))
+            if (activePhoto == null) {
+                Spacer(modifier = Modifier.height(18.dp))
+                Text("Your moments. At their best.", color = BrightText, fontSize = 27.sp,
+                    lineHeight = 32.sp, fontWeight = FontWeight.SemiBold)
+                Text(
+                    "Rank your shots, preview a gentle auto-edit, and export new copies.",
+                    modifier = Modifier.padding(top = 5.dp),
+                    color = SoftText, fontSize = 13.sp, lineHeight = 19.sp
+                )
+                Spacer(modifier = Modifier.height(14.dp))
+            }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                 Button(
                     onClick = { photoPicker.launch(arrayOf("image/*")) },
@@ -1018,7 +1032,7 @@ private fun PhotoEditorHome() {
                                     Text("AFTER", color = BrightText, fontSize = 9.sp, fontWeight = FontWeight.Bold,
                                         modifier = Modifier.align(Alignment.TopEnd).padding(8.dp)
                                             .background(Ink.copy(alpha = 0.8f), RoundedCornerShape(5.dp)).padding(5.dp))
-                                } else if (showEnhanced && previewBitmap != null) {
+                                } else if (selectedStyle != "Original" && showEnhanced && previewBitmap != null) {
                                     AsyncImage(model = previewBitmap, contentDescription = "Enhanced preview",
                                         modifier = Modifier.fillMaxSize().graphicsLayer {
                                             scaleX = previewScale
@@ -1252,8 +1266,7 @@ private fun PhotoEditorHome() {
                                                 )
                                             }
                                             val result = PhotoAnalysisEngine.analyze(analysisBitmap!!)
-                                            photoAnalysisResult = result
-                                            statusMessage = "AI analysis complete. Review the findings before choosing edits."
+                                            applyAiSuggestedEdit(result)
                                         } catch (error: CancellationException) {
                                             throw error
                                         } catch (error: Exception) {
@@ -1283,7 +1296,7 @@ private fun PhotoEditorHome() {
                             } else {
                                 androidx.compose.material3.Icon(Icons.Rounded.ImageSearch, contentDescription = null)
                                 Text(
-                                    if (photoAnalysisResult == null) "  Analyse this photo with AI" else "  Analyse again",
+                                    if (photoAnalysisResult == null) "  AI Analyse + Best Edit" else "  Analyse + Re-edit",
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.Bold
                                 )
@@ -1316,7 +1329,7 @@ private fun PhotoEditorHome() {
                                         Text("• $recommendation", color = BrightText, fontSize = 11.sp, lineHeight = 16.sp)
                                     }
                                     Text(
-                                        "Guidance only: labels and face detection can be wrong. Nothing was changed or exported.",
+                                        "AI has proposed a reversible basic edit using on-device scene labels, face count and lighting. This is not generative object removal, skin retouching, or true detail reconstruction.",
                                         color = SoftText, fontSize = 10.sp, lineHeight = 14.sp
                                     )
                                 }

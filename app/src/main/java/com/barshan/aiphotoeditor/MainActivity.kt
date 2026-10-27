@@ -60,6 +60,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -155,6 +160,10 @@ private fun PhotoEditorHome() {
     var backgroundBlur by remember { mutableFloatStateOf(0f) }
     var subjectBrightness by remember { mutableFloatStateOf(0f) }
     var darkerAreaLift by remember { mutableFloatStateOf(0f) }
+    var removalBrushMode by remember { mutableStateOf(false) }
+    var removalBrushSize by remember { mutableFloatStateOf(24f) }
+    val removalStrokes = remember { mutableStateListOf<List<Offset>>() }
+    var currentRemovalStroke by remember { mutableStateOf<List<Offset>>(emptyList()) }
     var cropLabel by remember { mutableStateOf("Original") }
     var cropOffsetX by remember { mutableFloatStateOf(0f) }
     var cropOffsetY by remember { mutableFloatStateOf(0f) }
@@ -181,6 +190,19 @@ private fun PhotoEditorHome() {
         previewScale = 1f
         previewOffsetX = 0f
         previewOffsetY = 0f
+    }
+
+    fun previewNormalizedPosition(position: Offset): Offset? {
+        val image = previewBitmap ?: return null
+        val boxWidth = previewWidthPx.toFloat().coerceAtLeast(1f)
+        val boxHeight = previewHeightPx.toFloat().coerceAtLeast(1f)
+        val fit = minOf(boxWidth / image.width.toFloat(), boxHeight / image.height.toFloat())
+        val shownWidth = image.width * fit
+        val shownHeight = image.height * fit
+        val left = (boxWidth - shownWidth) / 2f
+        val top = (boxHeight - shownHeight) / 2f
+        if (position.x < left || position.x > left + shownWidth || position.y < top || position.y > top + shownHeight) return null
+        return Offset(((position.x - left) / shownWidth).coerceIn(0f, 1f), ((position.y - top) / shownHeight).coerceIn(0f, 1f))
     }
 
     fun currentSettings(): EditSettings = EditSettings(
@@ -1087,7 +1109,18 @@ private fun PhotoEditorHome() {
                                     previewHeightPx = size.height
                                 }
                                 .then(
-                                    if (cropLabel != "Original") {
+                                    if (removalBrushMode) {
+                                        Modifier.pointerInput(removalBrushMode, previewWidthPx, previewHeightPx, previewBitmap?.width, previewBitmap?.height) {
+                                            detectDragGestures(
+                                                onDragStart = { position -> previewNormalizedPosition(position)?.let { currentRemovalStroke = listOf(it) } },
+                                                onDragEnd = { if (currentRemovalStroke.isNotEmpty()) removalStrokes.add(currentRemovalStroke); currentRemovalStroke = emptyList() },
+                                                onDragCancel = { currentRemovalStroke = emptyList() }
+                                            ) { change, _ ->
+                                                change.consume()
+                                                previewNormalizedPosition(change.position)?.let { currentRemovalStroke = currentRemovalStroke + it }
+                                            }
+                                        }
+                                    } else if (cropLabel != "Original") {
                                         Modifier.pointerInput(cropLabel, previewWidthPx, previewHeightPx) {
                                             detectDragGestures { change, dragAmount ->
                                                 change.consume()
@@ -1136,6 +1169,31 @@ private fun PhotoEditorHome() {
                                             translationX = previewOffsetX
                                             translationY = previewOffsetY
                                         }, contentScale = ContentScale.Fit)
+                                }
+                            }
+                            if (removalBrushMode || removalStrokes.isNotEmpty() || currentRemovalStroke.isNotEmpty()) {
+                                androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxSize()) {
+                                    val image = previewBitmap
+                                    if (image != null && image.width > 0 && image.height > 0) {
+                                        val fit = minOf(size.width / image.width.toFloat(), size.height / image.height.toFloat())
+                                        val shownWidth = image.width * fit
+                                        val shownHeight = image.height * fit
+                                        val left = (size.width - shownWidth) / 2f
+                                        val top = (size.height - shownHeight) / 2f
+                                        val strokeWidth = (removalBrushSize * 2f * shownWidth / 512f).coerceAtLeast(5f)
+                                        val allStrokes = removalStrokes.toList() + listOf(currentRemovalStroke).filter { it.isNotEmpty() }
+                                        allStrokes.forEach { points ->
+                                            if (points.size == 1) {
+                                                drawCircle(Color.Red.copy(alpha = 0.55f), strokeWidth / 2f, Offset(left + points[0].x * shownWidth, top + points[0].y * shownHeight))
+                                            } else if (points.size > 1) {
+                                                val path = Path().apply {
+                                                    moveTo(left + points[0].x * shownWidth, top + points[0].y * shownHeight)
+                                                    points.drop(1).forEach { lineTo(left + it.x * shownWidth, top + it.y * shownHeight) }
+                                                }
+                                                drawPath(path, Color.Red.copy(alpha = 0.72f), style = Stroke(width = strokeWidth, cap = StrokeCap.Round, join = StrokeJoin.Round))
+                                            }
+                                        }
+                                    }
                                 }
                             }
                             if (showCropGuides && cropLabel != "Original" && !compareBeforeAfter) {

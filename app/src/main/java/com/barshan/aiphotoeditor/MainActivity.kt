@@ -474,8 +474,9 @@ private fun PhotoEditorHome() {
         resetPreviewZoom()
         activePhoto = photo
         editedScore = null
-        // Open the feature-rich AI workspace first so existing tools are immediately discoverable.
-        activeEditorPanel = "AI Edit"
+        // Keep the familiar full manual controls immediately available.
+        // AI Edit and Presets remain one tap away in the workspace tabs.
+        activeEditorPanel = "Universal Edit"
         activeAiSubpanel = "Subject"
         compareBeforeAfter = false
         comparePosition = 0.5f

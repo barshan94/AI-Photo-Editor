@@ -14,7 +14,8 @@ data class PersonalEditProfile(
     val saturation: Float,
     val warmth: Float,
     val backgroundBlur: Float,
-    val subjectBrightness: Float
+    val subjectBrightness: Float,
+    val darkerAreaLift: Float
 ) {
     fun toSettings() = EditSettings(
         brightness = brightness,
@@ -22,7 +23,8 @@ data class PersonalEditProfile(
         saturation = saturation,
         warmth = warmth,
         backgroundBlur = backgroundBlur,
-        subjectBrightness = subjectBrightness
+        subjectBrightness = subjectBrightness,
+        darkerAreaLift = darkerAreaLift
     )
 }
 
@@ -40,7 +42,8 @@ object PersonalEditLearning {
             saturation = p.getFloat("saturation", 1.06f),
             warmth = p.getFloat("warmth", 0f),
             backgroundBlur = p.getFloat("background_blur", 0f),
-            subjectBrightness = p.getFloat("subject_brightness", 0f)
+            subjectBrightness = p.getFloat("subject_brightness", 0f),
+            darkerAreaLift = p.getFloat("darker_area_lift", 0f)
         )
     }
 
@@ -58,7 +61,8 @@ object PersonalEditLearning {
             saturation = blend(old.saturation, settings.saturation),
             warmth = blend(old.warmth, settings.warmth),
             backgroundBlur = blend(old.backgroundBlur, settings.backgroundBlur),
-            subjectBrightness = blend(old.subjectBrightness, settings.subjectBrightness)
+            subjectBrightness = blend(old.subjectBrightness, settings.subjectBrightness),
+            darkerAreaLift = blend(old.darkerAreaLift, settings.darkerAreaLift)
         )
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
             .putInt(COUNT, next.acceptedEdits)
@@ -68,6 +72,7 @@ object PersonalEditLearning {
             .putFloat("warmth", next.warmth)
             .putFloat("background_blur", next.backgroundBlur)
             .putFloat("subject_brightness", next.subjectBrightness)
+            .putFloat("darker_area_lift", next.darkerAreaLift)
             .apply()
         return next
     }

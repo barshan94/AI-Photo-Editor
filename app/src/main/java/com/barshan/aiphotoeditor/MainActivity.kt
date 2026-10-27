@@ -791,6 +791,7 @@ private fun PhotoEditorHome() {
                 )
                 Spacer(modifier = Modifier.height(14.dp))
             }
+            if (activePhoto == null) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                 Button(
                     onClick = { photoPicker.launch(arrayOf("image/*")) },
@@ -882,15 +883,44 @@ private fun PhotoEditorHome() {
                     Text("  Save all", fontWeight = FontWeight.Bold, fontSize = 13.sp)
                 }
             }
+            }
 
             if (activePhoto == null && selectedPhotos.isNotEmpty()) {
-                Text("BATCH PRESET", color = BrightText, fontSize = 11.sp, fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(top = 8.dp, bottom = 4.dp))
+                Row(modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically) {
+                    Text("BATCH PRESET", color = BrightText, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    Spacer(modifier = Modifier.weight(1f))
+                    Button(
+                        onClick = {
+                            val sample = selectedPhotos.firstOrNull { it.decision != "Reject" }
+                            if (sample != null) {
+                                openEditor(sample)
+                                activeEditorPanel = "AI Edit"
+                                activeAiSubpanel = "Enhance"
+                                statusMessage = "AI Edit workspace opened. Run AI Edit to analyse the scene, lighting and people together."
+                            }
+                        },
+                        enabled = !isExporting && !isAnalyzing && selectedPhotos.any { it.decision != "Reject" },
+                        shape = RoundedCornerShape(10.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Ink),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 3.dp)
+                    ) { Text("✦ AI Edit", fontSize = 11.sp, fontWeight = FontWeight.Bold) }
+                }
                 Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     BatchExportPolicy.presetNames.forEach { preset ->
-                        Button(onClick = { batchPreset = preset; batchSummary = null },
-                            enabled = !isExporting && !isAnalyzing,
+                        Button(onClick = {
+                            batchPreset = preset
+                            batchSummary = null
+                            val sample = selectedPhotos.firstOrNull { it.decision != "Reject" }
+                            if (sample != null) {
+                                openEditor(sample)
+                                applyEditSnapshot(BatchExportPolicy.settingsForPreset(preset))
+                                selectedStyle = preset
+                                statusMessage = "Previewing $preset. The image and quality score will update before you save the batch."
+                            }
+                        },
+                            enabled = !isExporting && !isAnalyzing && selectedPhotos.any { it.decision != "Reject" },
                             shape = RoundedCornerShape(10.dp),
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = if (batchPreset == preset) Mint else Color(0xFF293333),
@@ -918,7 +948,7 @@ private fun PhotoEditorHome() {
                                 applyEditSnapshot(BatchExportPolicy.settingsForPreset(batchPreset))
                                 selectedStyle = batchPreset
                             }
-                            statusMessage = "Batch preview sample: " + batchPreset + ". Return to the grid to export the reviewed batch."
+                            statusMessage = "Batch preview sample: " + batchPreset + ". Return to the grid to save the reviewed batch."
                         }
                     }, enabled = !isExporting && !isAnalyzing && selectedPhotos.any { it.decision != "Reject" },
                         shape = RoundedCornerShape(10.dp),

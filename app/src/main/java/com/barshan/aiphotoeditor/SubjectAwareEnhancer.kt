@@ -1,6 +1,5 @@
 package com.barshan.aiphotoeditor
 
-import android.graphics.Bitmap
 import android.content.Context
 import android.graphics.Bitmap
 import android.renderscript.Allocation

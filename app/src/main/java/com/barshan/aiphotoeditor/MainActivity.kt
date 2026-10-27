@@ -248,7 +248,7 @@ private fun PhotoEditorHome() {
                 brightness = 0f; contrast = 1f; saturation = 1f; warmth = 0f
                 cropLabel = "Original"; cropOffsetX = 0f; cropOffsetY = 0f
             }
-            "Natural" -> { brightness = 0f; contrast = 1.03f; saturation = 1.02f; warmth = 0f }
+            "Natural" -> { brightness = 1f; contrast = 1.02f; saturation = 1.08f; warmth = 2f }
             "Vivid" -> { brightness = 0f; contrast = 1.13f; saturation = 1.28f; warmth = 0f }
             "Warm" -> { brightness = 2f; contrast = 1.06f; saturation = 1.08f; warmth = 12f }
             "Cool" -> { brightness = 0f; contrast = 1.05f; saturation = 1.04f; warmth = -10f }
@@ -416,17 +416,21 @@ private fun PhotoEditorHome() {
         statusMessage = "Opening original photo… Choose an edit when you're ready."
     }
 
-    fun applyAiSuggestedEdit(result: PhotoAnalysisResult) {
+    fun suggestedStyleFor(result: PhotoAnalysisResult): String {
         val sceneLabels = result.labels.joinToString(" ").lowercase()
-        val suggestedStyle = when {
+        return when {
             result.lightingSummary.contains("looks dark", ignoreCase = true) -> "Auto"
             result.faceCount > 0 -> "Natural"
             sceneLabels.contains("sunset") || sceneLabels.contains("food") -> "Warm"
             else -> "Natural"
         }
+    }
+
+    fun applyAiSuggestedEdit(result: PhotoAnalysisResult) {
+        val suggestedStyle = suggestedStyleFor(result)
         setStyle(suggestedStyle)
         photoAnalysisResult = result
-        statusMessage = "AI suggested a $suggestedStyle edit using the detected scene, people and lighting. Review it, adjust manually, or return to Original."
+        statusMessage = "Applied the $suggestedStyle suggestion. Check the preview and compare with Original; you can undo or adjust it."
     }
 
     LaunchedEffect(activePhoto?.uri) {
@@ -1266,7 +1270,8 @@ private fun PhotoEditorHome() {
                                                 )
                                             }
                                             val result = PhotoAnalysisEngine.analyze(analysisBitmap!!)
-                                            applyAiSuggestedEdit(result)
+                                            photoAnalysisResult = result
+                                            statusMessage = "Analysis complete. No edits were applied. Review the suggestion and choose whether to apply it."
                                         } catch (error: CancellationException) {
                                             throw error
                                         } catch (error: Exception) {
@@ -1328,8 +1333,17 @@ private fun PhotoEditorHome() {
                                     result.recommendations.forEach { recommendation ->
                                         Text("• $recommendation", color = BrightText, fontSize = 11.sp, lineHeight = 16.sp)
                                     }
+                                    Button(
+                                        onClick = { applyAiSuggestedEdit(result) },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        shape = RoundedCornerShape(10.dp),
+                                        colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Ink)
+                                    ) {
+                                        Text("Apply suggested " + suggestedStyleFor(result) + " edit", fontSize = 12.sp,
+                                            fontWeight = FontWeight.Bold)
+                                    }
                                     Text(
-                                        "AI has proposed a reversible basic edit using on-device scene labels, face count and lighting. This is not generative object removal, skin retouching, or true detail reconstruction.",
+                                        "Analysis does not change your photo. The suggested edit is a reversible basic color adjustment, not generative object removal, skin retouching, or true detail reconstruction.",
                                         color = SoftText, fontSize = 10.sp, lineHeight = 14.sp
                                     )
                                 }

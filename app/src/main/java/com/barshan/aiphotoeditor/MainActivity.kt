@@ -203,7 +203,7 @@ private fun PhotoEditorHome() {
         val image = previewBitmap ?: return null
         val boxWidth = previewWidthPx.toFloat().coerceAtLeast(1f)
         val boxHeight = previewHeightPx.toFloat().coerceAtLeast(1f)
-        val fit = minOf(boxWidth / image.width.toFloat(), boxHeight / image.height.toFloat())
+        val fit = maxOf(boxWidth / image.width.toFloat(), boxHeight / image.height.toFloat())
         val shownWidth = image.width * fit
         val shownHeight = image.height * fit
         val left = (boxWidth - shownWidth) / 2f
@@ -211,6 +211,21 @@ private fun PhotoEditorHome() {
         if (position.x < left || position.x > left + shownWidth || position.y < top || position.y > top + shownHeight) return null
         return Offset(((position.x - left) / shownWidth).coerceIn(0f, 1f), ((position.y - top) / shownHeight).coerceIn(0f, 1f))
     }
+
+    suspend fun scoreEditedBitmap(bitmap: Bitmap): PhotoQualityScoring.Score =
+        withContext(Dispatchers.Default) {
+            val scale = minOf(1f, 256f / maxOf(bitmap.width, bitmap.height).toFloat())
+            val sampleWidth = (bitmap.width * scale).toInt().coerceAtLeast(3)
+            val sampleHeight = (bitmap.height * scale).toInt().coerceAtLeast(3)
+            val sample = Bitmap.createScaledBitmap(bitmap, sampleWidth, sampleHeight, true)
+            try {
+                val pixels = IntArray(sample.width * sample.height)
+                sample.getPixels(pixels, 0, sample.width, 0, 0, sample.width, sample.height)
+                PhotoQualityScoring.scorePixels(pixels, sample.width, sample.height)
+            } finally {
+                if (sample !== bitmap && !sample.isRecycled) sample.recycle()
+            }
+        }
 
     fun currentSettings(): EditSettings = EditSettings(
         brightness = brightness,
@@ -550,19 +565,7 @@ private fun PhotoEditorHome() {
                     }
                 }
                 val scoredBitmap = adjusted!!
-                editedScore = withContext(Dispatchers.Default) {
-                    val scale = minOf(1f, 256f / maxOf(scoredBitmap.width, scoredBitmap.height).toFloat())
-                    val sampleWidth = (scoredBitmap.width * scale).toInt().coerceAtLeast(3)
-                    val sampleHeight = (scoredBitmap.height * scale).toInt().coerceAtLeast(3)
-                    val sample = Bitmap.createScaledBitmap(scoredBitmap, sampleWidth, sampleHeight, true)
-                    try {
-                        val pixels = IntArray(sample.width * sample.height)
-                        sample.getPixels(pixels, 0, sample.width, 0, 0, sample.width, sample.height)
-                        PhotoQualityScoring.scorePixels(pixels, sample.width, sample.height)
-                    } finally {
-                        if (sample !== scoredBitmap && !sample.isRecycled) sample.recycle()
-                    }
-                }
+                editedScore = scoreEditedBitmap(scoredBitmap)
                 previewBitmap?.let { if (!it.isRecycled) it.recycle() }
                 previewBitmap = adjusted
                 adjusted = null
@@ -642,6 +645,7 @@ private fun PhotoEditorHome() {
                         AutoEnhancer.enhance(original!!, settings)
                     }
                 }
+                if (useAiUpscale && enhanced != null) editedScore = scoreEditedBitmap(enhanced!!)
                 operationProgress = 94
                 operationStage = "Saving edited copy to Pictures/FRAME AI"
                 val width = enhanced!!.width
@@ -694,6 +698,7 @@ private fun PhotoEditorHome() {
                 operationStage = "Reconstructing the marked area"
                 val result = LamaInpainter.inpaint(context, original!!, strokes, removalBrushSize)
                 repaired = result.bitmap
+                editedScore = scoreEditedBitmap(repaired!!)
                 operationProgress = 92
                 operationStage = "Saving repaired copy"
                 withContext(Dispatchers.IO) { AutoEnhancer.saveJpeg(context.contentResolver, repaired!!) }
@@ -1252,7 +1257,7 @@ private fun PhotoEditorHome() {
                                 androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxSize()) {
                                     val image = previewBitmap
                                     if (image != null && image.width > 0 && image.height > 0) {
-                                        val fit = minOf(size.width / image.width.toFloat(), size.height / image.height.toFloat())
+                                        val fit = maxOf(size.width / image.width.toFloat(), size.height / image.height.toFloat())
                                         val shownWidth = image.width * fit
                                         val shownHeight = image.height * fit
                                         val left = (size.width - shownWidth) / 2f
@@ -1900,6 +1905,8 @@ private fun PhotoEditorHome() {
                             else -> true
                         }
                     }
+                    val rankByUri = selectedPhotos.sortedByDescending { it.score ?: -1 }
+                        .mapIndexed { index, rankedPhoto -> rankedPhoto.uri to (index + 1) }.toMap()
                     items(visiblePhotos, key = { it.uri.toString() }) { photo ->
                         Column(
                             modifier = Modifier.clip(RoundedCornerShape(13.dp))
@@ -1921,7 +1928,7 @@ private fun PhotoEditorHome() {
                                     )
                                 }
                             }
-                            val photoRank = selectedPhotos.sortedByDescending { it.score ?: -1 }.indexOfFirst { it.uri == photo.uri } + 1
+                            val photoRank = rankByUri[photo.uri] ?: 0
                             Text(
                                 if (photo.score == null) "Analysing…" else "#$photoRank · Score " + photo.score + "/100",
                                 color = if ((photo.score ?: 0) >= 70) Mint else BrightText,

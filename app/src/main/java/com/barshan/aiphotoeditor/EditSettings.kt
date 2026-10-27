@@ -9,5 +9,9 @@ data class EditSettings(
     val cropRatio: Float? = null,
     /** -1..1 positions the crop window within the available image bounds. */
     val cropOffsetX: Float = 0f,
-    val cropOffsetY: Float = 0f
+    val cropOffsetY: Float = 0f,
+    /** 0..20 approximate background blur strength; requires person segmentation. */
+    val backgroundBlur: Float = 0f,
+    /** 0..25 neutral brightness lift applied to segmented person pixels. */
+    val subjectBrightness: Float = 0f
 )

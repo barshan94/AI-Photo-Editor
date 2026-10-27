@@ -12,6 +12,8 @@ android {
         applicationId = "com.barshan.aiphotoeditor.beta"
         minSdk = 26
         targetSdk = 35
+        // The shipped APK targets modern 64-bit Android phones and avoids bundling unused x86/32-bit native runtimes.
+        ndk { abiFilters += listOf("arm64-v8a") }
         versionCode = 23
         versionName = "2.2.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"

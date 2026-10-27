@@ -278,50 +278,71 @@ object SubjectAwareEnhancer {
         val top = ((sourceHeight - cropHeight) * ((settings.cropOffsetY.coerceIn(-1f, 1f) + 1f) / 2f))
             .toInt().coerceIn(0, sourceHeight - cropHeight)
 
-        val row = IntArray(bitmap.width)
-        for (y in 0 until bitmap.height) {
-            bitmap.getPixels(row, 0, bitmap.width, 0, y, bitmap.width, 1)
-            val sourceY = top + (y.toFloat() / bitmap.height * cropHeight).toInt().coerceIn(0, cropHeight - 1)
+        val width = bitmap.width
+        val height = bitmap.height
+        var previousRow = IntArray(width)
+        var row = IntArray(width)
+        var nextRow = IntArray(width)
+        val outputRow = IntArray(width)
+        bitmap.getPixels(row, 0, width, 0, 0, width, 1)
+        previousRow = row.copyOf()
+        if (height > 1) bitmap.getPixels(nextRow, 0, width, 0, 1, width, 1) else nextRow = row.copyOf()
+        for (y in 0 until height) {
+            val sourceY = top + (y.toFloat() / height * cropHeight).toInt().coerceIn(0, cropHeight - 1)
             val maskY = (sourceY.toFloat() / sourceHeight * maskHeight).toInt().coerceIn(0, maskHeight - 1)
-            for (x in 0 until bitmap.width) {
-                val sourceX = left + (x.toFloat() / bitmap.width * cropWidth).toInt().coerceIn(0, cropWidth - 1)
+            for (x in 0 until width) {
+                val sourceX = left + (x.toFloat() / width * cropWidth).toInt().coerceIn(0, cropWidth - 1)
                 val maskX = (sourceX.toFloat() / sourceWidth * maskWidth).toInt().coerceIn(0, maskWidth - 1)
                 val maskIndex = maskY * maskWidth + maskX
                 val subject = confidence[maskIndex].coerceIn(0f, 1f)
-                val skin = if (skinConfidence.size >= maskWidth * maskHeight) {
-                    skinConfidence[maskIndex].coerceIn(0f, 1f)
-                } else 0f
+                val skin = if (skinConfidence.size >= maskWidth * maskHeight) skinConfidence[maskIndex].coerceIn(0f, 1f) else 0f
                 val pixel = row[x]
-                val backgroundPixel = if (blurredBackground != null) {
-                    blurredBackground.getPixel(sourceX.coerceIn(0, blurredBackground.width - 1), sourceY.coerceIn(0, blurredBackground.height - 1))
-                } else pixel
+                val backgroundPixel = if (blurredBackground != null) blurredBackground.getPixel(sourceX.coerceIn(0, blurredBackground.width - 1), sourceY.coerceIn(0, blurredBackground.height - 1)) else pixel
                 val alpha = pixel ushr 24 and 0xFF
-                val red = (pixel shr 16 and 0xFF).toDouble()
-                val green = (pixel shr 8 and 0xFF).toDouble()
-                val blue = (pixel and 0xFF).toDouble()
+                var red = (pixel shr 16 and 0xFF).toDouble()
+                var green = (pixel shr 8 and 0xFF).toDouble()
+                var blue = (pixel and 0xFF).toDouble()
+                val smoothMix = (settings.skinSmoothing.coerceIn(0f, 10f) / 10f * 0.42f * skin).toDouble()
+                if (smoothMix > 0.001) {
+                    var sumRed = 0.0; var sumGreen = 0.0; var sumBlue = 0.0
+                    for (dy in -1..1) {
+                        val neighborRow = when (dy) { -1 -> previousRow; 0 -> row; else -> nextRow }
+                        for (dx in -1..1) {
+                            val neighbor = neighborRow[(x + dx).coerceIn(0, width - 1)]
+                            sumRed += (neighbor shr 16 and 0xFF).toDouble()
+                            sumGreen += (neighbor shr 8 and 0xFF).toDouble()
+                            sumBlue += (neighbor and 0xFF).toDouble()
+                        }
+                    }
+                    red = red * (1.0 - smoothMix) + (sumRed / 9.0) * smoothMix
+                    green = green * (1.0 - smoothMix) + (sumGreen / 9.0) * smoothMix
+                    blue = blue * (1.0 - smoothMix) + (sumBlue / 9.0) * smoothMix
+                }
                 val luma = 0.2126 * red + 0.7152 * green + 0.0722 * blue
-                // Two independent skin controls: overall skin lift, plus an adaptive shadow lift.
-                // Dark pixels receive more of the second control; already-bright face pixels receive less.
-                val saturation = 1.0
-                val contrast = 1.0
                 val overallSkinLift = settings.subjectBrightness.coerceIn(0f, 25f).toDouble() * skin
                 val darkPixelFactor = ((175.0 - luma) / 175.0).coerceIn(0.0, 1.0)
-                val adaptiveDarkLift = settings.darkerAreaLift.coerceIn(0f, 30f).toDouble() *
-                    darkPixelFactor * skin
+                val adaptiveDarkLift = settings.darkerAreaLift.coerceIn(0f, 30f).toDouble() * darkPixelFactor * skin
                 val brightness = overallSkinLift + adaptiveDarkLift
                 val blurMix = (settings.backgroundBlur.coerceIn(0f, 20f) / 20f * (1f - subject)).coerceIn(0f, 1f)
                 val bgRed = (backgroundPixel shr 16 and 0xFF).toDouble()
                 val bgGreen = (backgroundPixel shr 8 and 0xFF).toDouble()
                 val bgBlue = (backgroundPixel and 0xFF).toDouble()
-                val baseRed = 128.0 + (luma + (red - luma) * saturation - 128.0) * contrast + brightness
-                val baseGreen = 128.0 + (luma + (green - luma) * saturation - 128.0) * contrast + brightness
-                val baseBlue = 128.0 + (luma + (blue - luma) * saturation - 128.0) * contrast + brightness
-                val outRed: Int = (baseRed * (1.0 - blurMix) + bgRed * blurMix).toInt().coerceIn(0, 255)
-                val outGreen: Int = (baseGreen * (1.0 - blurMix) + bgGreen * blurMix).toInt().coerceIn(0, 255)
-                val outBlue: Int = (baseBlue * (1.0 - blurMix) + bgBlue * blurMix).toInt().coerceIn(0, 255)
-                row[x] = (alpha shl 24) or (outRed shl 16) or (outGreen shl 8) or outBlue
+                val baseRed = luma + (red - luma) + brightness
+                val baseGreen = luma + (green - luma) + brightness
+                val baseBlue = luma + (blue - luma) + brightness
+                val outRed = (baseRed * (1.0 - blurMix) + bgRed * blurMix).toInt().coerceIn(0, 255)
+                val outGreen = (baseGreen * (1.0 - blurMix) + bgGreen * blurMix).toInt().coerceIn(0, 255)
+                val outBlue = (baseBlue * (1.0 - blurMix) + bgBlue * blurMix).toInt().coerceIn(0, 255)
+                outputRow[x] = (alpha shl 24) or (outRed shl 16) or (outGreen shl 8) or outBlue
             }
-            bitmap.setPixels(row, 0, bitmap.width, 0, y, bitmap.width, 1)
+            bitmap.setPixels(outputRow, 0, width, 0, y, width, 1)
+            if (y + 1 < height) {
+                val reusable = previousRow
+                previousRow = row
+                row = nextRow
+                nextRow = reusable
+                if (y + 2 < height) bitmap.getPixels(nextRow, 0, width, 0, y + 2, width, 1) else nextRow = row.copyOf()
+            }
         }
     }
 }

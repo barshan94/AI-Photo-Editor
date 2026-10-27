@@ -480,6 +480,7 @@ private fun PhotoEditorHome() {
 
     // Debounced live preview: controls update the image without an Apply button.
     LaunchedEffect(activePhoto?.uri, brightness, contrast, saturation, warmth, backgroundBlur, subjectBrightness, darkerAreaLift, cropLabel, cropOffsetX, cropOffsetY, selectedStyle) {
+        if (selectedStyle == "Object Removal") return@LaunchedEffect
         val photo = activePhoto
         if (photo != null) {
             delay(220)
@@ -536,7 +537,9 @@ private fun PhotoEditorHome() {
                 original = withContext(Dispatchers.IO) {
                     AutoEnhancer.decodeForEditing(context.contentResolver, photo.uri, maxDimension = Int.MAX_VALUE)
                 }
-                if (useAiUpscale) {
+                if (selectedStyle == "Object Removal" && previewBitmap != null && !useAiUpscale) {
+                    enhanced = Bitmap.createBitmap(previewBitmap!!)
+                } else if (useAiUpscale) {
                     val upscaleResult = AiUpscaler.upscale(context, original!!)
                     enhanced = upscaleResult.bitmap
                     aiNotice = if (upscaleResult.inputWasResizedForMemory) {
@@ -570,6 +573,50 @@ private fun PhotoEditorHome() {
                 statusMessage = "Export failed: " + (error.message ?: "unknown error")
             } finally {
                 enhanced?.let { if (!it.isRecycled) it.recycle() }
+                original?.let { if (!it.isRecycled) it.recycle() }
+                isExporting = false
+            }
+        }
+    }
+
+    fun removeMarkedObject(photo: PhotoItem) {
+        if (isExporting) return
+        val strokes = removalStrokes.toList()
+        if (strokes.none { it.isNotEmpty() }) {
+            statusMessage = "Tap Mark object, then paint over the unwanted object or person in the preview."
+            return
+        }
+        isExporting = true
+        statusMessage = "Running LaMa object-removal model on this device…"
+        scope.launch {
+            var original: Bitmap? = null
+            var repaired: Bitmap? = null
+            try {
+                original = withContext(Dispatchers.IO) {
+                    AutoEnhancer.decodeForEditing(context.contentResolver, photo.uri, maxDimension = 2400)
+                }
+                val result = LamaInpainter.inpaint(context, original!!, strokes, removalBrushSize)
+                repaired = result.bitmap
+                withContext(Dispatchers.IO) { AutoEnhancer.saveJpeg(context.contentResolver, repaired!!) }
+                previewBitmap?.let { if (!it.isRecycled) it.recycle() }
+                previewBitmap = repaired
+                repaired = null
+                selectedStyle = "Object Removal"
+                showEnhanced = true
+                compareBeforeAfter = false
+                removalBrushMode = false
+                removalStrokes.clear()
+                currentRemovalStroke = emptyList()
+                statusMessage = "LaMa neural inpainting finished locally. Saved the edited copy to Pictures/FRAME AI; original untouched."
+            } catch (error: CancellationException) {
+                statusMessage = "Object removal cancelled. Original photo remains untouched."
+                throw error
+            } catch (error: OutOfMemoryError) {
+                statusMessage = "Object removal ran out of memory on this photo. Try a smaller image."
+            } catch (error: Exception) {
+                statusMessage = "Object removal failed: " + (error.message ?: "unknown error")
+            } finally {
+                repaired?.let { if (!it.isRecycled) it.recycle() }
                 original?.let { if (!it.isRecycled) it.recycle() }
                 isExporting = false
             }

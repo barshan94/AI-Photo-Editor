@@ -619,7 +619,7 @@ private fun PhotoEditorHome() {
                         else -> withContext(Dispatchers.Default) { AutoEnhancer.enhance(original!!, settings) }
                     }
                     operationProgress = 14
-                    operationStage = "Preparing current edits for ESRGAN"
+                    operationStage = "Preparing current edits for AI upscaling"
                     val upscaleResult = AiUpscaler.upscale(context, upscaleInput!!) { progress, stage ->
                         withContext(Dispatchers.Main.immediate) {
                             operationProgress = 12 + (progress * 0.78f).toInt()
@@ -628,9 +628,9 @@ private fun PhotoEditorHome() {
                     }
                     enhanced = upscaleResult.bitmap
                     val upscaleNotice = if (upscaleResult.inputWasResizedForMemory) {
-                        "ESRGAN 4x ran locally after resizing the input for phone memory. "
-                    } else "ESRGAN 4x AI upscaling ran locally. "
-                    aiNotice = (if (selectedStyle != "Original") "Current edit settings applied before ESRGAN 4x. " else "") + upscaleNotice
+                        "AI upscaling ran locally after resizing the input for phone memory. "
+                    } else "AI upscaling ran locally. "
+                    aiNotice = (if (selectedStyle != "Original") "Current edit settings applied before AI upscaling. " else "") + upscaleNotice
                 } else if (useAiPortrait) {
                     operationProgress = 22
                     operationStage = "Detecting person, skin, and background masks"
@@ -654,7 +654,7 @@ private fun PhotoEditorHome() {
                 operationStage = "Finished · original photo preserved"
                 statusMessage = (aiNotice?.let { "$it " } ?: if (useAiPortrait) {
                     "AI Portrait enhancement applied. "
-                } else "") + (if (useAiUpscale) "Saved ESRGAN-upscaled " else "Saved full-resolution ") + width + "x" + height +
+                } else "") + (if (useAiUpscale) "Saved AI-upscaled " else "Saved full-resolution ") + width + "x" + height +
                     " copy to Pictures/FRAME AI. Original untouched."
             } catch (error: CancellationException) {
                 statusMessage = "Export cancelled. No original photo was changed."
@@ -682,7 +682,7 @@ private fun PhotoEditorHome() {
         isExporting = true
         operationProgress = 3
         operationStage = "Loading object-removal model"
-        statusMessage = "Running LaMa object-removal model on this device…"
+        statusMessage = "Removing the marked object on this device…"
         scope.launch {
             var original: Bitmap? = null
             var repaired: Bitmap? = null
@@ -691,7 +691,7 @@ private fun PhotoEditorHome() {
                     AutoEnhancer.decodeForEditing(context.contentResolver, photo.uri, maxDimension = 2400)
                 }
                 operationProgress = 20
-                operationStage = "Reconstructing marked area with LaMa"
+                operationStage = "Reconstructing the marked area"
                 val result = LamaInpainter.inpaint(context, original!!, strokes, removalBrushSize)
                 repaired = result.bitmap
                 operationProgress = 92
@@ -706,7 +706,7 @@ private fun PhotoEditorHome() {
                 removalBrushMode = false
                 removalStrokes.clear()
                 currentRemovalStroke = emptyList()
-                statusMessage = "LaMa neural inpainting finished locally. Saved the edited copy to Pictures/FRAME AI; original untouched."
+                statusMessage = "Object removal finished locally. Saved the edited copy to Pictures/FRAME AI; original untouched."
             } catch (error: CancellationException) {
                 statusMessage = "Object removal cancelled. Original photo remains untouched."
                 throw error

@@ -44,6 +44,7 @@ object SubjectAwareEnhancer {
     suspend fun enhance(source: Bitmap, settings: EditSettings = EditSettings(), context: Context? = null): Result {
         var maskInput: Bitmap? = null
         var usedMulticlassModel = false
+        var makeupWarning: String? = null
         try {
             maskInput = withContext(Dispatchers.Default) {
                 val largest = maxOf(source.width, source.height)
@@ -89,12 +90,19 @@ object SubjectAwareEnhancer {
                         blurredBackground = blurredBackground
                     )
                 }
-                if (settings.makeupIntensity > 0f) applyNaturalMakeup(enhanced, source, settings)
+                if (settings.makeupIntensity > 0f) {
+                    try {
+                        applyNaturalMakeup(enhanced, source, settings)
+                    } catch (_: Exception) {
+                        makeupWarning = "Face-contour makeup was unavailable; the other portrait adjustments were kept."
+                    }
+                }
                 return Result(
                     bitmap = enhanced,
                     usedAi = usedMulticlassModel,
-                    message = if (usedMulticlassModel) null else
+                    message = if (!usedMulticlassModel) {
                         "Portrait blur used fallback person segmentation. Skin-only lightening is disabled because the skin mask model did not initialize."
+                    } else makeupWarning
                 )
             } catch (error: Exception) {
                 if (!enhanced.isRecycled) enhanced.recycle()

@@ -100,6 +100,8 @@ private data class PhotoItem(
     val exposure: Int = 0,
     val contrast: Int = 0,
     val note: String = "Waiting for analysis",
+    val width: Int = 0,
+    val height: Int = 0,
     val fingerprint: String? = null,
     val visualFingerprint: Long? = null,
     val captureTimeMillis: Long? = null,
@@ -364,6 +366,8 @@ private fun PhotoEditorHome() {
                                 exposure = result.exposure,
                                 contrast = result.contrast,
                                 note = result.note,
+                                width = result.width,
+                                height = result.height,
                                 fingerprint = try {
                                     withContext(Dispatchers.IO) {
                                         PhotoQualityAnalyzer.fingerprint(context.contentResolver, uri)
@@ -1341,7 +1345,7 @@ private fun PhotoEditorHome() {
             }
 
             if (activePhoto != null) {
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(3.dp))
                 Card(
                     modifier = Modifier.fillMaxWidth().weight(1f),
                     shape = RoundedCornerShape(20.dp),
@@ -2125,7 +2129,8 @@ private fun PhotoEditorHome() {
                                 else "Sharpness ${photo.sharpness} · Exposure ${photo.exposure} · Contrast ${photo.contrast}",
                                 color = SoftText, fontSize = 8.sp, lineHeight = 11.sp,
                                 modifier = Modifier.padding(top = 2.dp, start = 2.dp))
-                            val formats = batchPreviewFormats[photo.uri].orEmpty()
+                            val formats = batchPreviewFormats[photo.uri]
+                                ?: if (photo.width > 0 && photo.height > 0) recommendedFormats(photo.width, photo.height) else emptyList()
                             if (formats.isNotEmpty()) {
                                 Text(formats.joinToString(" · "), color = Color(0xFF9CC8FF),
                                     fontSize = 8.sp, fontWeight = FontWeight.Bold,

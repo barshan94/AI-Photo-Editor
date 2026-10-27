@@ -420,6 +420,9 @@ private fun PhotoEditorHome() {
         backgroundBlur = 0f
         subjectBrightness = 0f
         darkerAreaLift = 0f
+        removalBrushMode = false
+        removalStrokes.clear()
+        currentRemovalStroke = emptyList()
         cropLabel = "Original"
         cropOffsetX = 0f
         cropOffsetY = 0f
@@ -1207,7 +1210,7 @@ private fun PhotoEditorHome() {
                                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                     Column(modifier = Modifier.weight(1f)) {
                                         Text("Object / person removal", color = BrightText, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
-                                        Text("MASK / INPAINTING NOT YET CONNECTED", color = SoftText, fontSize = 9.sp)
+                                        Text("LaMa NEURAL INPAINTING CONNECTED", color = Mint, fontSize = 9.sp)
                                     }
                                     Column(modifier = Modifier.weight(1f)) {
                                         Text("AI image upscale", color = BrightText, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
@@ -1226,6 +1229,37 @@ private fun PhotoEditorHome() {
                                     colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Ink)
                                 ) { Text(if (isExporting) "Processing photo…" else "Run AI Upscale 4×") }
                                 Text("ESRGAN is a real neural super-resolution model. For memory safety, inputs above 1024 px on the long edge are reduced before inference; the source photo is never overwritten.", color = SoftText, fontSize = 10.sp, lineHeight = 14.sp)
+                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Button(
+                                        onClick = {
+                                            removalBrushMode = !removalBrushMode
+                                            compareBeforeAfter = false
+                                            if (removalBrushMode) {
+                                                statusMessage = "Paint over the unwanted object/person in red, then tap Remove marked area."
+                                            } else statusMessage = "Mask drawing paused. Your red selection is kept until you clear it or remove the object."
+                                        },
+                                        enabled = activePhoto != null && !isExporting,
+                                        modifier = Modifier.weight(1f),
+                                        colors = ButtonDefaults.buttonColors(containerColor = if (removalBrushMode) Color(0xFFFF6B6B) else Color(0xFF293333), contentColor = if (removalBrushMode) Ink else BrightText)
+                                    ) { Text(if (removalBrushMode) "Finish marking" else "Mark object") }
+                                    Button(
+                                        onClick = { removalStrokes.clear(); currentRemovalStroke = emptyList(); statusMessage = "Object mask cleared." },
+                                        enabled = removalStrokes.isNotEmpty() && !isExporting,
+                                        modifier = Modifier.weight(1f),
+                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = BrightText)
+                                    ) { Text("Clear mask") }
+                                }
+                                if (removalBrushMode || removalStrokes.isNotEmpty()) {
+                                    Text("REMOVAL BRUSH SIZE  " + removalBrushSize.toInt(), color = SoftText, fontSize = 11.sp)
+                                    Slider(value = removalBrushSize, onValueChange = { removalBrushSize = it }, valueRange = 10f..60f)
+                                    Text("Paint across the full object, including its shadow. Red strokes mark pixels to reconstruct. Inpainting runs on-device.", color = SoftText, fontSize = 10.sp, lineHeight = 14.sp)
+                                    Button(
+                                        onClick = { activePhoto?.let { removeMarkedObject(it) } },
+                                        enabled = activePhoto != null && removalStrokes.isNotEmpty() && !isExporting,
+                                        modifier = Modifier.fillMaxWidth(),
+                                        colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Ink)
+                                    ) { Text(if (isExporting) "Removing object…" else "Remove marked area with LaMa") }
+                                }
                                 Text("PERSONAL EDIT LEARNING · PRIVATE ON THIS DEVICE", color = Mint, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                                 Text(
                                     if (learnedProfile.acceptedEdits == 0) "No accepted edits learned yet. Export an edit you like; the app will remember its settings locally and use them as your personal starting point."

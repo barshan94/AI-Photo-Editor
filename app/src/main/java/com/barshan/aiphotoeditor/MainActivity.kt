@@ -1277,6 +1277,22 @@ private fun PhotoEditorHome() {
                         Column(
                             modifier = Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState())
                         ) {
+                            Text("EDIT WORKSPACE", color = Mint, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                listOf("Universal Edit", "Portrait & Background", "AI Tools", "Presets").forEach { panel ->
+                                    Button(
+                                        onClick = { activeEditorPanel = panel; compareBeforeAfter = false },
+                                        shape = RoundedCornerShape(10.dp),
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = if (activeEditorPanel == panel) Mint else Color(0xFF293333),
+                                            contentColor = if (activeEditorPanel == panel) Ink else BrightText
+                                        ),
+                                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 3.dp)
+                                    ) { Text(panel, fontSize = 10.sp, fontWeight = FontWeight.SemiBold) }
+                                }
+                            }
+                            Text("Only the selected tool group is expanded. Universal Edit keeps the standard controls together.", color = SoftText, fontSize = 10.sp, lineHeight = 14.sp)
+                        if (activeEditorPanel == "AI Tools") {
                         Card(
                             modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
                             colors = CardDefaults.cardColors(containerColor = Color(0xFF1A2424)),
@@ -1327,8 +1343,16 @@ private fun PhotoEditorHome() {
                                     enabled = activePhoto != null && !isExporting,
                                     modifier = Modifier.fillMaxWidth(),
                                     colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Ink)
-                                ) { Text(if (isExporting) "Processing photo…" else "Run AI Upscale 4×") }
-                                Text("ESRGAN is a real neural super-resolution model. For memory safety, inputs above 1024 px on the long edge are reduced before inference; the source photo is never overwritten.", color = SoftText, fontSize = 10.sp, lineHeight = 14.sp)
+                                ) { Text(if (isExporting && operationStage.contains("tile", ignoreCase = true)) "Upscaling…" else if (isExporting) "Processing photo…" else "Run AI Upscale 4×") }
+                                if (isExporting && activePhoto != null) {
+                                    LinearProgressIndicator(
+                                        progress = { operationProgress.coerceIn(0, 100) / 100f },
+                                        modifier = Modifier.fillMaxWidth().padding(top = 5.dp), color = Mint
+                                    )
+                                    Text("$operationProgress% · $operationStage", color = SoftText, fontSize = 10.sp, lineHeight = 14.sp,
+                                        modifier = Modifier.padding(top = 3.dp))
+                                }
+                                Text("ESRGAN runs tile-by-tile on this device. The progress above reports model loading, tile inference, reconstruction, and saving; the source photo is never overwritten.", color = SoftText, fontSize = 10.sp, lineHeight = 14.sp)
                                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                     Button(
                                         onClick = {
@@ -1409,6 +1433,8 @@ private fun PhotoEditorHome() {
                                 Text("This learns a private preference profile, not new neural-network weights. It never uploads photos or trains in the background.", color = SoftText, fontSize = 9.sp, lineHeight = 12.sp)
                             }
                         }
+                        }
+                        if (activeEditorPanel == "Portrait & Background") {
                         Card(
                             modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
                             colors = CardDefaults.cardColors(containerColor = Color(0xFF202929)),
@@ -1417,6 +1443,14 @@ private fun PhotoEditorHome() {
                             Column(modifier = Modifier.fillMaxWidth().padding(12.dp)) {
                                 Text("PORTRAIT EFFECTS · ON DEVICE", color = Mint, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                                 Text("Use the slider to blur the background while keeping the detected person clearer. Best for portraits and couples.", color = SoftText, fontSize = 10.sp, lineHeight = 14.sp)
+                                Text("BACKGROUND ENHANCE · SCENE-AWARE  " + backgroundEnhancement.toInt(), color = SoftText, fontSize = 11.sp)
+                                Slider(value = backgroundEnhancement, onValueChange = {
+                                    recordEditChange()
+                                    backgroundEnhancement = it
+                                    selectedStyle = if (it > 0f || backgroundBlur > 0f) "AI Portrait" else "Custom"
+                                    showEnhanced = true
+                                }, valueRange = 0f..10f)
+                                Text("Enhances background color separation and local contrast while protecting the detected person. This is a segmentation-guided image adjustment, not a separate generative model.", color = SoftText, fontSize = 10.sp, lineHeight = 14.sp)
                                 Text("BACKGROUND BLUR  " + backgroundBlur.toInt(), color = SoftText, fontSize = 11.sp)
                                 Slider(value = backgroundBlur, onValueChange = {
                                     recordEditChange()
@@ -1455,10 +1489,11 @@ private fun PhotoEditorHome() {
                                     selectedStyle = if (it > 0f || backgroundBlur > 0f || subjectBrightness > 0f || darkerAreaLift > 0f || skinSmoothing > 0f) "AI Portrait" else "Custom"
                                     showEnhanced = true
                                 }, valueRange = 0f..10f)
-                                Text("Uses detected face contours for a subtle lip and cheek tint. It is optional and remains off at zero.", color = SoftText, fontSize = 10.sp, lineHeight = 14.sp)
+                                Text("Uses detected face contours for a stronger but still translucent lip tint and softly feathered cheek color. It is optional and remains off at zero.", color = SoftText, fontSize = 10.sp, lineHeight = 14.sp)
                             }
                         }
-
+                        }
+                        if (activeEditorPanel == "Presets") {
                             Text("QUICK EDIT", color = BrightText, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                             Row(
                                 modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
@@ -1500,6 +1535,7 @@ private fun PhotoEditorHome() {
                                     ) { Text(crop, fontSize = 10.sp) }
                                 }
                             }
+                        }
                         val current = activePhoto
                         if (current != null && current.score != null) {
                             Text("TECHNICAL SCORE  " + current.score + "/100",
@@ -1620,6 +1656,7 @@ private fun PhotoEditorHome() {
                             }
                         }
                         Spacer(modifier = Modifier.height(12.dp))
+                        if (activeEditorPanel == "AI Tools") {
                         Button(
                             onClick = {
                                 val photo = activePhoto
@@ -1716,7 +1753,11 @@ private fun PhotoEditorHome() {
                             }
                         }
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("MANUAL ADJUSTMENTS", color = BrightText, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            }
+                        if (activeEditorPanel == "Universal Edit") {
+                        Text("UNIVERSAL EDIT · STANDARD CONTROLS", color = Mint, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        Text("Brightness, contrast, saturation, warmth, and crop apply alongside any active AI adjustment.", color = SoftText, fontSize = 10.sp, lineHeight = 14.sp)
+                        Text("MANUAL ADJUSTMENTS", color = BrightText, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                             Spacer(modifier = Modifier.weight(1f))
                             Text(if (showCropGuides) "Guides on" else "Guides off", color = Mint, fontSize = 10.sp,
                                 modifier = Modifier.clickable { showCropGuides = !showCropGuides }.padding(4.dp))
@@ -1788,6 +1829,7 @@ private fun PhotoEditorHome() {
                                 ),
                                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 2.dp)
                             ) { Text("Reset edits", fontSize = 11.sp) }
+                        }
                         }
                         }
                     }

@@ -572,7 +572,7 @@ private fun PhotoEditorHome() {
         if (isExporting) return
         isExporting = true
         operationProgress = 2
-        operationStage = "Reading original photo"
+        operationStage = if (useAiUpscale) "Reading original photo for AI upscale" else "Reading original photo"
         statusMessage = "Preparing export…"
         scope.launch {
             var original: Bitmap? = null
@@ -580,7 +580,10 @@ private fun PhotoEditorHome() {
             var aiNotice: String? = null
             try {
                 original = withContext(Dispatchers.IO) {
-                    AutoEnhancer.decodeForEditing(context.contentResolver, photo.uri, maxDimension = Int.MAX_VALUE)
+                    AutoEnhancer.decodeForEditing(
+                        context.contentResolver, photo.uri,
+                        maxDimension = if (useAiUpscale) 1024 else Int.MAX_VALUE
+                    )
                 }
                 operationProgress = 12
                 operationStage = if (useAiUpscale) "Preparing AI upscaling" else "Applying edit settings"
@@ -1345,14 +1348,18 @@ private fun PhotoEditorHome() {
                                     colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Ink)
                                 ) { Text(if (isExporting && operationStage.contains("tile", ignoreCase = true)) "Upscaling…" else if (isExporting) "Processing photo…" else "Run AI Upscale 4×") }
                                 if (isExporting && activePhoto != null) {
-                                    LinearProgressIndicator(
-                                        progress = { operationProgress.coerceIn(0, 100) / 100f },
-                                        modifier = Modifier.fillMaxWidth().padding(top = 5.dp), color = Mint
-                                    )
+                                    if (operationStage.contains("Reading original", ignoreCase = true) || operationStage.contains("Loading", ignoreCase = true)) {
+                                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth().padding(top = 5.dp), color = Mint)
+                                    } else {
+                                        LinearProgressIndicator(
+                                            progress = { operationProgress.coerceIn(0, 100) / 100f },
+                                            modifier = Modifier.fillMaxWidth().padding(top = 5.dp), color = Mint
+                                        )
+                                    }
                                     Text("$operationProgress% · $operationStage", color = SoftText, fontSize = 10.sp, lineHeight = 14.sp,
                                         modifier = Modifier.padding(top = 3.dp))
                                 }
-                                Text("ESRGAN runs tile-by-tile on this device. The progress above reports model loading, tile inference, reconstruction, and saving; the source photo is never overwritten.", color = SoftText, fontSize = 10.sp, lineHeight = 14.sp)
+                                Text("ESRGAN runs tile-by-tile on this device. The input is memory-bounded to about 1024 px on its longest edge, then reconstructed at 4×. The source photo is never overwritten.", color = SoftText, fontSize = 10.sp, lineHeight = 14.sp)
                                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                     Button(
                                         onClick = {

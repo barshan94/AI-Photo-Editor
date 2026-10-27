@@ -444,8 +444,8 @@ private fun PhotoEditorHome() {
         val suggestedStyle = suggestedStyleFor(result)
         if (result.faceCount == 1) {
             setStyle("AI Portrait")
-            backgroundBlur = 8f
-            subjectBrightness = 5f
+            backgroundBlur = 12f
+            subjectBrightness = 8f
         } else {
             setStyle(suggestedStyle)
         }
@@ -1113,6 +1113,32 @@ private fun PhotoEditorHome() {
                         Column(
                             modifier = Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState())
                         ) {
+                        Card(
+                            modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFF202929)),
+                            shape = RoundedCornerShape(14.dp)
+                        ) {
+                            Column(modifier = Modifier.fillMaxWidth().padding(12.dp)) {
+                                Text("PORTRAIT EFFECTS · ON DEVICE", color = Mint, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                Text("Use the slider to blur the background while keeping the detected person clearer. Best for portraits and couples.", color = SoftText, fontSize = 10.sp, lineHeight = 14.sp)
+                                Text("BACKGROUND BLUR  " + backgroundBlur.toInt(), color = SoftText, fontSize = 11.sp)
+                                Slider(value = backgroundBlur, onValueChange = {
+                                    recordEditChange()
+                                    backgroundBlur = it
+                                    selectedStyle = if (it > 0f || subjectBrightness > 0f) "AI Portrait" else "Custom"
+                                    showEnhanced = true
+                                }, valueRange = 0f..20f)
+                                Text("SUBJECT LIGHTENING · NEUTRAL TONE  " + subjectBrightness.toInt(), color = SoftText, fontSize = 11.sp)
+                                Slider(value = subjectBrightness, onValueChange = {
+                                    recordEditChange()
+                                    subjectBrightness = it
+                                    selectedStyle = if (it > 0f || backgroundBlur > 0f) "AI Portrait" else "Custom"
+                                    showEnhanced = true
+                                }, valueRange = 0f..25f)
+                                Text("Lightening affects the detected person, not skin pixels alone. Tone is kept less saturated to avoid an orange cast.", color = SoftText, fontSize = 10.sp, lineHeight = 14.sp), color = SoftText, fontSize = 10.sp, lineHeight = 14.sp)
+                            }
+                        }
+
                             Text("QUICK EDIT", color = BrightText, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                             Row(
                                 modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
@@ -1367,31 +1393,6 @@ private fun PhotoEditorHome() {
                                         color = SoftText, fontSize = 10.sp, lineHeight = 14.sp
                                     )
                                 }
-                            }
-                        }
-                        Card(
-                            modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
-                            colors = CardDefaults.cardColors(containerColor = Color(0xFF202929)),
-                            shape = RoundedCornerShape(14.dp)
-                        ) {
-                            Column(modifier = Modifier.fillMaxWidth().padding(12.dp)) {
-                                Text("PORTRAIT TOOLS · ON DEVICE", color = Mint, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                Text("Background blur uses person segmentation. Increase carefully around hair and edges.", color = SoftText, fontSize = 10.sp, lineHeight = 14.sp)
-                                Text("BACKGROUND BLUR  " + backgroundBlur.toInt(), color = SoftText, fontSize = 11.sp)
-                                Slider(value = backgroundBlur, onValueChange = {
-                                    recordEditChange()
-                                    backgroundBlur = it
-                                    selectedStyle = if (it > 0f || subjectBrightness > 0f) "AI Portrait" else "Custom"
-                                    showEnhanced = true
-                                }, valueRange = 0f..20f)
-                                Text("PERSON BRIGHTNESS  " + subjectBrightness.toInt(), color = SoftText, fontSize = 11.sp)
-                                Slider(value = subjectBrightness, onValueChange = {
-                                    recordEditChange()
-                                    subjectBrightness = it
-                                    selectedStyle = if (it > 0f || backgroundBlur > 0f) "AI Portrait" else "Custom"
-                                    showEnhanced = true
-                                }, valueRange = 0f..25f)
-                                Text("Person brightness lifts the detected person, not skin alone. This is not a skin-tone or complexion detector.", color = SoftText, fontSize = 10.sp, lineHeight = 14.sp)
                             }
                         }
                         Row(verticalAlignment = Alignment.CenterVertically) {

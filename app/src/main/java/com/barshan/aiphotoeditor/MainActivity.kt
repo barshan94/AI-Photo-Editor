@@ -1043,36 +1043,14 @@ private fun PhotoEditorHome() {
                         ) { Text(preset, fontSize = 10.sp) }
                     }
                 }
-                Row(modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(selectedPhotos.count { it.decision != "Reject" }.toString() + " photos to export · " +
-                            selectedPhotos.count { it.decision == "Reject" } + " rejected will be skipped",
-                            color = SoftText, fontSize = 10.sp)
-                        Text(if (batchPreset == "Current edits") "Uses the settings currently open in the editor." else
-                            "Applies " + batchPreset + " consistently to every eligible photo.",
-                            color = SoftText, fontSize = 10.sp)
-                    }
-                    Button(onClick = {
-                        val sample = selectedPhotos.firstOrNull { it.decision != "Reject" }
-                        if (sample != null) {
-                            openEditor(sample)
-                            if (batchPreset == "AI Edit") {
-                                activeEditorPanel = "AI Edit"
-                                activeAiSubpanel = "Enhance"
-                                statusMessage = "Single-photo AI Edit opened. The batch previews stay available when you return to All photos."
-                            } else if (batchPreset != "Current edits") {
-                                applyEditSnapshot(BatchExportPolicy.settingsForPreset(batchPreset))
-                                selectedStyle = batchPreset
-                                statusMessage = "Previewing $batchPreset on this photo. Return to All photos to see the full batch."
-                            }
-                        }
-                    }, enabled = !isExporting && !isAnalyzing && !isPreparingBatchPreview && selectedPhotos.any { it.decision != "Reject" },
-                        shape = RoundedCornerShape(10.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = Mint),
-                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 3.dp)
-                    ) { Text("Preview sample", fontSize = 10.sp) }
+                Column(modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                    verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    Text(selectedPhotos.count { it.decision != "Reject" }.toString() + " photos to export · " +
+                        selectedPhotos.count { it.decision == "Reject" } + " rejected will be skipped",
+                        color = SoftText, fontSize = 10.sp)
+                    Text(if (batchPreset == "Current edits") "Uses the settings currently open in the editor." else
+                        "Applies " + batchPreset + " consistently to every eligible photo.",
+                        color = SoftText, fontSize = 10.sp)
                 }
                 if (isPreparingBatchPreview) {
                     LinearProgressIndicator(

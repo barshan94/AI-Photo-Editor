@@ -17,5 +17,7 @@ data class EditSettings(
     /** 0..30 adaptive lift that targets darker skin pixels more strongly than already-bright skin. */
     val darkerAreaLift: Float = 0f,
     /** 0..10 restrained smoothing blended only into detected skin pixels. */
-    val skinSmoothing: Float = 0f
+    val skinSmoothing: Float = 0f,
+    /** 0..10 subtle contour-guided lip and cheek tint; 0 disables makeup. */
+    val makeupIntensity: Float = 0f
 )

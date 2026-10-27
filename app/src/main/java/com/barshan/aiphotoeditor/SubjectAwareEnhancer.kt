@@ -105,7 +105,8 @@ object SubjectAwareEnhancer {
                 val fallbackWarning = if (!usedMulticlassModel) {
                     "Fallback person segmentation was used. Skin-only lightening and softening are disabled because the skin-mask model did not initialize."
                 } else null
-                val combinedWarning = listOfNotNull(fallbackWarning, makeupWarning).joinToString(" ").ifBlank { null }
+                val warnings = listOfNotNull(fallbackWarning, makeupWarning)
+                val combinedWarning: String? = if (warnings.isEmpty()) null else warnings.joinToString(" ")
                 return Result(
                     bitmap = enhanced,
                     usedAi = usedMulticlassModel,

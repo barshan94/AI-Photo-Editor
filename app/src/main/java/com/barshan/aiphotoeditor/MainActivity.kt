@@ -1308,11 +1308,11 @@ private fun PhotoEditorHome() {
                                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                     Column(modifier = Modifier.weight(1f)) {
                                         Text("Background blur", color = BrightText, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
-                                        Text("AVAILABLE · slider below", color = Mint, fontSize = 9.sp)
+                                        Text("AVAILABLE · Portrait & Background panel", color = Mint, fontSize = 9.sp)
                                     }
                                     Column(modifier = Modifier.weight(1f)) {
                                         Text("Subject lightening", color = BrightText, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
-                                        Text("EXPERIMENTAL · slider below", color = Color(0xFFE8C77A), fontSize = 9.sp)
+                                        Text("EXPERIMENTAL · Portrait & Background panel", color = Color(0xFFE8C77A), fontSize = 9.sp)
                                     }
                                 }
                                 androidx.compose.material3.HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = Color(0xFF344040))
@@ -1489,7 +1489,7 @@ private fun PhotoEditorHome() {
                                     selectedStyle = if (it > 0f || backgroundBlur > 0f || subjectBrightness > 0f || darkerAreaLift > 0f) "AI Portrait" else "Custom"
                                     showEnhanced = true
                                 }, valueRange = 0f..10f)
-                                Text("Subtle local smoothing is blended only into detected skin pixels; keep this low to avoid a plastic look.", color = SoftText, fontSize = 10.sp, lineHeight = 14.sp)
+                                Text("Skin-only smoothing is stronger at higher settings. Compare before/after and lower the strength if fine texture looks too soft.", color = SoftText, fontSize = 10.sp, lineHeight = 14.sp)
                                 Text("NATURAL MAKEUP · LIP + CHEEK TINT  " + makeupIntensity.toInt(), color = SoftText, fontSize = 11.sp)
                                 Slider(value = makeupIntensity, onValueChange = {
                                     recordEditChange()
@@ -1917,10 +1917,11 @@ private fun PhotoEditorHome() {
                                     statusMessage = "Top 6 marked Keep; ${selectedPhotos.size - rankedUris.size} lower-ranked photo(s) marked Reject for batch export. Nothing was deleted; change any decision in the editor."
                                 },
                                 modifier = Modifier.fillMaxWidth(),
+                                enabled = !isAnalyzing && ranked.all { it.score != null },
                                 shape = RoundedCornerShape(10.dp),
                                 colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Ink),
                                 contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
-                            ) { Text("Apply top 6 shortlist to batch", fontSize = 11.sp, fontWeight = FontWeight.Bold) }
+                            ) { Text(if (isAnalyzing) "Wait for ranking to finish" else "Apply top 6 shortlist to batch", fontSize = 11.sp, fontWeight = FontWeight.Bold) }
                         }
                     }
                 }

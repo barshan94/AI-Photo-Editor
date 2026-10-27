@@ -578,6 +578,7 @@ private fun PhotoEditorHome() {
         scope.launch {
             var original: Bitmap? = null
             var enhanced: Bitmap? = null
+            var upscaleInput: Bitmap? = null
             var aiNotice: String? = null
             try {
                 original = withContext(Dispatchers.IO) {
@@ -591,14 +592,26 @@ private fun PhotoEditorHome() {
                 if (selectedStyle == "Object Removal" && previewBitmap != null && !useAiUpscale) {
                     enhanced = Bitmap.createBitmap(previewBitmap!!)
                 } else if (useAiUpscale) {
-                    val upscaleResult = AiUpscaler.upscale(context, original!!) { progress, stage ->
+                    val hasSubjectAdjustments = selectedStyle == "AI Portrait" || settings.backgroundBlur > 0f ||
+                        settings.backgroundEnhancement > 0f || settings.subjectBrightness > 0f ||
+                        settings.darkerAreaLift > 0f || settings.skinSmoothing > 0f || settings.makeupIntensity > 0f
+                    upscaleInput = when {
+                        selectedStyle == "Object Removal" && previewBitmap != null -> Bitmap.createBitmap(previewBitmap!!)
+                        selectedStyle == "Original" -> Bitmap.createBitmap(original!!)
+                        hasSubjectAdjustments -> SubjectAwareEnhancer.enhance(original!!, settings, context).bitmap
+                        else -> withContext(Dispatchers.Default) { AutoEnhancer.enhance(original!!, settings) }
+                    }
+                    operationProgress = 14
+                    operationStage = "Preparing current edits for ESRGAN"
+                    val upscaleResult = AiUpscaler.upscale(context, upscaleInput!!) { progress, stage ->
                         withContext(Dispatchers.Main.immediate) {
                             operationProgress = 12 + (progress * 0.78f).toInt()
                             operationStage = stage
                         }
                     }
                     enhanced = upscaleResult.bitmap
-                    aiNotice = if (upscaleResult.inputWasResizedForMemory) {
+                    aiNotice = if (selectedStyle != "Original") "Current edit settings applied before ESRGAN 4x. " else ""
+                    aiNotice += if (upscaleResult.inputWasResizedForMemory) {
                         "ESRGAN 4x ran locally after resizing the input for phone memory. "
                     } else "ESRGAN 4x AI upscaling ran locally. "
                 } else if (useAiPortrait) {
@@ -635,6 +648,7 @@ private fun PhotoEditorHome() {
                 statusMessage = "Export failed: " + (error.message ?: "unknown error")
             } finally {
                 enhanced?.let { if (!it.isRecycled) it.recycle() }
+                upscaleInput?.let { if (!it.isRecycled) it.recycle() }
                 original?.let { if (!it.isRecycled) it.recycle() }
                 isExporting = false
             }

@@ -1409,7 +1409,7 @@ private fun PhotoEditorHome() {
                                 if (removalBrushMode || removalStrokes.isNotEmpty()) {
                                     Text("REMOVAL BRUSH SIZE  " + removalBrushSize.toInt(), color = SoftText, fontSize = 11.sp)
                                     Slider(value = removalBrushSize, onValueChange = { removalBrushSize = it }, valueRange = 10f..60f)
-                                    Text("Paint across the full object, including its shadow. Red strokes mark pixels to reconstruct. Inpainting runs on-device.", color = SoftText, fontSize = 10.sp, lineHeight = 14.sp)
+                                    Text("Paint over the whole object, including its shadow. Red strokes mark the area to remove; the app reconstructs it from surrounding content.", color = SoftText, fontSize = 10.sp, lineHeight = 14.sp)
                                     Button(
                                         onClick = { activePhoto?.let { removeMarkedObject(it) } },
                                         enabled = activePhoto != null && removalStrokes.isNotEmpty() && !isExporting,
@@ -1513,7 +1513,7 @@ private fun PhotoEditorHome() {
                                     selectedStyle = if (it > 0f || backgroundBlur > 0f || darkerAreaLift > 0f) "AI Portrait" else "Custom"
                                     showEnhanced = true
                                 }, valueRange = 0f..25f)
-                                Text("This is separate from the darker-area control. It targets detected face/body skin when the multiclass model is available; no photo is uploaded.", color = SoftText, fontSize = 10.sp, lineHeight = 14.sp)
+                                Text("Targets detected face and body skin separately from darker-area lift. Your photo stays on this device.", color = SoftText, fontSize = 10.sp, lineHeight = 14.sp)
                                 Text("SKIN SOFTENING · KEEP NATURAL TEXTURE  " + skinSmoothing.toInt(), color = SoftText, fontSize = 11.sp)
                                 Slider(value = skinSmoothing, onValueChange = {
                                     recordEditChange()

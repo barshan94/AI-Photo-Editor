@@ -18,7 +18,11 @@ import kotlin.math.min
 internal object AiUpscaler {
     data class Result(val bitmap: Bitmap, val inputWasResizedForMemory: Boolean)
 
-    suspend fun upscale(context: Context, original: Bitmap): Result = withContext(Dispatchers.Default) {
+    suspend fun upscale(
+        context: Context,
+        original: Bitmap,
+        onProgress: suspend (percent: Int, stage: String) -> Unit = { _, _ -> }
+    ): Result = withContext(Dispatchers.Default) {
         require(!original.isRecycled && original.width > 0 && original.height > 0) {
             "Choose a valid photo before upscaling."
         }
@@ -37,11 +41,13 @@ internal object AiUpscaler {
 
         var interpreter: Interpreter? = null
         try {
+            onProgress(3, "Loading ESRGAN neural model")
             val modelBytes = context.assets.open("ESRGAN.tflite").use { it.readBytes() }
             val modelBuffer = ByteBuffer.allocateDirect(modelBytes.size).order(ByteOrder.nativeOrder())
             modelBuffer.put(modelBytes)
             modelBuffer.rewind()
             interpreter = Interpreter(modelBuffer, Interpreter.Options().setNumThreads(4))
+            onProgress(8, "Preparing image tiles")
 
             val inputShape = interpreter.getInputTensor(0).shape()
             val outputShape = interpreter.getOutputTensor(0).shape()
@@ -72,6 +78,9 @@ internal object AiUpscaler {
             val tileOutput = IntArray(outputTileHeight * outputTileWidth)
             val outputPixels = IntArray(outWidth * outHeight)
 
+            val totalTiles = ((inputBitmap.width + tileWidth - 1) / tileWidth) *
+                ((inputBitmap.height + tileSize - 1) / tileSize)
+            var completedTiles = 0
             var top = 0
             while (top < inputBitmap.height) {
                 var left = 0
@@ -108,12 +117,17 @@ internal object AiUpscaler {
                             System.arraycopy(tileOutput, oy * outputTileWidth, outputPixels, dstY * outWidth + dstX, count)
                         }
                     }
+                    completedTiles++
+                    val percent = 8 + (completedTiles * 82 / totalTiles.coerceAtLeast(1))
+                    onProgress(percent, "AI upscaling · tile $completedTiles of $totalTiles")
                     left += tileWidth
                 }
                 top += tileSize
             }
+            onProgress(93, "Rebuilding the high-resolution image")
             val result = Bitmap.createBitmap(outWidth, outHeight, Bitmap.Config.ARGB_8888)
             result.setPixels(outputPixels, 0, outWidth, 0, 0, outWidth, outHeight)
+            onProgress(96, "AI reconstruction complete · saving copy")
             Result(result, resized)
         } finally {
             interpreter?.close()

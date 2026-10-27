@@ -122,6 +122,7 @@ class MainActivity : ComponentActivity() {
 private fun PhotoEditorHome() {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    var learnedProfile by remember { mutableStateOf(PersonalEditLearning.load(context)) }
     val selectedPhotos = remember { mutableStateListOf<PhotoItem>() }
     var isAnalyzing by remember { mutableStateOf(false) }
     var analysisProgress by remember { mutableIntStateOf(0) }
@@ -543,6 +544,7 @@ private fun PhotoEditorHome() {
                 withContext(Dispatchers.IO) {
                     AutoEnhancer.saveJpeg(context.contentResolver, enhanced!!)
                 }
+                learnedProfile = PersonalEditLearning.recordAccepted(context, settings)
                 statusMessage = (aiNotice?.let { "$it " } ?: if (useAiPortrait) {
                     "AI Portrait enhancement applied. "
                 } else "") + "Saved full-resolution " + width + "x" + height +
@@ -1120,7 +1122,7 @@ private fun PhotoEditorHome() {
                         ) {
                             Column(modifier = Modifier.fillMaxWidth().padding(12.dp)) {
                                 Text("AI TOOLBOX", color = Mint, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                                Text("Choose a tool by the job you want done. Planned tools are shown transparently; they are not active until their model and editing workflow are implemented.", color = SoftText, fontSize = 10.sp, lineHeight = 14.sp, modifier = Modifier.padding(top = 3.dp, bottom = 8.dp))
+                                Text("Your basic editor stays available. These advanced tools are being added as real workflows, not pretend buttons.", color = SoftText, fontSize = 10.sp, lineHeight = 14.sp, modifier = Modifier.padding(top = 3.dp, bottom = 8.dp))
                                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                     Column(modifier = Modifier.weight(1f)) {
                                         Text("Background blur", color = BrightText, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
@@ -1135,270 +1137,71 @@ private fun PhotoEditorHome() {
                                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                     Column(modifier = Modifier.weight(1f)) {
                                         Text("Scene-aware background", color = BrightText, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
-                                        Text("MODEL NEEDED", color = SoftText, fontSize = 9.sp)
+                                        Text("Image labels available; selective scene edits in progress", color = SoftText, fontSize = 9.sp, lineHeight = 12.sp)
                                     }
                                     Column(modifier = Modifier.weight(1f)) {
                                         Text("Skin retouch & makeup", color = BrightText, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
-                                        Text("FACE / SKIN MODEL NEEDED", color = SoftText, fontSize = 9.sp)
+                                        Text("Needs dedicated skin masks for reliable results", color = SoftText, fontSize = 9.sp, lineHeight = 12.sp)
                                     }
                                 }
                                 androidx.compose.material3.HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = Color(0xFF344040))
                                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                     Column(modifier = Modifier.weight(1f)) {
                                         Text("Object / person removal", color = BrightText, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
-                                        Text("MASK + INPAINTING MODEL NEEDED", color = SoftText, fontSize = 9.sp)
+                                        Text("Brush mask + inpainting workflow to implement", color = SoftText, fontSize = 9.sp, lineHeight = 12.sp)
                                     }
                                     Column(modifier = Modifier.weight(1f)) {
                                         Text("AI image upscale", color = BrightText, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
-                                        Text("SUPER-RESOLUTION MODEL NEEDED", color = SoftText, fontSize = 9.sp)
+                                        Text("True super-resolution model still required", color = SoftText, fontSize = 9.sp, lineHeight = 12.sp)
                                     }
                                 }
                                 androidx.compose.material3.HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = Color(0xFF344040))
-                                Text("Training status: this beta uses pretrained on-device models plus image-processing rules. It does not yet train a model or learn your preferences. See the project roadmap before treating any planned tool as available.", color = SoftText, fontSize = 10.sp, lineHeight = 14.sp)
+                                Text("PERSONAL EDIT LEARNING · PRIVATE ON THIS DEVICE", color = Mint, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                Text(
+                                    if (learnedProfile.acceptedEdits == 0) "No accepted edits learned yet. Export an edit you like; the app will remember its settings locally and use them as your personal starting point."
+                                    else "Learned from ${learnedProfile.acceptedEdits} exported edit(s). Your personal starting point updates gradually as you export edits you like. Photos are not stored for learning.",
+                                    color = SoftText, fontSize = 10.sp, lineHeight = 14.sp,
+                                    modifier = Modifier.padding(top = 3.dp, bottom = 8.dp)
+                                )
+                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Button(
+                                        onClick = {
+                                            if (learnedProfile.acceptedEdits > 0) {
+                                                recordEditChange()
+                                                val learned = learnedProfile.toSettings()
+                                                brightness = learned.brightness
+                                                contrast = learned.contrast
+                                                saturation = learned.saturation
+                                                warmth = learned.warmth
+                                                backgroundBlur = learned.backgroundBlur
+                                                subjectBrightness = learned.subjectBrightness
+                                                selectedStyle = "Personal"
+                                                showEnhanced = true
+                                                compareBeforeAfter = false
+                                                statusMessage = "Applied your personal edit suggestion. Review it before exporting."
+                                            } else {
+                                                statusMessage = "Export an edited copy you like first; then your personal suggestion will be available."
+                                            }
+                                        },
+                                        modifier = Modifier.weight(1f),
+                                        enabled = learnedProfile.acceptedEdits > 0,
+                                        colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Ink),
+                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 5.dp)
+                                    ) { Text("Use my style", fontSize = 10.sp) }
+                                    Button(
+                                        onClick = {
+                                            PersonalEditLearning.reset(context)
+                                            learnedProfile = PersonalEditLearning.load(context)
+                                            statusMessage = "Personal editing preferences reset on this device."
+                                        },
+                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = BrightText),
+                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 5.dp)
+                                    ) { Text("Reset learning", fontSize = 10.sp) }
+                                }
+                                Text("This learns a private preference profile, not new neural-network weights. It never uploads photos or trains in the background.", color = SoftText, fontSize = 9.sp, lineHeight = 12.sp, modifier = Modifier.padding(top = 6.dp))
                             }
                         }
                         Card(
-                            modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
-                            colors = CardDefaults.cardColors(containerColor = Color(0xFF202929)),
-                            shape = RoundedCornerShape(14.dp)
-                        ) {
-                            Column(modifier = Modifier.fillMaxWidth().padding(12.dp)) {
-                                Text("PORTRAIT EFFECTS · ON DEVICE", color = Mint, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                Text("Use the slider to blur the background while keeping the detected person clearer. Best for portraits and couples.", color = SoftText, fontSize = 10.sp, lineHeight = 14.sp)
-                                Text("BACKGROUND BLUR  " + backgroundBlur.toInt(), color = SoftText, fontSize = 11.sp)
-                                Slider(value = backgroundBlur, onValueChange = {
-                                    recordEditChange()
-                                    backgroundBlur = it
-                                    selectedStyle = if (it > 0f || subjectBrightness > 0f) "AI Portrait" else "Custom"
-                                    showEnhanced = true
-                                }, valueRange = 0f..20f)
-                                Text("SUBJECT LIGHTENING · NEUTRAL TONE  " + subjectBrightness.toInt(), color = SoftText, fontSize = 11.sp)
-                                Slider(value = subjectBrightness, onValueChange = {
-                                    recordEditChange()
-                                    subjectBrightness = it
-                                    selectedStyle = if (it > 0f || backgroundBlur > 0f) "AI Portrait" else "Custom"
-                                    showEnhanced = true
-                                }, valueRange = 0f..25f)
-                                Text("Lightening affects the detected person, not skin pixels alone. Tone is kept less saturated to avoid an orange cast.", color = SoftText, fontSize = 10.sp, lineHeight = 14.sp)
-                            }
-                        }
-
-                            Text("QUICK EDIT", color = BrightText, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                            Row(
-                                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
-                            ) {
-                                listOf("Original", "Auto", "Natural", "Vivid", "Warm", "Cool", "Mono").forEach { style ->
-                                    Button(
-                                        onClick = { setStyle(style) },
-                                        shape = RoundedCornerShape(10.dp),
-                                        colors = ButtonDefaults.buttonColors(
-                                            containerColor = if (selectedStyle == style) Mint else Color(0xFF293333),
-                                            contentColor = if (selectedStyle == style) Ink else BrightText
-                                        ),
-                                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp)
-                                    ) { Text(style, fontSize = 10.sp) }
-                                }
-                            }
-                            Text("CROP RATIO", color = BrightText, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                            Row(
-                                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
-                            ) {
-                                listOf("Original", "Square", "Portrait 4:5", "Story 9:16", "Landscape 16:9").forEach { crop ->
-                                    Button(
-                                        onClick = {
-                                            recordEditChange()
-                                            cropLabel = crop
-                                            selectedStyle = if (crop == "Original" && brightness == 0f &&
-                                                contrast == 1f && saturation == 1f && warmth == 0f) "Original" else "Custom"
-                                            showEnhanced = true
-                                            compareBeforeAfter = false
-                                        },
-                                        shape = RoundedCornerShape(10.dp),
-                                        colors = ButtonDefaults.buttonColors(
-                                            containerColor = if (cropLabel == crop) Mint else Color(0xFF293333),
-                                            contentColor = if (cropLabel == crop) Ink else BrightText
-                                        ),
-                                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp)
-                                    ) { Text(crop, fontSize = 10.sp) }
-                                }
-                            }
-                        val current = activePhoto
-                        if (current != null && current.score != null) {
-                            Text("TECHNICAL SCORE  " + current.score + "/100",
-                                color = Mint, fontSize = 11.sp, fontWeight = FontWeight.Bold,
-                                modifier = Modifier.padding(top = 7.dp))
-                            Text("Sharpness " + current.sharpness + "  ·  Exposure " + current.exposure +
-                                "  ·  Contrast " + current.contrast,
-                                color = SoftText, fontSize = 10.sp,
-                                modifier = Modifier.padding(top = 3.dp))
-                            Text(current.note, color = SoftText, fontSize = 10.sp,
-                                modifier = Modifier.padding(top = 2.dp))
-                        }
-                        if (current != null) {
-                            Text("YOUR DECISION", color = BrightText, fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp))
-                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
-                                listOf("Keep", "Review", "Reject").forEach { decision ->
-                                    Button(
-                                        onClick = { setPhotoDecision(current, decision) },
-                                        modifier = Modifier.weight(1f),
-                                        shape = RoundedCornerShape(10.dp),
-                                        colors = ButtonDefaults.buttonColors(
-                                            containerColor = if (current.decision == decision) {
-                                                when (decision) {
-                                                    "Keep" -> Mint
-                                                    "Reject" -> Color(0xFF8B4242)
-                                                    else -> Color(0xFF52605D)
-                                                }
-                                            } else Color(0xFF293333),
-                                            contentColor = if (current.decision == decision && decision == "Keep") Ink else BrightText
-                                        ),
-                                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp)
-                                    ) { Text(decision, fontSize = 11.sp, fontWeight = FontWeight.Bold) }
-                                }
-                            }
-                        }
-                        val activeIndex = selectedPhotos.indexOfFirst { it.uri == activePhoto?.uri }
-                        Row(
-                            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Button(
-                                onClick = {
-                                    if (activeIndex > 0) openEditor(selectedPhotos[activeIndex - 1])
-                                },
-                                enabled = activeIndex > 0 && !isExporting,
-                                modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(10.dp),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = Color(0xFF293333), contentColor = BrightText
-                                ),
-                                contentPadding = PaddingValues(horizontal = 5.dp)
-                            ) { Text("← Previous", fontSize = 11.sp) }
-                            Text(
-                                if (activeIndex >= 0) "${activeIndex + 1} / ${selectedPhotos.size}" else "",
-                                color = SoftText, fontSize = 11.sp,
-                                modifier = Modifier.align(Alignment.CenterVertically)
-                            )
-                            Button(
-                                onClick = {
-                                    if (activeIndex >= 0 && activeIndex < selectedPhotos.lastIndex) {
-                                        openEditor(selectedPhotos[activeIndex + 1])
-                                    }
-                                },
-                                enabled = activeIndex >= 0 && activeIndex < selectedPhotos.lastIndex && !isExporting,
-                                modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(10.dp),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = Color(0xFF293333), contentColor = BrightText
-                                ),
-                                contentPadding = PaddingValues(horizontal = 5.dp)
-                            ) { Text("Next →", fontSize = 11.sp) }
-                        }
-                        Spacer(modifier = Modifier.height(9.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                            Button(onClick = { undoEdit() }, enabled = undoHistory.isNotEmpty() && !isExporting,
-                                modifier = Modifier.weight(0.65f), shape = RoundedCornerShape(10.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = BrightText),
-                                contentPadding = PaddingValues(horizontal = 3.dp, vertical = 2.dp)
-                            ) { Text("Undo", fontSize = 10.sp) }
-                            Button(onClick = { redoEdit() }, enabled = redoHistory.isNotEmpty() && !isExporting,
-                                modifier = Modifier.weight(0.65f), shape = RoundedCornerShape(10.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = BrightText),
-                                contentPadding = PaddingValues(horizontal = 3.dp, vertical = 2.dp)
-                            ) { Text("Redo", fontSize = 10.sp) }
-                            Button(onClick = { compareBeforeAfter = !compareBeforeAfter; showEnhanced = true },
-                                enabled = previewBitmap != null && selectedStyle != "Original", modifier = Modifier.weight(0.85f),
-                                shape = RoundedCornerShape(10.dp),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = if (compareBeforeAfter) Mint else Color(0xFF293333),
-                                    contentColor = if (compareBeforeAfter) Ink else BrightText),
-                                contentPadding = PaddingValues(horizontal = 3.dp, vertical = 2.dp)
-                            ) { Text(if (compareBeforeAfter) "Close compare" else "Compare", fontSize = 10.sp) }
-                            Button(
-                                onClick = { showEnhanced = !showEnhanced; compareBeforeAfter = false },
-                                enabled = previewBitmap != null && selectedStyle != "Original",
-                                modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(12.dp),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = Color(0xFF293333), contentColor = BrightText
-                                ),
-                                contentPadding = PaddingValues(horizontal = 6.dp)
-                            ) {
-                                Text(if (showEnhanced) "Show original" else "Show enhanced", fontSize = 12.sp)
-                            }
-                            Button(
-                                onClick = {
-                                    val photo = activePhoto
-                                    if (photo != null) exportOne(photo, currentSettings(), selectedStyle == "AI Portrait" || backgroundBlur > 0f || subjectBrightness > 0f)
-                                },
-                                enabled = previewBitmap != null && !isExporting && selectedStyle != "Original",
-                                modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(12.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Ink),
-                                contentPadding = PaddingValues(horizontal = 6.dp)
-                            ) {
-                                Text("Export copy", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                            }
-                        }
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Button(
-                            onClick = {
-                                val photo = activePhoto
-                                if (photo != null && !isRunningPhotoAnalysis && !isExporting) {
-                                    isRunningPhotoAnalysis = true
-                                    photoAnalysisResult = null
-                                    statusMessage = "Inspecting subjects, scene labels, and lighting on this device…"
-                                    scope.launch {
-                                        var analysisBitmap: Bitmap? = null
-                                        try {
-                                            analysisBitmap = withContext(Dispatchers.IO) {
-                                                AutoEnhancer.decodeForEditing(
-                                                    context.contentResolver, photo.uri, maxDimension = 1400
-                                                )
-                                            }
-                                            val result = PhotoAnalysisEngine.analyze(analysisBitmap!!)
-                                            photoAnalysisResult = result
-                                            statusMessage = "Analysis complete. No edits were applied. Review the suggestion and choose whether to apply it."
-                                        } catch (error: CancellationException) {
-                                            throw error
-                                        } catch (error: Exception) {
-                                            statusMessage = "AI analysis failed: " + (error.message ?: "could not inspect this image")
-                                        } finally {
-                                            analysisBitmap?.let { if (!it.isRecycled) it.recycle() }
-                                            isRunningPhotoAnalysis = false
-                                        }
-                                    }
-                                }
-                            },
-                            enabled = activePhoto != null && !isRunningPhotoAnalysis && !isExporting,
-                            modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp),
-                            shape = RoundedCornerShape(12.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = if (photoAnalysisResult != null) Color(0xFF293333) else Mint,
-                                contentColor = if (photoAnalysisResult != null) Mint else Ink
-                            )
-                        ) {
-                            if (isRunningPhotoAnalysis) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(16.dp),
-                                    strokeWidth = 2.dp,
-                                    color = Mint
-                                )
-                                Text("  Analysing photo…", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                            } else {
-                                androidx.compose.material3.Icon(Icons.Rounded.ImageSearch, contentDescription = null)
-                                Text(
-                                    if (photoAnalysisResult == null) "  AI Analyse + Best Edit" else "  Analyse + Re-edit",
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                        }
-                        photoAnalysisResult?.let { result ->
-                            Card(
                                 modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
                                 colors = CardDefaults.cardColors(containerColor = Color(0xFF202929)),
                                 shape = RoundedCornerShape(14.dp)

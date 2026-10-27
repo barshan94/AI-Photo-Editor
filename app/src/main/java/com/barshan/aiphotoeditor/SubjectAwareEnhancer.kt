@@ -34,6 +34,7 @@ object SubjectAwareEnhancer {
 
     suspend fun enhance(source: Bitmap, settings: EditSettings = EditSettings(), context: Context? = null): Result {
         var maskInput: Bitmap? = null
+        var usedMulticlassModel = false
         try {
             maskInput = withContext(Dispatchers.Default) {
                 val largest = maxOf(source.width, source.height)
@@ -50,7 +51,7 @@ object SubjectAwareEnhancer {
             }
             val mask = if (context != null) {
                 try {
-                    getMulticlassPersonMask(context, maskInput!!)
+                    getMulticlassPersonMask(context, maskInput!!).also { usedMulticlassModel = true }
                 } catch (_: Exception) {
                     // Keep portrait blur available if the additional model cannot initialize.
                     getPersonMask(maskInput!!)
@@ -79,7 +80,12 @@ object SubjectAwareEnhancer {
                         blurredBackground = blurredBackground
                     )
                 }
-                return Result(enhanced, true)
+                return Result(
+                    bitmap = enhanced,
+                    usedAi = usedMulticlassModel,
+                    message = if (usedMulticlassModel) null else
+                        "Portrait blur used fallback person segmentation. Skin-only lightening is disabled because the skin mask model did not initialize."
+                )
             } catch (error: Exception) {
                 if (!enhanced.isRecycled) enhanced.recycle()
                 throw error
@@ -173,7 +179,7 @@ object SubjectAwareEnhancer {
         val height: Int,
         val values: FloatArray,
         /** Separate skin-only mask when the multiclass model is available. */
-        val skinValues: FloatArray = values
+        val skinValues: FloatArray = FloatArray(0)
     )
 
     /**
@@ -230,7 +236,7 @@ object SubjectAwareEnhancer {
                         val width = mask.width
                         val height = mask.height
                         val values = SegmentationMaskDecoder.decode(mask.buffer, width, height)
-                        continuation.resume(PersonMask(width, height, values, values))
+                        continuation.resume(PersonMask(width, height, values))
                     } catch (error: Exception) {
                         continuation.resumeWithException(error)
                     }
@@ -284,7 +290,7 @@ object SubjectAwareEnhancer {
                 val subject = confidence[maskIndex].coerceIn(0f, 1f)
                 val skin = if (skinConfidence.size >= maskWidth * maskHeight) {
                     skinConfidence[maskIndex].coerceIn(0f, 1f)
-                } else subject
+                } else 0f
                 val pixel = row[x]
                 val backgroundPixel = if (blurredBackground != null) {
                     blurredBackground.getPixel(sourceX.coerceIn(0, blurredBackground.width - 1), sourceY.coerceIn(0, blurredBackground.height - 1))

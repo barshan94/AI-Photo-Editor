@@ -14,6 +14,7 @@ data class PersonalEditProfile(
     val saturation: Float,
     val warmth: Float,
     val backgroundBlur: Float,
+    val backgroundEnhancement: Float,
     val subjectBrightness: Float,
     val darkerAreaLift: Float,
     val skinSmoothing: Float,
@@ -25,6 +26,7 @@ data class PersonalEditProfile(
         saturation = saturation,
         warmth = warmth,
         backgroundBlur = backgroundBlur,
+        backgroundEnhancement = backgroundEnhancement,
         subjectBrightness = subjectBrightness,
         darkerAreaLift = darkerAreaLift,
         skinSmoothing = skinSmoothing,
@@ -46,6 +48,7 @@ object PersonalEditLearning {
             saturation = p.getFloat("saturation", 1.06f),
             warmth = p.getFloat("warmth", 0f),
             backgroundBlur = p.getFloat("background_blur", 0f),
+            backgroundEnhancement = p.getFloat("background_enhancement", 0f),
             subjectBrightness = p.getFloat("subject_brightness", 0f),
             darkerAreaLift = p.getFloat("darker_area_lift", 0f),
             skinSmoothing = p.getFloat("skin_smoothing", 0f),
@@ -67,6 +70,7 @@ object PersonalEditLearning {
             saturation = blend(old.saturation, settings.saturation),
             warmth = blend(old.warmth, settings.warmth),
             backgroundBlur = blend(old.backgroundBlur, settings.backgroundBlur),
+            backgroundEnhancement = blend(old.backgroundEnhancement, settings.backgroundEnhancement),
             subjectBrightness = blend(old.subjectBrightness, settings.subjectBrightness),
             darkerAreaLift = blend(old.darkerAreaLift, settings.darkerAreaLift),
             skinSmoothing = blend(old.skinSmoothing, settings.skinSmoothing),
@@ -79,6 +83,7 @@ object PersonalEditLearning {
             .putFloat("saturation", next.saturation)
             .putFloat("warmth", next.warmth)
             .putFloat("background_blur", next.backgroundBlur)
+            .putFloat("background_enhancement", next.backgroundEnhancement)
             .putFloat("subject_brightness", next.subjectBrightness)
             .putFloat("darker_area_lift", next.darkerAreaLift)
             .putFloat("skin_smoothing", next.skinSmoothing)

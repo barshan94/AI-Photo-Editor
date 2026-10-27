@@ -264,6 +264,7 @@ private fun PhotoEditorHome() {
             "Warm" -> { brightness = 2f; contrast = 1.06f; saturation = 1.04f; warmth = 8f; backgroundBlur = 0f; subjectBrightness = 0f; darkerAreaLift = 0f }
             "Cool" -> { brightness = 0f; contrast = 1.05f; saturation = 1.02f; warmth = -8f; backgroundBlur = 0f; subjectBrightness = 0f; darkerAreaLift = 0f }
             "Mono" -> { brightness = 0f; contrast = 1.10f; saturation = 0f; warmth = 0f; backgroundBlur = 0f; subjectBrightness = 0f; darkerAreaLift = 0f }
+            "AI Portrait" -> { brightness = 0f; contrast = 1.02f; saturation = 1.02f; warmth = 0f; backgroundBlur = 16f; subjectBrightness = 0f; darkerAreaLift = 0f }
             else -> { brightness = 0f; contrast = 1.07f; saturation = 1.02f; warmth = 0f; backgroundBlur = 0f; subjectBrightness = 0f; darkerAreaLift = 0f }
         }
     }
@@ -1263,7 +1264,7 @@ private fun PhotoEditorHome() {
                                 modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                                 horizontalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
-                                listOf("Original", "Auto", "Natural", "Vivid", "Warm", "Cool", "Mono").forEach { style ->
+                                listOf("Original", "Auto", "Natural", "AI Portrait", "Vivid", "Warm", "Cool", "Mono").forEach { style ->
                                     Button(
                                         onClick = { setStyle(style) },
                                         shape = RoundedCornerShape(10.dp),

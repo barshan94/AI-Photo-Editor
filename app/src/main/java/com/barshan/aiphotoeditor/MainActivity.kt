@@ -1108,6 +1108,19 @@ private fun PhotoEditorHome() {
                                 contentPadding = PaddingValues(horizontal = 9.dp, vertical = 1.dp)
                             ) { Text("All photos", fontSize = 10.sp) }
                         }
+                        val current = activePhoto
+                        if (current != null && current.score != null) {
+                            val scoreDelta = editedQualityScore - current.score
+                            Text("ORIGINAL " + current.score + "/100  ·  EDITED " + editedQualityScore +
+                                "/100  ·  " + (if (scoreDelta > 0) "+" else "") + scoreDelta,
+                                color = if (scoreDelta > 0) Mint else if (scoreDelta < 0) Color(0xFFFFC078) else SoftText,
+                                fontSize = 11.sp, fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(top = 4.dp))
+                            Text("Sharpness " + current.sharpness + "  ·  Exposure " + current.exposure +
+                                "  ·  Contrast " + current.contrast + "  ·  " + current.note,
+                                color = SoftText, fontSize = 10.sp,
+                                modifier = Modifier.padding(top = 2.dp))
+                        }
                         Spacer(modifier = Modifier.height(8.dp))
                         val previewAspectRatio = previewBitmap?.let { bitmap ->
                             if (bitmap.width > 0 && bitmap.height > 0) bitmap.width.toFloat() / bitmap.height.toFloat()
@@ -1246,21 +1259,6 @@ private fun PhotoEditorHome() {
                                     fontWeight = FontWeight.Bold,
                                     modifier = Modifier.clickable { resetPreviewZoom() }.padding(4.dp))
                             }
-                        }
-                        val current = activePhoto
-                        if (current != null && current.score != null) {
-                            val scoreDelta = editedQualityScore - current.score
-                            Text("ORIGINAL " + current.score + "/100  ·  EDITED " + editedQualityScore +
-                                "/100  ·  " + (if (scoreDelta > 0) "+" else "") + scoreDelta,
-                                color = if (scoreDelta > 0) Mint else if (scoreDelta < 0) Color(0xFFFFC078) else SoftText,
-                                fontSize = 11.sp, fontWeight = FontWeight.Bold,
-                                modifier = Modifier.padding(top = 7.dp))
-                            Text("Sharpness " + current.sharpness + "  ·  Exposure " + current.exposure +
-                                "  ·  Contrast " + current.contrast,
-                                color = SoftText, fontSize = 10.sp,
-                                modifier = Modifier.padding(top = 3.dp))
-                            Text(current.note, color = SoftText, fontSize = 10.sp,
-                                modifier = Modifier.padding(top = 2.dp))
                         }
                         if (current != null) {
                             Text("YOUR DECISION", color = BrightText, fontSize = 10.sp,

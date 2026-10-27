@@ -1137,7 +1137,7 @@ private fun PhotoEditorHome() {
                                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                     Column(modifier = Modifier.weight(1f)) {
                                         Text("Scene-aware background", color = BrightText, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
-                                        Text("MODEL NEEDED", color = SoftText, fontSize = 9.sp)
+                                        Text("MEDIAPIPE MODEL INTEGRATED", color = Mint, fontSize = 9.sp)
                                     }
                                     Column(modifier = Modifier.weight(1f)) {
                                         Text("Skin retouch & makeup", color = BrightText, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)

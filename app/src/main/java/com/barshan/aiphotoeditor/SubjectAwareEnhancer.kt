@@ -70,6 +70,7 @@ object SubjectAwareEnhancer {
                     applyPersonAwareLook(
                         bitmap = enhanced,
                         confidence = mask.values,
+                        skinConfidence = mask.skinValues,
                         maskWidth = mask.width,
                         maskHeight = mask.height,
                         sourceWidth = source.width,
@@ -167,7 +168,13 @@ object SubjectAwareEnhancer {
         }
     }
 
-    private data class PersonMask(val width: Int, val height: Int, val values: FloatArray)
+    private data class PersonMask(
+        val width: Int,
+        val height: Int,
+        val values: FloatArray,
+        /** Separate skin-only mask when the multiclass model is available. */
+        val skinValues: FloatArray = values
+    )
 
     /**
      * Uses the additional MediaPipe neural network to retain hair, face, body, and clothing
@@ -178,28 +185,39 @@ object SubjectAwareEnhancer {
         bitmap: Bitmap
     ): PersonMask {
         val segmented = MulticlassSegmentationEngine.segment(context, bitmap)
-        val values = FloatArray(segmented.classes.size) { index ->
+        val values = FloatArray(segmented.classes.size)
+        val skinValues = FloatArray(segmented.classes.size)
+        for (index in segmented.classes.indices) {
             when (segmented.classes[index].toInt() and 0xFF) {
                 MulticlassSegmentationEngine.HAIR,
                 MulticlassSegmentationEngine.BODY,
                 MulticlassSegmentationEngine.FACE,
-                MulticlassSegmentationEngine.CLOTHES -> 1f
-                else -> 0f
+                MulticlassSegmentationEngine.CLOTHES -> values[index] = 1f
+            }
+            // The official multiclass model labels body-skin and face-skin separately.
+            when (segmented.classes[index].toInt() and 0xFF) {
+                MulticlassSegmentationEngine.BODY,
+                MulticlassSegmentationEngine.FACE -> skinValues[index] = 1f
             }
         }
         // Feather hard category edges slightly to reduce a cut-out look around hair and shoulders.
         val smoothed = values.copyOf()
+        val smoothedSkin = skinValues.copyOf()
         for (y in 1 until segmented.height - 1) {
             for (x in 1 until segmented.width - 1) {
                 val i = y * segmented.width + x
-                var total = 0f
+                var personTotal = 0f
+                var skinTotal = 0f
                 for (dy in -1..1) for (dx in -1..1) {
-                    total += values[(y + dy) * segmented.width + x + dx]
+                    val neighbor = (y + dy) * segmented.width + x + dx
+                    personTotal += values[neighbor]
+                    skinTotal += skinValues[neighbor]
                 }
-                smoothed[i] = (values[i] * 0.55f + (total / 9f) * 0.45f).coerceIn(0f, 1f)
+                smoothed[i] = (values[i] * 0.55f + (personTotal / 9f) * 0.45f).coerceIn(0f, 1f)
+                smoothedSkin[i] = (skinValues[i] * 0.55f + (skinTotal / 9f) * 0.45f).coerceIn(0f, 1f)
             }
         }
-        return PersonMask(segmented.width, segmented.height, smoothed)
+        return PersonMask(segmented.width, segmented.height, smoothed, smoothedSkin)
     }
 
 
@@ -212,7 +230,7 @@ object SubjectAwareEnhancer {
                         val width = mask.width
                         val height = mask.height
                         val values = SegmentationMaskDecoder.decode(mask.buffer, width, height)
-                        continuation.resume(PersonMask(width, height, values))
+                        continuation.resume(PersonMask(width, height, values, values))
                     } catch (error: Exception) {
                         continuation.resumeWithException(error)
                     }
@@ -225,6 +243,7 @@ object SubjectAwareEnhancer {
     private fun applyPersonAwareLook(
         bitmap: Bitmap,
         confidence: FloatArray,
+        skinConfidence: FloatArray,
         maskWidth: Int,
         maskHeight: Int,
         sourceWidth: Int,
@@ -261,7 +280,11 @@ object SubjectAwareEnhancer {
             for (x in 0 until bitmap.width) {
                 val sourceX = left + (x.toFloat() / bitmap.width * cropWidth).toInt().coerceIn(0, cropWidth - 1)
                 val maskX = (sourceX.toFloat() / sourceWidth * maskWidth).toInt().coerceIn(0, maskWidth - 1)
-                val subject = confidence[maskY * maskWidth + maskX].coerceIn(0f, 1f)
+                val maskIndex = maskY * maskWidth + maskX
+                val subject = confidence[maskIndex].coerceIn(0f, 1f)
+                val skin = if (skinConfidence.size >= maskWidth * maskHeight) {
+                    skinConfidence[maskIndex].coerceIn(0f, 1f)
+                } else subject
                 val pixel = row[x]
                 val backgroundPixel = if (blurredBackground != null) {
                     blurredBackground.getPixel(sourceX.coerceIn(0, blurredBackground.width - 1), sourceY.coerceIn(0, blurredBackground.height - 1))
@@ -271,19 +294,22 @@ object SubjectAwareEnhancer {
                 val green = (pixel shr 8 and 0xFF).toDouble()
                 val blue = (pixel and 0xFF).toDouble()
                 val luma = 0.2126 * red + 0.7152 * green + 0.0722 * blue
-                // Keep complexion neutral: avoid the saturation/contrast boost that made skin look orange.
-                val saturation = 0.92 + 0.02 * subject
+                // Two independent skin controls: overall skin lift, plus an adaptive shadow lift.
+                // Dark pixels receive more of the second control; already-bright face pixels receive less.
+                val saturation = 1.0
                 val contrast = 1.0
-                val brightness = settings.subjectBrightness.coerceIn(0f, 25f).toDouble() * subject
+                val overallSkinLift = settings.subjectBrightness.coerceIn(0f, 25f).toDouble() * skin
+                val darkPixelFactor = ((175.0 - luma) / 175.0).coerceIn(0.0, 1.0)
+                val adaptiveDarkLift = settings.darkerAreaLift.coerceIn(0f, 30f).toDouble() *
+                    darkPixelFactor * skin
+                val brightness = overallSkinLift + adaptiveDarkLift
                 val blurMix = (settings.backgroundBlur.coerceIn(0f, 20f) / 20f * (1f - subject)).coerceIn(0f, 1f)
                 val bgRed = (backgroundPixel shr 16 and 0xFF).toDouble()
                 val bgGreen = (backgroundPixel shr 8 and 0xFF).toDouble()
                 val bgBlue = (backgroundPixel and 0xFF).toDouble()
-                // A tiny neutral/cool correction offsets the red-orange cast while lifting the subject.
-                val toneCooling = settings.subjectBrightness.coerceIn(0f, 25f).toDouble() * 0.10 * subject
-                val baseRed = 128.0 + (luma + (red - luma) * saturation - 128.0) * contrast + brightness - toneCooling
+                val baseRed = 128.0 + (luma + (red - luma) * saturation - 128.0) * contrast + brightness
                 val baseGreen = 128.0 + (luma + (green - luma) * saturation - 128.0) * contrast + brightness
-                val baseBlue = 128.0 + (luma + (blue - luma) * saturation - 128.0) * contrast + brightness + toneCooling
+                val baseBlue = 128.0 + (luma + (blue - luma) * saturation - 128.0) * contrast + brightness
                 val outRed: Int = (baseRed * (1.0 - blurMix) + bgRed * blurMix).toInt().coerceIn(0, 255)
                 val outGreen: Int = (baseGreen * (1.0 - blurMix) + bgGreen * blurMix).toInt().coerceIn(0, 255)
                 val outBlue: Int = (baseBlue * (1.0 - blurMix) + bgBlue * blurMix).toInt().coerceIn(0, 255)

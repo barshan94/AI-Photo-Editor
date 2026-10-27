@@ -33,6 +33,8 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
+      - name: Verify official segmentation model endpoint
+        run: curl --fail --location --retry 3 --output /dev/null https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_multiclass_256x256/float32/1/selfie_multiclass_256x256.tflite
       - name: Run unit regression tests
         run: gradle --no-daemon testDebugUnitTest
       - name: Build debug APK

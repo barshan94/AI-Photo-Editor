@@ -891,8 +891,11 @@ private fun PhotoEditorHome() {
 
     Surface(modifier = Modifier.fillMaxSize(), color = Ink) {
         Column(
+            // Keep the editor screen bounded so its preview stays visible and the
+            // dedicated workspace below it can scroll independently. An outer
+            // verticalScroll here gives the nested weighted workspace unbounded
+            // height and can make the editing controls appear to disappear.
             modifier = Modifier.fillMaxSize().padding(horizontal = 18.dp, vertical = 14.dp)
-                .then(if (activePhoto != null) Modifier.verticalScroll(rememberScrollState()) else Modifier)
         ) {
             if (activePhoto == null) {
             Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {

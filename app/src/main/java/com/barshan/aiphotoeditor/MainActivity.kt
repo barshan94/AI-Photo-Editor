@@ -523,7 +523,7 @@ private fun PhotoEditorHome() {
         }
     }
 
-    fun exportOne(photo: PhotoItem, settings: EditSettings, useAiPortrait: Boolean = false) {
+    fun exportOne(photo: PhotoItem, settings: EditSettings, useAiPortrait: Boolean = false, useAiUpscale: Boolean = false) {
         if (isExporting) return
         isExporting = true
         statusMessage = "Rendering full-resolution export…"
@@ -535,7 +535,13 @@ private fun PhotoEditorHome() {
                 original = withContext(Dispatchers.IO) {
                     AutoEnhancer.decodeForEditing(context.contentResolver, photo.uri, maxDimension = Int.MAX_VALUE)
                 }
-                if (useAiPortrait) {
+                if (useAiUpscale) {
+                    val upscaleResult = AiUpscaler.upscale(context, original!!)
+                    enhanced = upscaleResult.bitmap
+                    aiNotice = if (upscaleResult.inputWasResizedForMemory) {
+                        "ESRGAN 4x ran locally after resizing the input for phone memory. "
+                    } else "ESRGAN 4x AI upscaling ran locally. "
+                } else if (useAiPortrait) {
                     val aiResult = SubjectAwareEnhancer.enhance(original!!, settings, context)
                     enhanced = aiResult.bitmap
                     aiNotice = aiResult.message
@@ -552,7 +558,7 @@ private fun PhotoEditorHome() {
                 learnedProfile = PersonalEditLearning.recordAccepted(context, settings)
                 statusMessage = (aiNotice?.let { "$it " } ?: if (useAiPortrait) {
                     "AI Portrait enhancement applied. "
-                } else "") + "Saved full-resolution " + width + "x" + height +
+                } else "") + (if (useAiUpscale) "Saved ESRGAN-upscaled " else "Saved full-resolution ") + width + "x" + height +
                     " copy to Pictures/FRAME AI. Original untouched."
             } catch (error: CancellationException) {
                 statusMessage = "Export cancelled. No original photo was changed."
@@ -1145,8 +1151,8 @@ private fun PhotoEditorHome() {
                                         Text("MEDIAPIPE SEGMENTATION + BLUR", color = Mint, fontSize = 9.sp)
                                     }
                                     Column(modifier = Modifier.weight(1f)) {
-                                        Text("Skin retouch & makeup", color = BrightText, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
-                                        Text("SKIN MASK + TONE CONTROLS INTEGRATED", color = Mint, fontSize = 9.sp)
+                                        Text("Skin tone balancing", color = BrightText, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                                        Text("SKIN MASK + DUAL LIGHTING CONTROLS", color = Mint, fontSize = 9.sp)
                                     }
                                 }
                                 androidx.compose.material3.HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = Color(0xFF344040))
@@ -1157,10 +1163,21 @@ private fun PhotoEditorHome() {
                                     }
                                     Column(modifier = Modifier.weight(1f)) {
                                         Text("AI image upscale", color = BrightText, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
-                                        Text("SUPER-RESOLUTION NOT YET CONNECTED", color = SoftText, fontSize = 9.sp)
+                                        Text("ESRGAN 4× MODEL CONNECTED", color = Mint, fontSize = 9.sp)
                                     }
                                 }
                                 androidx.compose.material3.HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = Color(0xFF344040))
+                                Button(
+                                    onClick = {
+                                        val photo = activePhoto
+                                        if (photo != null) exportOne(photo, currentSettings(), useAiUpscale = true)
+                                        else statusMessage = "Open a photo first to use AI Upscale."
+                                    },
+                                    enabled = activePhoto != null && !isExporting,
+                                    modifier = Modifier.fillMaxWidth(),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Ink)
+                                ) { Text(if (isExporting) "Processing photo…" else "Run AI Upscale 4×") }
+                                Text("ESRGAN is a real neural super-resolution model. For memory safety, inputs above 1024 px on the long edge are reduced before inference; the source photo is never overwritten.", color = SoftText, fontSize = 10.sp, lineHeight = 14.sp)
                                 Text("PERSONAL EDIT LEARNING · PRIVATE ON THIS DEVICE", color = Mint, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                                 Text(
                                     if (learnedProfile.acceptedEdits == 0) "No accepted edits learned yet. Export an edit you like; the app will remember its settings locally and use them as your personal starting point."

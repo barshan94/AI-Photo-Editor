@@ -1115,6 +1115,50 @@ private fun PhotoEditorHome() {
                         ) {
                         Card(
                             modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFF1A2424)),
+                            shape = RoundedCornerShape(14.dp)
+                        ) {
+                            Column(modifier = Modifier.fillMaxWidth().padding(12.dp)) {
+                                Text("AI TOOLBOX", color = Mint, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                                Text("Choose a tool by the job you want done. Planned tools are shown transparently; they are not active until their model and editing workflow are implemented.", color = SoftText, fontSize = 10.sp, lineHeight = 14.sp, modifier = Modifier.padding(top = 3.dp, bottom = 8.dp))
+                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text("Background blur", color = BrightText, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                                        Text("AVAILABLE · slider below", color = Mint, fontSize = 9.sp)
+                                    }
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text("Subject lightening", color = BrightText, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                                        Text("EXPERIMENTAL · slider below", color = Color(0xFFE8C77A), fontSize = 9.sp)
+                                    }
+                                }
+                                androidx.compose.material3.HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = Color(0xFF344040))
+                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text("Scene-aware background", color = BrightText, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                                        Text("MODEL NEEDED", color = SoftText, fontSize = 9.sp)
+                                    }
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text("Skin retouch & makeup", color = BrightText, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                                        Text("FACE / SKIN MODEL NEEDED", color = SoftText, fontSize = 9.sp)
+                                    }
+                                }
+                                androidx.compose.material3.HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = Color(0xFF344040))
+                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text("Object / person removal", color = BrightText, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                                        Text("MASK + INPAINTING MODEL NEEDED", color = SoftText, fontSize = 9.sp)
+                                    }
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text("AI image upscale", color = BrightText, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                                        Text("SUPER-RESOLUTION MODEL NEEDED", color = SoftText, fontSize = 9.sp)
+                                    }
+                                }
+                                androidx.compose.material3.HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = Color(0xFF344040))
+                                Text("Training status: this beta uses pretrained on-device models plus image-processing rules. It does not yet train a model or learn your preferences. See the project roadmap before treating any planned tool as available.", color = SoftText, fontSize = 10.sp, lineHeight = 14.sp)
+                            }
+                        }
+                        Card(
+                            modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
                             colors = CardDefaults.cardColors(containerColor = Color(0xFF202929)),
                             shape = RoundedCornerShape(14.dp)
                         ) {

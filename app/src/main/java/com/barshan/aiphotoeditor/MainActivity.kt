@@ -492,34 +492,60 @@ private fun PhotoEditorHome() {
     }
 
     fun suggestedStyleFor(result: PhotoAnalysisResult): String {
-        val sceneLabels = result.labels.joinToString(" ").lowercase()
+        val labels = result.labels.joinToString(" ").lowercase()
         return when {
-            result.lightingSummary.contains("looks dark", ignoreCase = true) -> "Auto"
-            result.faceCount > 0 -> "Natural"
-            sceneLabels.contains("sunset") || sceneLabels.contains("sunrise") ||
-                sceneLabels.contains("food") -> "Warm"
-            sceneLabels.contains("sky") || sceneLabels.contains("cloud") ||
-                sceneLabels.contains("water") || sceneLabels.contains("ocean") -> "Cool"
-            sceneLabels.contains("forest") || sceneLabels.contains("tree") ||
-                sceneLabels.contains("nature") || sceneLabels.contains("plant") -> "Natural"
+            labels.contains("sunset") || labels.contains("sunrise") || labels.contains("food") || labels.contains("meal") -> "Warm"
+            labels.contains("water") || labels.contains("ocean") || labels.contains("lake") || labels.contains("sky") || labels.contains("cloud") -> "Cool"
+            labels.contains("forest") || labels.contains("tree") || labels.contains("plant") || result.faceCount > 0 -> "Natural"
+            labels.contains("building") || labels.contains("architecture") || labels.contains("city") -> "Vivid"
             else -> "Natural"
         }
     }
 
+    /** One adaptive edit for portraits, couples, groups, objects and landscapes. */
     fun applyAiSuggestedEdit(result: PhotoAnalysisResult) {
-        val suggestedStyle = suggestedStyleFor(result)
-        if (result.faceCount == 1) {
-            setStyle("AI Portrait")
-            backgroundBlur = 12f
-            subjectBrightness = 8f
-            darkerAreaLift = 10f
-        } else {
-            setStyle(suggestedStyle)
-        }
-        photoAnalysisResult = result
-        statusMessage = "Applied the $suggestedStyle suggestion. Check the preview and compare with Original; you can undo or adjust it."
-    }
+        val labels = result.labels.joinToString(" ").lowercase()
+        val sceneStyle = suggestedStyleFor(result)
+        setStyle(sceneStyle)
 
+        // Apply a restrained whole-image grade; blur is not the default effect.
+        contrast = 1.04f
+        saturation = if (result.faceCount > 0) 1.035f else 1.07f
+        warmth = when {
+            labels.contains("sunset") || labels.contains("sunrise") || labels.contains("food") || labels.contains("meal") -> 4f
+            labels.contains("water") || labels.contains("ocean") || labels.contains("lake") || labels.contains("sky") -> -2f
+            else -> 0f
+        }
+        brightness = when {
+            result.lightingSummary.contains("looks dark", ignoreCase = true) -> 5f
+            result.lightingSummary.contains("looks bright", ignoreCase = true) -> -3f
+            else -> 1f
+        }
+        backgroundEnhancement = when {
+            labels.contains("forest") || labels.contains("tree") || labels.contains("plant") || labels.contains("nature") -> 4.5f
+            labels.contains("sky") || labels.contains("cloud") || labels.contains("water") || labels.contains("ocean") -> 3.5f
+            else -> 3f
+        }
+        backgroundBlur = 0f
+
+        // Balance detected people in single, couple and group photos.
+        if (result.faceCount > 0) {
+            subjectBrightness = 5f
+            darkerAreaLift = 5f
+            skinSmoothing = 1.5f
+            makeupIntensity = 0f
+        } else {
+            subjectBrightness = 0f
+            darkerAreaLift = 0f
+            skinSmoothing = 0f
+            makeupIntensity = 0f
+        }
+        selectedStyle = sceneStyle
+        showEnhanced = true
+        compareBeforeAfter = false
+        photoAnalysisResult = result
+        statusMessage = "AI Edit applied: scene color, contrast, lighting and detected people were balanced together. Review the result and undo or adjust it if needed."
+    }
     LaunchedEffect(activePhoto?.uri) {
         resetPreviewZoom()
         photoAnalysisResult = null
@@ -1740,6 +1766,7 @@ private fun PhotoEditorHome() {
                                     fontWeight = FontWeight.Bold
                                 )
                             }
+                        }
                         }
                         if (activeEditorPanel == "Universal Edit") {
                             Text("UNIVERSAL EDIT · STANDARD CONTROLS", color = Mint, fontSize = 11.sp, fontWeight = FontWeight.Bold)

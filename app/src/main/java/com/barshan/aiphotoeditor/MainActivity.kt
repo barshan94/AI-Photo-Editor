@@ -879,7 +879,7 @@ private fun PhotoEditorHome() {
                     contentPadding = PaddingValues(horizontal = 6.dp)
                 ) {
                     androidx.compose.material3.Icon(Icons.Rounded.AutoAwesome, contentDescription = null)
-                    Text("  Enhance all", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    Text("  Save all", fontWeight = FontWeight.Bold, fontSize = 13.sp)
                 }
             }
 

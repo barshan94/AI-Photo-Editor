@@ -595,6 +595,8 @@ private fun PhotoEditorHome() {
                     val hasSubjectAdjustments = selectedStyle == "AI Portrait" || settings.backgroundBlur > 0f ||
                         settings.backgroundEnhancement > 0f || settings.subjectBrightness > 0f ||
                         settings.darkerAreaLift > 0f || settings.skinSmoothing > 0f || settings.makeupIntensity > 0f
+                    operationProgress = 12
+                    operationStage = if (hasSubjectAdjustments) "Applying current portrait/background edits" else "Preparing current edit"
                     upscaleInput = when {
                         selectedStyle == "Object Removal" && previewBitmap != null -> Bitmap.createBitmap(previewBitmap!!)
                         selectedStyle == "Original" -> Bitmap.createBitmap(original!!)
@@ -1363,7 +1365,7 @@ private fun PhotoEditorHome() {
                                     colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Ink)
                                 ) { Text(if (isExporting && operationStage.contains("tile", ignoreCase = true)) "Upscaling…" else if (isExporting) "Processing photo…" else "Run AI Upscale 4×") }
                                 if (isExporting && activePhoto != null) {
-                                    if (operationStage.contains("Reading original", ignoreCase = true) || operationStage.contains("Loading", ignoreCase = true)) {
+                                    if (operationStage.contains("Reading original", ignoreCase = true) || operationStage.contains("Loading", ignoreCase = true) || operationStage.contains("Applying current", ignoreCase = true) || operationStage.contains("Preparing current", ignoreCase = true) || operationStage.contains("Detecting", ignoreCase = true)) {
                                         LinearProgressIndicator(modifier = Modifier.fillMaxWidth().padding(top = 5.dp), color = Mint)
                                     } else {
                                         LinearProgressIndicator(

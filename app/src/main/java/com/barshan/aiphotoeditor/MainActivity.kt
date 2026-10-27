@@ -12,6 +12,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.rememberTransformableState
 import androidx.compose.foundation.gestures.transformable
 import androidx.compose.foundation.layout.Arrangement
@@ -86,6 +87,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 
 private val Ink = Color(0xFF101313)
@@ -161,6 +163,7 @@ private fun PhotoEditorHome() {
     var previewScale by remember { mutableFloatStateOf(1f) }
     var previewOffsetX by remember { mutableFloatStateOf(0f) }
     var previewOffsetY by remember { mutableFloatStateOf(0f) }
+    var isShowingOriginalOnHold by remember { mutableStateOf(false) }
     var previewWidthPx by remember { mutableIntStateOf(0) }
     var previewHeightPx by remember { mutableIntStateOf(0) }
     var isPreparingPreview by remember { mutableStateOf(false) }
@@ -1080,11 +1083,47 @@ private fun PhotoEditorHome() {
                                     } else {
                                         Modifier.transformable(state = previewTransformState)
                                     }
+                                )
+                                .then(
+                                    if (cropLabel == "Original") Modifier.pointerInput(activePhoto?.uri, previewBitmap) {
+                                        detectTapGestures(
+                                            onDoubleTap = {
+                                                if (previewScale > 1.01f) {
+                                                    resetPreviewZoom()
+                                                } else {
+                                                    previewScale = 2f
+                                                    previewOffsetX = 0f
+                                                    previewOffsetY = 0f
+                                                }
+                                            },
+                                            onPress = {
+                                                coroutineScope {
+                                                    val holdJob = launch {
+                                                        delay(450)
+                                                        isShowingOriginalOnHold = true
+                                                        showEnhanced = false
+                                                    }
+                                                    tryAwaitRelease()
+                                                    holdJob.cancel()
+                                                    if (isShowingOriginalOnHold) {
+                                                        showEnhanced = true
+                                                        isShowingOriginalOnHold = false
+                                                    }
+                                                }
+                                            }
+                                        )
+                                    } else Modifier
                                 ),
                             contentAlignment = Alignment.Center
                         ) {
                             val active = activePhoto
                             if (active != null) {
+                                if (isShowingOriginalOnHold) {
+                                    Text("ORIGINAL · RELEASE TO RETURN",
+                                        color = BrightText, fontSize = 10.sp, fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.align(Alignment.TopCenter).padding(8.dp)
+                                            .background(Ink.copy(alpha = 0.8f), RoundedCornerShape(5.dp)).padding(5.dp))
+                                }
                                 if (compareBeforeAfter && previewBitmap != null) {
                                     AsyncImage(model = previewBitmap, contentDescription = "After edit comparison",
                                         modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Fit)

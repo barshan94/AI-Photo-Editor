@@ -32,6 +32,7 @@ android {
 // The official Apache-2.0 MediaPipe multiclass segmentation model is fetched during builds.
 // It is not committed as a binary asset; the same pinned model is used by CI and local builds.
 val segmentationModelFile = layout.projectDirectory.file("src/main/assets/selfie_multiclass_256x256.tflite")
+val esrganModelFile = layout.projectDirectory.file("src/main/assets/ESRGAN.tflite")
 tasks.register("downloadMulticlassSegmentationModel") {
     outputs.file(segmentationModelFile)
     doLast {
@@ -47,7 +48,25 @@ tasks.register("downloadMulticlassSegmentationModel") {
         }
     }
 }
-tasks.named("preBuild").configure { dependsOn("downloadMulticlassSegmentationModel") }
+tasks.register("downloadEsrganSuperResolutionModel") {
+    outputs.file(esrganModelFile)
+    doLast {
+        val model = esrganModelFile.asFile
+        if (!model.exists() || model.length() < 1_000_000L) {
+            model.parentFile.mkdirs()
+            val temp = File(model.parentFile, model.name + ".download")
+            URL("https://storage.googleapis.com/download.tensorflow.org/models/tflite/esrgan/ESRGAN.tflite").openStream().use { input ->
+                temp.outputStream().use { output -> input.copyTo(output) }
+            }
+            check(temp.length() > 1_000_000L) { "ESRGAN super-resolution model download was incomplete." }
+            check(temp.renameTo(model)) { "Could not place the ESRGAN model in app/src/main/assets." }
+        }
+    }
+}
+tasks.named("preBuild").configure {
+    dependsOn("downloadMulticlassSegmentationModel")
+    dependsOn("downloadEsrganSuperResolutionModel")
+}
 
 dependencies {
     val composeBom = platform("androidx.compose:compose-bom:2024.12.01")
@@ -59,6 +78,7 @@ dependencies {
     implementation("androidx.exifinterface:exifinterface:1.3.7")
     implementation("com.google.mlkit:segmentation-selfie:16.0.0-beta6")
     implementation("com.google.mediapipe:tasks-vision:0.10.14")
+    implementation("org.tensorflow:tensorflow-lite:2.14.0")
     implementation("com.google.mlkit:image-labeling:17.0.9")
     implementation("com.google.mlkit:face-detection:16.1.7")
     implementation("androidx.compose.ui:ui")

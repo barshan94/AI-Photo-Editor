@@ -1,3 +1,5 @@
+import java.net.URL
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -37,7 +39,7 @@ tasks.register("downloadMulticlassSegmentationModel") {
         if (!model.exists() || model.length() < 100_000L) {
             model.parentFile.mkdirs()
             val temp = File(model.parentFile, model.name + ".download")
-            java.net.URL("https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_multiclass_256x256/float32/1/selfie_multiclass_256x256.tflite").openStream().use { input ->
+            URL("https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_multiclass_256x256/float32/1/selfie_multiclass_256x256.tflite").openStream().use { input ->
                 temp.outputStream().use { output -> input.copyTo(output) }
             }
             check(temp.length() > 100_000L) { "MediaPipe segmentation model download was incomplete." }

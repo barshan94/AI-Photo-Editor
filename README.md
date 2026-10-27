@@ -92,6 +92,24 @@ A native Android photo editor focused on batch workflows. It runs locally on the
 - Original photos are never edited or overwritten.
 - Return to the gallery to choose another photo without re-importing the batch.
 
+## Advanced AI development plan
+
+The visible AI Toolbox is a capability map, not a claim that every listed tool is already implemented. The current beta uses pretrained ML Kit models and deterministic pixel-processing rules; it does not train a new neural network and does not yet learn an individual user's style.
+
+### Recommended implementation order
+
+1. **Make the editor reliable first:** validate neutral skin rendering and subject-mask edges on a varied set of real photos; keep the original untouched and preserve before/after, undo, reset, and export.
+2. **Scene-aware background enhancement:** combine image labels with segmentation and implement conservative, adjustable scene-specific changes. Never apply a sky/greenery/water treatment based on a guessed label alone; let the user preview and reject it.
+3. **Skin retouch and subtle makeup:** use face landmarks plus a dedicated skin-region mask. Preserve texture, facial identity, undertones, and non-skin details; expose separate controls for blemishes, smoothing, brightness, and makeup intensity. Do not equate “fairer” with orange warmth or indiscriminate whitening.
+4. **Object and unwanted-person removal:** add a brush/lasso mask, undoable mask editing, and an actual inpainting model. A segmentation mask alone cannot reconstruct what was behind a removed object.
+5. **AI upscaling:** integrate a licensed, mobile-compatible super-resolution model and compare it against the original at 100% zoom. Ordinary interpolation must not be labelled AI upscaling.
+6. **Personalized preference learning:** first collect explicit, opt-in before/after ratings and saved slider preferences on-device. Use these as preference signals to rank existing edits; do not silently upload private photos or claim that the app is training a neural network from a few taps.
+7. **Model training / fine-tuning:** curate a properly licensed, diverse dataset with aligned input/target edits, document skin-tone and scene coverage, split train/validation/test data by source person or shoot, evaluate regressions and artifacts, then convert/quantize a suitable model for Android. Training needs a suitable compute environment and dataset; it does not happen just by adding a control to the app.
+
+### Model integration acceptance criteria
+
+Every advanced tool must have a real inference path, clear progress/error states, a visible adjustable result, before/after comparison, undo/reset, and full-resolution export testing. It must run on-device or explicitly disclose any external processing before a photo leaves the phone. A button or roadmap label alone does not count as a delivered feature.
+
 ## Important limitations
 
 - AI photo analysis uses on-device ML Kit image labels and face detection plus a simple average-brightness estimate. It is not a multimodal reasoning model, cannot reliably infer relationships, intentions, or which person is unwanted, and may miss faces or mislabel scenes.

@@ -85,6 +85,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.ByteArrayOutputStream
 
 private val Ink = Color(0xFF101313)
 private val Panel = Color(0xFF1A2020)
@@ -137,6 +138,11 @@ private fun PhotoEditorHome() {
     var operationStage by remember { mutableStateOf("Ready") }
     var batchPreset by remember { mutableStateOf("Current edits") }
     var batchSummary by remember { mutableStateOf<String?>(null) }
+    var batchPreviewImages by remember { mutableStateOf<Map<Uri, ByteArray>>(emptyMap()) }
+    var batchPreviewScores by remember { mutableStateOf<Map<Uri, PhotoQualityScoring.Score>>(emptyMap()) }
+    var batchPreviewFormats by remember { mutableStateOf<Map<Uri, List<String>>>(emptyMap()) }
+    var isPreparingBatchPreview by remember { mutableStateOf(false) }
+    var batchPreviewProgress by remember { mutableIntStateOf(0) }
     var activePhoto by remember { mutableStateOf<PhotoItem?>(null) }
     var showBurstComparison by remember { mutableStateOf(false) }
     var showBurstGroupPicker by remember { mutableStateOf(false) }
@@ -529,6 +535,90 @@ private fun PhotoEditorHome() {
             skinSmoothing = if (result.faceCount > 0) 1.5f else 0f,
             makeupIntensity = 0f
         )
+    }
+
+    fun recommendedFormats(width: Int, height: Int): List<String> {
+        val ratio = width.toFloat() / height.coerceAtLeast(1).toFloat()
+        return when {
+            ratio in 0.88f..1.12f -> listOf("DP", "Post")
+            ratio <= 0.68f -> listOf("Story", "Video")
+            ratio in 0.69f..0.86f -> listOf("Post", "DP")
+            ratio >= 1.55f -> listOf("Cover", "Video")
+            else -> listOf("Post", if (ratio > 1f) "Cover" else "DP")
+        }
+    }
+
+    /** Build a small, visible preview for every eligible grid photo without opening a single-photo editor. */
+    fun previewBatchPreset(preset: String) {
+        if (isPreparingBatchPreview || isExporting || isAnalyzing) return
+        batchPreset = preset
+        batchSummary = null
+        batchPreviewImages = emptyMap()
+        batchPreviewScores = emptyMap()
+        batchPreviewFormats = emptyMap()
+        val batch = selectedPhotos.filter { it.decision != "Reject" }
+        if (batch.isEmpty()) {
+            statusMessage = "Choose at least one photo to preview a batch edit."
+            return
+        }
+        isPreparingBatchPreview = true
+        batchPreviewProgress = 0
+        statusMessage = "Preparing live $preset previews for ${batch.size} photos…"
+        scope.launch {
+            var failed = 0
+            try {
+                for ((index, photo) in batch.withIndex()) {
+                    var original: Bitmap? = null
+                    var enhanced: Bitmap? = null
+                    try {
+                        original = withContext(Dispatchers.IO) {
+                            AutoEnhancer.decodeForEditing(context.contentResolver, photo.uri, maxDimension = 480)
+                        }
+                        batchPreviewFormats = batchPreviewFormats + (photo.uri to recommendedFormats(original!!.width, original!!.height))
+                        val settings = if (preset == "AI Edit") {
+                            aiSettingsFor(PhotoAnalysisEngine.analyze(original!!))
+                        } else if (preset == "Current edits") {
+                            currentSettings()
+                        } else {
+                            BatchExportPolicy.settingsForPreset(preset)
+                        }
+                        val useSubjectAware = preset == "AI Edit" || preset == "AI Portrait" ||
+                            settings.backgroundBlur > 0f || settings.backgroundEnhancement > 0f ||
+                            settings.subjectBrightness > 0f || settings.darkerAreaLift > 0f ||
+                            settings.skinSmoothing > 0f || settings.makeupIntensity > 0f
+                        if (useSubjectAware) {
+                            enhanced = SubjectAwareEnhancer.enhance(original!!, settings, context).bitmap
+                        } else {
+                            enhanced = withContext(Dispatchers.Default) {
+                                AutoEnhancer.enhance(original!!, settings)
+                            }
+                        }
+                        val score = scoreEditedBitmap(enhanced!!)
+                        val bytes = ByteArrayOutputStream().use { stream ->
+                            enhanced!!.compress(Bitmap.CompressFormat.JPEG, 76, stream)
+                            stream.toByteArray()
+                        }
+                        batchPreviewImages = batchPreviewImages + (photo.uri to bytes)
+                        batchPreviewScores = batchPreviewScores + (photo.uri to score)
+                    } catch (error: CancellationException) {
+                        throw error
+                    } catch (_: Exception) {
+                        failed++
+                    } catch (_: OutOfMemoryError) {
+                        failed++
+                    } finally {
+                        enhanced?.let { if (!it.isRecycled && it !== original) it.recycle() }
+                        original?.let { if (!it.isRecycled) it.recycle() }
+                    }
+                    batchPreviewProgress = index + 1
+                }
+                val ready = batchPreviewImages.size
+                statusMessage = "$preset live preview ready for $ready/${batch.size} photos." +
+                    if (failed > 0) " $failed preview(s) could not be generated; originals remain visible." else ""
+            } finally {
+                isPreparingBatchPreview = false
+            }
+        }
     }
 
     /** One adaptive edit for portraits, couples, groups, objects and landscapes. */
@@ -928,9 +1018,7 @@ private fun PhotoEditorHome() {
                     Spacer(modifier = Modifier.weight(1f))
                     Button(
                         onClick = {
-                            batchPreset = "AI Edit"
-                            batchSummary = null
-                            statusMessage = "AI Edit selected for ${selectedPhotos.count { it.decision != "Reject" }} photos. Tap Save all to analyse and edit every eligible photo; originals stay untouched."
+                            previewBatchPreset("AI Edit")
                         },
                         enabled = !isExporting && !isAnalyzing && selectedPhotos.any { it.decision != "Reject" },
                         shape = RoundedCornerShape(10.dp),
@@ -941,12 +1029,8 @@ private fun PhotoEditorHome() {
                 Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     BatchExportPolicy.presetNames.forEach { preset ->
-                        Button(onClick = {
-                            batchPreset = preset
-                            batchSummary = null
-                            statusMessage = "$preset selected for ${selectedPhotos.count { it.decision != "Reject" }} photos. Tap Save all to apply it to every eligible photo."
-                        },
-                            enabled = !isExporting && !isAnalyzing && selectedPhotos.any { it.decision != "Reject" },
+                        Button(onClick = { previewBatchPreset(preset) },
+                            enabled = !isExporting && !isAnalyzing && !isPreparingBatchPreview && selectedPhotos.any { it.decision != "Reject" },
                             shape = RoundedCornerShape(10.dp),
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = if (batchPreset == preset) Mint else Color(0xFF293333),
@@ -970,17 +1054,33 @@ private fun PhotoEditorHome() {
                         val sample = selectedPhotos.firstOrNull { it.decision != "Reject" }
                         if (sample != null) {
                             openEditor(sample)
-                            if (batchPreset != "Current edits") {
+                            if (batchPreset == "AI Edit") {
+                                activeEditorPanel = "AI Edit"
+                                activeAiSubpanel = "Enhance"
+                                statusMessage = "Single-photo AI Edit opened. The batch previews stay available when you return to All photos."
+                            } else if (batchPreset != "Current edits") {
                                 applyEditSnapshot(BatchExportPolicy.settingsForPreset(batchPreset))
                                 selectedStyle = batchPreset
+                                statusMessage = "Previewing $batchPreset on this photo. Return to All photos to see the full batch."
                             }
-                            statusMessage = "Batch preview sample: " + batchPreset + ". Return to the grid to save the reviewed batch."
                         }
-                    }, enabled = !isExporting && !isAnalyzing && selectedPhotos.any { it.decision != "Reject" },
+                    }, enabled = !isExporting && !isAnalyzing && !isPreparingBatchPreview && selectedPhotos.any { it.decision != "Reject" },
                         shape = RoundedCornerShape(10.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = Mint),
                         contentPadding = PaddingValues(horizontal = 10.dp, vertical = 3.dp)
                     ) { Text("Preview sample", fontSize = 10.sp) }
+                }
+                if (isPreparingBatchPreview) {
+                    LinearProgressIndicator(
+                        progress = { if (selectedPhotos.none { it.decision != "Reject" }) 0f else batchPreviewProgress.toFloat() / selectedPhotos.count { it.decision != "Reject" } },
+                        modifier = Modifier.fillMaxWidth().padding(top = 5.dp), color = Mint
+                    )
+                    Text("Live previews $batchPreviewProgress / ${selectedPhotos.count { it.decision != "Reject" }} · images and scores update as each photo finishes",
+                        color = SoftText, fontSize = 10.sp, modifier = Modifier.padding(top = 3.dp))
+                } else if (batchPreviewScores.isNotEmpty()) {
+                    Text("LIVE PREVIEW · ${batchPreviewScores.size} photos updated · scores show measured changes, not guaranteed improvement",
+                        color = Mint, fontSize = 10.sp, lineHeight = 14.sp,
+                        modifier = Modifier.fillMaxWidth().padding(top = 5.dp))
                 }
                 if (batchSummary != null) {
                     Text(batchSummary!!, color = Mint, fontSize = 10.sp, lineHeight = 14.sp,
@@ -1986,10 +2086,16 @@ private fun PhotoEditorHome() {
                                 .padding(5.dp)
                         ) {
                             Box {
-                                AsyncImage(model = photo.uri, contentDescription = "Photo",
+                                AsyncImage(model = batchPreviewImages[photo.uri] ?: photo.uri,
+                                    contentDescription = if (batchPreviewImages.containsKey(photo.uri)) "Live edited batch preview" else "Photo",
                                     modifier = Modifier.fillMaxWidth().aspectRatio(0.82f)
                                         .clip(RoundedCornerShape(9.dp)),
                                     contentScale = ContentScale.Crop)
+                                if (batchPreviewImages.containsKey(photo.uri)) {
+                                    Text("LIVE", color = Ink, fontSize = 8.sp, fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.align(Alignment.TopStart).padding(4.dp)
+                                            .background(Mint, RoundedCornerShape(5.dp)).padding(horizontal = 5.dp, vertical = 3.dp))
+                                }
                                 if (activePhoto?.uri == photo.uri) {
                                     androidx.compose.material3.Icon(
                                         imageVector = Icons.Rounded.CheckCircle,
@@ -2000,15 +2106,31 @@ private fun PhotoEditorHome() {
                                 }
                             }
                             val photoRank = rankByUri[photo.uri] ?: 0
+                            val liveScore = batchPreviewScores[photo.uri]
+                            val scoreDelta = if (liveScore != null && photo.score != null) liveScore.score - photo.score else null
                             Text(
-                                if (photo.score == null) "Analysing…" else "#$photoRank · Score " + photo.score + "/100",
-                                color = if ((photo.score ?: 0) >= 70) Mint else BrightText,
+                                if (liveScore != null) "EDITED ${liveScore.score}/100" +
+                                    (scoreDelta?.let { " (${if (it > 0) "+" else ""}$it)" } ?: "")
+                                else if (photo.score == null) "Analysing…" else "#$photoRank · Score ${photo.score}/100",
+                                color = when {
+                                    scoreDelta != null && scoreDelta > 0 -> Mint
+                                    scoreDelta != null && scoreDelta < 0 -> Color(0xFFFF8B8B)
+                                    (liveScore?.score ?: photo.score ?: 0) >= 70 -> Mint
+                                    else -> BrightText
+                                },
                                 fontSize = 10.sp, fontWeight = FontWeight.Bold,
                                 modifier = Modifier.padding(top = 5.dp, start = 2.dp)
                             )
-                            Text("Sharpness ${photo.sharpness} · Exposure ${photo.exposure} · Contrast ${photo.contrast}",
+                            Text(if (liveScore != null) "Sharpness ${liveScore.sharpness} · Exposure ${liveScore.exposure} · Contrast ${liveScore.contrast}"
+                                else "Sharpness ${photo.sharpness} · Exposure ${photo.exposure} · Contrast ${photo.contrast}",
                                 color = SoftText, fontSize = 8.sp, lineHeight = 11.sp,
                                 modifier = Modifier.padding(top = 2.dp, start = 2.dp))
+                            val formats = batchPreviewFormats[photo.uri].orEmpty()
+                            if (formats.isNotEmpty()) {
+                                Text(formats.joinToString(" · "), color = Color(0xFF9CC8FF),
+                                    fontSize = 8.sp, fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(top = 3.dp, start = 2.dp))
+                            }
                             Text(photo.decision.uppercase(),
                                 color = when (photo.decision) {
                                     "Keep" -> Mint
@@ -2031,7 +2153,8 @@ private fun PhotoEditorHome() {
                                     fontSize = 8.sp, fontWeight = FontWeight.Bold,
                                     modifier = Modifier.padding(top = 3.dp, start = 2.dp))
                             }
-                            Text(photo.note, color = SoftText, fontSize = 9.sp, lineHeight = 12.sp,
+                            Text(if (liveScore != null) "Reason: ${liveScore.note}" else photo.note,
+                                color = SoftText, fontSize = 9.sp, lineHeight = 12.sp,
                                 maxLines = 2, modifier = Modifier.padding(top = 2.dp, start = 2.dp, bottom = 2.dp))
                         }
                     }

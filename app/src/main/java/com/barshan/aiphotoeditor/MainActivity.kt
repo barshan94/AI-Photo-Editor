@@ -488,7 +488,7 @@ private fun PhotoEditorHome() {
                 if (selectedStyle == "Original") {
                     adjusted = Bitmap.createBitmap(original!!)
                 } else if (selectedStyle == "AI Portrait" || backgroundBlur > 0f || subjectBrightness > 0f) {
-                    val aiResult = SubjectAwareEnhancer.enhance(original!!, settings)
+                    val aiResult = SubjectAwareEnhancer.enhance(original!!, settings, context)
                     adjusted = aiResult.bitmap
                     aiNotice = aiResult.message
                 } else {
@@ -530,7 +530,7 @@ private fun PhotoEditorHome() {
                     AutoEnhancer.decodeForEditing(context.contentResolver, photo.uri, maxDimension = Int.MAX_VALUE)
                 }
                 if (useAiPortrait) {
-                    val aiResult = SubjectAwareEnhancer.enhance(original!!, settings)
+                    val aiResult = SubjectAwareEnhancer.enhance(original!!, settings, context)
                     enhanced = aiResult.bitmap
                     aiNotice = aiResult.message
                 } else {
@@ -637,7 +637,7 @@ private fun PhotoEditorHome() {
                                                 )
                                             }
                                             if (useAiPortrait) {
-                                                val aiResult = SubjectAwareEnhancer.enhance(original!!, settingsForBatch)
+                                                val aiResult = SubjectAwareEnhancer.enhance(original!!, settingsForBatch, context)
                                                 enhanced = aiResult.bitmap
                                                 if (!aiResult.usedAi) aiFallbacks++
                                             } else {
@@ -1135,7 +1135,7 @@ private fun PhotoEditorHome() {
                                     selectedStyle = if (it > 0f || backgroundBlur > 0f) "AI Portrait" else "Custom"
                                     showEnhanced = true
                                 }, valueRange = 0f..25f)
-                                Text("Lightening affects the detected person, not skin pixels alone. Tone is kept less saturated to avoid an orange cast.", color = SoftText, fontSize = 10.sp, lineHeight = 14.sp), color = SoftText, fontSize = 10.sp, lineHeight = 14.sp)
+                                Text("Lightening affects the detected person, not skin pixels alone. Tone is kept less saturated to avoid an orange cast.", color = SoftText, fontSize = 10.sp, lineHeight = 14.sp)
                             }
                         }
 

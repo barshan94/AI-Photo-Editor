@@ -292,6 +292,7 @@ private fun PhotoEditorHome() {
             "Original" -> {
                 brightness = 0f; contrast = 1f; saturation = 1f; warmth = 0f
                 backgroundBlur = 0f; backgroundEnhancement = 0f; subjectBrightness = 0f; darkerAreaLift = 0f
+                skinSmoothing = 0f; makeupIntensity = 0f
                 cropLabel = "Original"; cropOffsetX = 0f; cropOffsetY = 0f
             }
             "Natural" -> { brightness = 1f; contrast = 1.02f; saturation = 1.02f; warmth = 0f; backgroundBlur = 0f; backgroundEnhancement = 0f; subjectBrightness = 0f; darkerAreaLift = 0f; skinSmoothing = 0f; makeupIntensity = 0f }
@@ -299,7 +300,7 @@ private fun PhotoEditorHome() {
             "Warm" -> { brightness = 2f; contrast = 1.06f; saturation = 1.04f; warmth = 8f; backgroundBlur = 0f; backgroundEnhancement = 0f; subjectBrightness = 0f; darkerAreaLift = 0f; skinSmoothing = 0f; makeupIntensity = 0f }
             "Cool" -> { brightness = 0f; contrast = 1.05f; saturation = 1.02f; warmth = -8f; backgroundBlur = 0f; backgroundEnhancement = 0f; subjectBrightness = 0f; darkerAreaLift = 0f; skinSmoothing = 0f; makeupIntensity = 0f }
             "Mono" -> { brightness = 0f; contrast = 1.10f; saturation = 0f; warmth = 0f; backgroundBlur = 0f; backgroundEnhancement = 0f; subjectBrightness = 0f; darkerAreaLift = 0f; skinSmoothing = 0f; makeupIntensity = 0f }
-            "AI Portrait" -> { brightness = 0f; contrast = 1.02f; saturation = 1.02f; warmth = 0f; backgroundBlur = 16f; subjectBrightness = 0f; darkerAreaLift = 0f; skinSmoothing = 0f; makeupIntensity = 0f }
+            "AI Portrait" -> { brightness = 0f; contrast = 1.02f; saturation = 1.02f; warmth = 0f; backgroundBlur = 16f; backgroundEnhancement = 0f; subjectBrightness = 0f; darkerAreaLift = 0f; skinSmoothing = 0f; makeupIntensity = 0f }
             else -> { brightness = 0f; contrast = 1.07f; saturation = 1.02f; warmth = 0f; backgroundBlur = 0f; backgroundEnhancement = 0f; subjectBrightness = 0f; darkerAreaLift = 0f; skinSmoothing = 0f; makeupIntensity = 0f }
         }
     }
@@ -1903,7 +1904,23 @@ private fun PhotoEditorHome() {
                                     Text("Rank ${index + 7} · ${photo.score ?: 0}/100 — ${photo.note}; weakest dimension ${weakest?.first ?: "unknown"} (${weakest?.second ?: 0}/100).", color = SoftText, fontSize = 10.sp, lineHeight = 14.sp)
                                 }
                             }
-                            Text("Important: all imported photos stay in the grid. Top 6 is a technical shortlist only; the app does not automatically reject or delete the remaining photos.", color = BrightText, fontSize = 10.sp, lineHeight = 14.sp)
+                            Text("The score is technical guidance, not a judgement of the moment. Applying the shortlist marks the top 6 Keep and the rest Reject for batch export; it never deletes files, and every decision remains editable.", color = BrightText, fontSize = 10.sp, lineHeight = 14.sp)
+                            Button(
+                                onClick = {
+                                    val rankedUris = ranked.take(6).map { it.uri }.toSet()
+                                    for (index in selectedPhotos.indices) {
+                                        val photo = selectedPhotos[index]
+                                        selectedPhotos[index] = photo.copy(decision = if (photo.uri in rankedUris) "Keep" else "Reject")
+                                    }
+                                    gridFilter = "All"
+                                    showRankingDetails = true
+                                    statusMessage = "Top 6 marked Keep; ${selectedPhotos.size - rankedUris.size} lower-ranked photo(s) marked Reject for batch export. Nothing was deleted; change any decision in the editor."
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(10.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Ink),
+                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
+                            ) { Text("Apply top 6 shortlist to batch", fontSize = 11.sp, fontWeight = FontWeight.Bold) }
                         }
                     }
                 }

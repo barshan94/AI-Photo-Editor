@@ -502,6 +502,35 @@ private fun PhotoEditorHome() {
         }
     }
 
+    /** Convert each photo's own analysis into restrained, scene-aware batch settings. */
+    fun aiSettingsFor(result: PhotoAnalysisResult): EditSettings {
+        val labels = result.labels.joinToString(" ").lowercase()
+        return EditSettings(
+            brightness = when {
+                result.lightingSummary.contains("looks dark", ignoreCase = true) -> 5f
+                result.lightingSummary.contains("looks bright", ignoreCase = true) -> -3f
+                else -> 1f
+            },
+            contrast = 1.04f,
+            saturation = if (result.faceCount > 0) 1.035f else 1.07f,
+            warmth = when {
+                labels.contains("sunset") || labels.contains("sunrise") || labels.contains("food") || labels.contains("meal") -> 4f
+                labels.contains("water") || labels.contains("ocean") || labels.contains("lake") || labels.contains("sky") -> -2f
+                else -> 0f
+            },
+            backgroundEnhancement = when {
+                labels.contains("forest") || labels.contains("tree") || labels.contains("plant") || labels.contains("nature") -> 4.5f
+                labels.contains("sky") || labels.contains("cloud") || labels.contains("water") || labels.contains("ocean") -> 3.5f
+                else -> 3f
+            },
+            backgroundBlur = 0f,
+            subjectBrightness = if (result.faceCount > 0) 5f else 0f,
+            darkerAreaLift = if (result.faceCount > 0) 5f else 0f,
+            skinSmoothing = if (result.faceCount > 0) 1.5f else 0f,
+            makeupIntensity = 0f
+        )
+    }
+
     /** One adaptive edit for portraits, couples, groups, objects and landscapes. */
     fun applyAiSuggestedEdit(result: PhotoAnalysisResult) {
         val labels = result.labels.joinToString(" ").lowercase()
@@ -758,6 +787,7 @@ private fun PhotoEditorHome() {
         Column(
             modifier = Modifier.fillMaxSize().padding(horizontal = 18.dp, vertical = 14.dp)
         ) {
+            if (activePhoto == null) {
             Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Box(
                     modifier = Modifier.size(42.dp).clip(RoundedCornerShape(14.dp)).background(Mint),
@@ -778,6 +808,7 @@ private fun PhotoEditorHome() {
                 }
                 Spacer(modifier = Modifier.weight(1f))
                 Text("BETA 2.2", color = Mint, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+            }
             }
 
             if (activePhoto == null) {
@@ -810,7 +841,7 @@ private fun PhotoEditorHome() {
                             exportProgress = 0
                             statusMessage = "Enhancing and exporting the batch…"
                             val settingsForBatch = if (batchPreset == "Current edits") currentSettings() else BatchExportPolicy.settingsForPreset(batchPreset)
-                            val useAiPortrait = batchPreset == "AI Portrait" ||
+                            val useAiPortrait = batchPreset == "AI Edit" || batchPreset == "AI Portrait" ||
                                 settingsForBatch.backgroundBlur > 0f || settingsForBatch.backgroundEnhancement > 0f ||
                                 settingsForBatch.subjectBrightness > 0f || settingsForBatch.darkerAreaLift > 0f ||
                                 settingsForBatch.skinSmoothing > 0f || settingsForBatch.makeupIntensity > 0f
@@ -832,13 +863,18 @@ private fun PhotoEditorHome() {
                                                     context.contentResolver, photo.uri, maxDimension = Int.MAX_VALUE
                                                 )
                                             }
+                                            val photoSettings = if (batchPreset == "AI Edit") {
+                                                aiSettingsFor(PhotoAnalysisEngine.analyze(original!!))
+                                            } else {
+                                                settingsForBatch
+                                            }
                                             if (useAiPortrait) {
-                                                val aiResult = SubjectAwareEnhancer.enhance(original!!, settingsForBatch, context)
+                                                val aiResult = SubjectAwareEnhancer.enhance(original!!, photoSettings, context)
                                                 enhanced = aiResult.bitmap
                                                 if (!aiResult.usedAi) aiFallbacks++
                                             } else {
                                                 enhanced = withContext(Dispatchers.Default) {
-                                                    AutoEnhancer.enhance(original!!, settingsForBatch)
+                                                    AutoEnhancer.enhance(original!!, photoSettings)
                                                 }
                                             }
                                             withContext(Dispatchers.IO) {
@@ -892,19 +928,15 @@ private fun PhotoEditorHome() {
                     Spacer(modifier = Modifier.weight(1f))
                     Button(
                         onClick = {
-                            val sample = selectedPhotos.firstOrNull { it.decision != "Reject" }
-                            if (sample != null) {
-                                openEditor(sample)
-                                activeEditorPanel = "AI Edit"
-                                activeAiSubpanel = "Enhance"
-                                statusMessage = "AI Edit workspace opened. Run AI Edit to analyse the scene, lighting and people together."
-                            }
+                            batchPreset = "AI Edit"
+                            batchSummary = null
+                            statusMessage = "AI Edit selected for ${selectedPhotos.count { it.decision != "Reject" }} photos. Tap Save all to analyse and edit every eligible photo; originals stay untouched."
                         },
                         enabled = !isExporting && !isAnalyzing && selectedPhotos.any { it.decision != "Reject" },
                         shape = RoundedCornerShape(10.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Ink),
                         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 3.dp)
-                    ) { Text("✦ AI Edit", fontSize = 11.sp, fontWeight = FontWeight.Bold) }
+                    ) { Text("✦ AI Edit all", fontSize = 11.sp, fontWeight = FontWeight.Bold) }
                 }
                 Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -912,13 +944,7 @@ private fun PhotoEditorHome() {
                         Button(onClick = {
                             batchPreset = preset
                             batchSummary = null
-                            val sample = selectedPhotos.firstOrNull { it.decision != "Reject" }
-                            if (sample != null) {
-                                openEditor(sample)
-                                applyEditSnapshot(BatchExportPolicy.settingsForPreset(preset))
-                                selectedStyle = preset
-                                statusMessage = "Previewing $preset. The image and quality score will update before you save the batch."
-                            }
+                            statusMessage = "$preset selected for ${selectedPhotos.count { it.decision != "Reject" }} photos. Tap Save all to apply it to every eligible photo."
                         },
                             enabled = !isExporting && !isAnalyzing && selectedPhotos.any { it.decision != "Reject" },
                             shape = RoundedCornerShape(10.dp),

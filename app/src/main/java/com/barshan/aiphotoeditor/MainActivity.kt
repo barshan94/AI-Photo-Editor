@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -122,14 +123,29 @@ class MainActivity : ComponentActivity() {
 private fun PhotoEditorHome() {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val selectedPhotos = remember { mutableStateListOf<PhotoItem>() }
+    // Keep the working set and non-destructive edit controls across process death.
+    // OpenMultipleDocuments grants persistable read access for these selected URIs.
+    val recoveryPrefs = remember {
+        context.getSharedPreferences("frame_ai_recovery", android.content.Context.MODE_PRIVATE)
+    }
+    val recoveredUris = remember {
+        recoveryPrefs.getString("selected_photo_uris", "")
+            .orEmpty().split("\\n").filter { it.isNotBlank() }.mapNotNull {
+                try { Uri.parse(it) } catch (_: Exception) { null }
+            }
+    }
+    val selectedPhotos = remember {
+        mutableStateListOf<PhotoItem>().apply { recoveredUris.forEach { add(PhotoItem(uri = it)) } }
+    }
     var isAnalyzing by remember { mutableStateOf(false) }
     var analysisProgress by remember { mutableIntStateOf(0) }
     var isExporting by remember { mutableStateOf(false) }
     var exportProgress by remember { mutableIntStateOf(0) }
     var batchPreset by remember { mutableStateOf("Current edits") }
     var batchSummary by remember { mutableStateOf<String?>(null) }
-    var activePhoto by remember { mutableStateOf<PhotoItem?>(null) }
+    var activePhoto by remember {
+        mutableStateOf(selectedPhotos.firstOrNull { it.uri.toString() == recoveryPrefs.getString("active_photo_uri", null) })
+    }
     var showBurstComparison by remember { mutableStateOf(false) }
     var showBurstGroupPicker by remember { mutableStateOf(false) }
     var gridFilter by remember { mutableStateOf("All") }
@@ -147,15 +163,34 @@ private fun PhotoEditorHome() {
     var showCropGuides by remember { mutableStateOf(true) }
     val undoHistory = remember { mutableStateListOf<EditSettings>() }
     val redoHistory = remember { mutableStateListOf<EditSettings>() }
-    var brightness by remember { mutableFloatStateOf(0f) }
-    var contrast by remember { mutableFloatStateOf(1.07f) }
-    var saturation by remember { mutableFloatStateOf(1.06f) }
-    var warmth by remember { mutableFloatStateOf(0f) }
-    var cropLabel by remember { mutableStateOf("Original") }
-    var cropOffsetX by remember { mutableFloatStateOf(0f) }
-    var cropOffsetY by remember { mutableFloatStateOf(0f) }
-    var selectedStyle by remember { mutableStateOf("Auto") }
+    var brightness by remember { mutableFloatStateOf(recoveryPrefs.getFloat("brightness", 0f)) }
+    var contrast by remember { mutableFloatStateOf(recoveryPrefs.getFloat("contrast", 1.07f)) }
+    var saturation by remember { mutableFloatStateOf(recoveryPrefs.getFloat("saturation", 1.06f)) }
+    var warmth by remember { mutableFloatStateOf(recoveryPrefs.getFloat("warmth", 0f)) }
+    var cropLabel by remember { mutableStateOf(recoveryPrefs.getString("crop_label", "Original") ?: "Original") }
+    var cropOffsetX by remember { mutableFloatStateOf(recoveryPrefs.getFloat("crop_offset_x", 0f)) }
+    var cropOffsetY by remember { mutableFloatStateOf(recoveryPrefs.getFloat("crop_offset_y", 0f)) }
+    var selectedStyle by remember { mutableStateOf(recoveryPrefs.getString("selected_style", "Auto") ?: "Auto") }
     var statusMessage by remember { mutableStateOf("Choose photos to begin. Analysis and edits run on this device.") }
+
+    // Save recovery state whenever the selection or edit controls change.
+    LaunchedEffect(
+        selectedPhotos.map { it.uri.toString() }, activePhoto?.uri?.toString(),
+        brightness, contrast, saturation, warmth, cropLabel, cropOffsetX, cropOffsetY, selectedStyle
+    ) {
+        recoveryPrefs.edit()
+            .putString("selected_photo_uris", selectedPhotos.joinToString("\\n") { it.uri.toString() })
+            .putString("active_photo_uri", activePhoto?.uri?.toString())
+            .putFloat("brightness", brightness)
+            .putFloat("contrast", contrast)
+            .putFloat("saturation", saturation)
+            .putFloat("warmth", warmth)
+            .putString("crop_label", cropLabel)
+            .putFloat("crop_offset_x", cropOffsetX)
+            .putFloat("crop_offset_y", cropOffsetY)
+            .putString("selected_style", selectedStyle)
+            .apply()
+    }
 
     val previewTransformState = rememberTransformableState { zoomChange, panChange, _ ->
         val nextScale = (previewScale * zoomChange).coerceIn(1f, 5f)
@@ -951,8 +986,14 @@ private fun PhotoEditorHome() {
                             ) { Text("All photos", fontSize = 10.sp) }
                         }
                         Spacer(modifier = Modifier.height(8.dp))
+                        val previewAspectRatio = previewBitmap?.let { bitmap ->
+                            if (bitmap.width > 0 && bitmap.height > 0) bitmap.width.toFloat() / bitmap.height.toFloat()
+                            else 1.25f
+                        } ?: 1.25f
                         Box(
-                            modifier = Modifier.fillMaxWidth().height(220.dp)
+                            modifier = Modifier.fillMaxWidth()
+                                .aspectRatio(previewAspectRatio.coerceIn(0.55f, 2.2f))
+                                .heightIn(min = 150.dp, max = 300.dp)
                                 .clip(RoundedCornerShape(14.dp)).background(Ink)
                                 .onSizeChanged { size ->
                                     previewWidthPx = size.width

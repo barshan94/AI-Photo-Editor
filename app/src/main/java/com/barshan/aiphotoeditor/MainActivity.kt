@@ -474,7 +474,9 @@ private fun PhotoEditorHome() {
         resetPreviewZoom()
         activePhoto = photo
         editedScore = null
-        activeEditorPanel = "Universal Edit"
+        // Open the feature-rich AI workspace first so existing tools are immediately discoverable.
+        activeEditorPanel = "AI Edit"
+        activeAiSubpanel = "Subject"
         compareBeforeAfter = false
         comparePosition = 0.5f
         previewBitmap?.let { if (!it.isRecycled) it.recycle() }

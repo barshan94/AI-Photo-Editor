@@ -1,6 +1,11 @@
 package com.barshan.aiphotoeditor
 
 import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Paint
+import android.graphics.RenderEffect
+import android.graphics.Shader
+import android.os.Build
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.segmentation.Segmentation
 import com.google.mlkit.vision.segmentation.SegmentationMask
@@ -49,12 +54,7 @@ object SubjectAwareEnhancer {
             try {
                 if (settings.backgroundBlur > 0f) {
                     blurredBackground = withContext(Dispatchers.Default) {
-                        val factor = (1f + settings.backgroundBlur * 0.12f).toInt().coerceIn(2, 4)
-                        val small = Bitmap.createScaledBitmap(source,
-                            (source.width / factor).coerceAtLeast(1),
-                            (source.height / factor).coerceAtLeast(1), true)
-                        try { Bitmap.createScaledBitmap(small, source.width, source.height, true) }
-                        finally { if (!small.isRecycled) small.recycle() }
+                        createBlurredBackground(source, settings.backgroundBlur)
                     }
                 }
                 withContext(Dispatchers.Default) {
@@ -86,6 +86,41 @@ object SubjectAwareEnhancer {
             )
         } finally {
             maskInput?.let { if (it !== source && !it.isRecycled) it.recycle() }
+        }
+    }
+
+    /**
+     * Real Gaussian blur on Android 12+ (including Pixel 6a). Older Android versions
+     * use a stronger downscale/upscale fallback. The subject mask is composited afterward.
+     */
+    private fun createBlurredBackground(source: Bitmap, strength: Float): Bitmap {
+        val amount = strength.coerceIn(0f, 20f)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val output = Bitmap.createBitmap(source.width, source.height, Bitmap.Config.ARGB_8888)
+            val canvas = Canvas(output)
+            val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
+                renderEffect = RenderEffect.createBlurEffect(
+                    (amount * 1.8f).coerceAtLeast(1.5f),
+                    (amount * 1.8f).coerceAtLeast(1.5f),
+                    Shader.TileMode.CLAMP
+                )
+            }
+            canvas.drawBitmap(source, 0f, 0f, paint)
+            paint.setRenderEffect(null)
+            return output
+        }
+
+        val factor = (2f + amount * 0.35f).toInt().coerceIn(2, 9)
+        val small = Bitmap.createScaledBitmap(
+            source,
+            (source.width / factor).coerceAtLeast(1),
+            (source.height / factor).coerceAtLeast(1),
+            true
+        )
+        return try {
+            Bitmap.createScaledBitmap(small, source.width, source.height, true)
+        } finally {
+            if (!small.isRecycled) small.recycle()
         }
     }
 
@@ -159,16 +194,22 @@ object SubjectAwareEnhancer {
                 val green = (pixel shr 8 and 0xFF).toDouble()
                 val blue = (pixel and 0xFF).toDouble()
                 val luma = 0.2126 * red + 0.7152 * green + 0.0722 * blue
-                val saturation = 0.94 + 0.20 * subject
-                val contrast = 1.02 + 0.04 * subject
+                // Keep complexion neutral: avoid the saturation/contrast boost that made skin look orange.
+                val saturation = 0.92 + 0.02 * subject
+                val contrast = 1.0
                 val brightness = settings.subjectBrightness.coerceIn(0f, 25f).toDouble() * subject
                 val blurMix = (settings.backgroundBlur.coerceIn(0f, 20f) / 20f * (1f - subject)).coerceIn(0f, 1f)
                 val bgRed = (backgroundPixel shr 16 and 0xFF).toDouble()
                 val bgGreen = (backgroundPixel shr 8 and 0xFF).toDouble()
                 val bgBlue = (backgroundPixel and 0xFF).toDouble()
-                val outRed: Int = (((128.0 + (luma + (red - luma) * saturation - 128.0) * contrast + brightness) * (1.0 - blurMix) + bgRed * blurMix).toInt()).coerceIn(0, 255)
-                val outGreen: Int = (((128.0 + (luma + (green - luma) * saturation - 128.0) * contrast + brightness) * (1.0 - blurMix) + bgGreen * blurMix).toInt()).coerceIn(0, 255)
-                val outBlue: Int = (((128.0 + (luma + (blue - luma) * saturation - 128.0) * contrast + brightness) * (1.0 - blurMix) + bgBlue * blurMix).toInt()).coerceIn(0, 255)
+                // A tiny neutral/cool correction offsets the red-orange cast while lifting the subject.
+                val toneCooling = settings.subjectBrightness.coerceIn(0f, 25f).toDouble() * 0.10 * subject
+                val baseRed = 128.0 + (luma + (red - luma) * saturation - 128.0) * contrast + brightness - toneCooling
+                val baseGreen = 128.0 + (luma + (green - luma) * saturation - 128.0) * contrast + brightness
+                val baseBlue = 128.0 + (luma + (blue - luma) * saturation - 128.0) * contrast + brightness + toneCooling
+                val outRed: Int = (baseRed * (1.0 - blurMix) + bgRed * blurMix).toInt().coerceIn(0, 255)
+                val outGreen: Int = (baseGreen * (1.0 - blurMix) + bgGreen * blurMix).toInt().coerceIn(0, 255)
+                val outBlue: Int = (baseBlue * (1.0 - blurMix) + bgBlue * blurMix).toInt().coerceIn(0, 255)
                 row[x] = (alpha shl 24) or (outRed shl 16) or (outGreen shl 8) or outBlue
             }
             bitmap.setPixels(row, 0, bitmap.width, 0, y, bitmap.width, 1)

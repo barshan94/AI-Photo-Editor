@@ -12,6 +12,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.rememberTransformableState
 import androidx.compose.foundation.gestures.transformable
 import androidx.compose.foundation.layout.Arrangement
@@ -142,6 +143,7 @@ private fun PhotoEditorHome() {
     var batchSummary by remember { mutableStateOf<String?>(null) }
     var batchPreviewImages by remember { mutableStateOf<Map<Uri, ByteArray>>(emptyMap()) }
     var batchPreviewScores by remember { mutableStateOf<Map<Uri, PhotoQualityScoring.Score>>(emptyMap()) }
+    var batchOriginalScores by remember { mutableStateOf<Map<Uri, PhotoQualityScoring.Score>>(emptyMap()) }
     var batchPreviewFormats by remember { mutableStateOf<Map<Uri, List<String>>>(emptyMap()) }
     var isPreparingBatchPreview by remember { mutableStateOf(false) }
     var batchPreviewProgress by remember { mutableIntStateOf(0) }
@@ -184,6 +186,8 @@ private fun PhotoEditorHome() {
     var activeEditorPanel by remember { mutableStateOf("Universal Edit") }
     var activeAiSubpanel by remember { mutableStateOf("Subject") }
     var editedScore by remember { mutableStateOf<PhotoQualityScoring.Score?>(null) }
+    var originalPreviewScore by remember { mutableStateOf<PhotoQualityScoring.Score?>(null) }
+    var isShowingOriginal by remember { mutableStateOf(false) }
     var statusMessage by remember { mutableStateOf("Choose photos to begin. Analysis and edits run on this device.") }
     var photoAnalysisResult by remember { mutableStateOf<PhotoAnalysisResult?>(null) }
     var isRunningPhotoAnalysis by remember { mutableStateOf(false) }
@@ -559,6 +563,7 @@ private fun PhotoEditorHome() {
         batchSummary = null
         batchPreviewImages = emptyMap()
         batchPreviewScores = emptyMap()
+        batchOriginalScores = emptyMap()
         batchPreviewFormats = emptyMap()
         val batch = selectedPhotos.filter { it.decision != "Reject" }
         if (batch.isEmpty()) {
@@ -579,6 +584,8 @@ private fun PhotoEditorHome() {
                             AutoEnhancer.decodeForEditing(context.contentResolver, photo.uri, maxDimension = 480)
                         }
                         batchPreviewFormats = batchPreviewFormats + (photo.uri to recommendedFormats(original!!.width, original!!.height))
+                        val originalScore = scoreEditedBitmap(original!!)
+                        batchOriginalScores = batchOriginalScores + (photo.uri to originalScore)
                         val settings = if (preset == "AI Edit") {
                             aiSettingsFor(PhotoAnalysisEngine.analyze(original!!))
                         } else if (preset == "Current edits") {
@@ -671,8 +678,10 @@ private fun PhotoEditorHome() {
     }
     LaunchedEffect(activePhoto?.uri) {
         resetPreviewZoom()
+        isShowingOriginal = false
         photoAnalysisResult = null
         editedScore = null
+        originalPreviewScore = null
     }
 
     // Android system Back returns to the current batch instead of exiting the editor.
@@ -703,6 +712,7 @@ private fun PhotoEditorHome() {
                 original = withContext(Dispatchers.IO) {
                     AutoEnhancer.decodeForEditing(context.contentResolver, photo.uri, maxDimension = 1800)
                 }
+                originalPreviewScore = scoreEditedBitmap(original!!)
                 if (selectedStyle == "Original") {
                     adjusted = Bitmap.createBitmap(original!!)
                 } else if (selectedStyle == "AI Portrait" || backgroundBlur > 0f || backgroundEnhancement > 0f || subjectBrightness > 0f || darkerAreaLift > 0f || skinSmoothing > 0f || makeupIntensity > 0f) {
@@ -1378,14 +1388,47 @@ private fun PhotoEditorHome() {
                                             }
                                         }
                                     } else {
-                                        Modifier.transformable(state = previewTransformState)
+                                        Modifier
+                                            .pointerInput(activePhoto?.uri, cropLabel) {
+                                                detectTapGestures(
+                                                    onDoubleTap = {
+                                                        if (previewScale > 1.1f) {
+                                                            resetPreviewZoom()
+                                                        } else {
+                                                            previewScale = 2.5f
+                                                            previewOffsetX = 0f
+                                                            previewOffsetY = 0f
+                                                        }
+                                                    },
+                                                    onLongPress = { isShowingOriginal = true },
+                                                    onPress = {
+                                                        try {
+                                                            awaitRelease()
+                                                        } finally {
+                                                            isShowingOriginal = false
+                                                        }
+                                                    }
+                                                )
+                                            }
+                                            .transformable(state = previewTransformState)
                                     }
                                 ),
                             contentAlignment = Alignment.Center
                         ) {
                             val active = activePhoto
                             if (active != null) {
-                                if (compareBeforeAfter && previewBitmap != null) {
+                                if (isShowingOriginal) {
+                                    AsyncImage(model = active.uri, contentDescription = "Original photo held for comparison",
+                                        modifier = Modifier.fillMaxSize().graphicsLayer {
+                                            scaleX = previewScale
+                                            scaleY = previewScale
+                                            translationX = previewOffsetX
+                                            translationY = previewOffsetY
+                                        }, contentScale = ContentScale.Fit)
+                                    Text("ORIGINAL", color = BrightText, fontSize = 10.sp, fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.align(Alignment.TopStart).padding(8.dp)
+                                            .background(Ink.copy(alpha = 0.85f), RoundedCornerShape(5.dp)).padding(5.dp))
+                                } else if (compareBeforeAfter && previewBitmap != null) {
                                     AsyncImage(model = previewBitmap, contentDescription = "After edit comparison",
                                         modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
                                     AsyncImage(model = active.uri, contentDescription = "Before edit comparison",
@@ -1456,6 +1499,33 @@ private fun PhotoEditorHome() {
                             }
                             if (isPreparingPreview) CircularProgressIndicator(color = Mint)
                         }
+                        val scorePhoto = activePhoto
+                        if (scorePhoto != null) {
+                            val live = editedScore
+                            val baseline = originalPreviewScore
+                            val delta = if (live != null && baseline != null) live.score - baseline.score else null
+                            Column(
+                                modifier = Modifier.fillMaxWidth().padding(top = 7.dp, bottom = 2.dp)
+                                    .clip(RoundedCornerShape(10.dp)).background(Color(0xFF111818)).padding(9.dp)
+                            ) {
+                                Text(
+                                    if (live == null || baseline == null) "TECHNICAL SCORE · CALCULATING…" else
+                                        "EDITED SCORE  ${live.score}/100  (${if (delta!! > 0) "+" else ""}$delta vs original ${baseline.score})",
+                                    color = when { delta != null && delta > 0 -> Mint; delta != null && delta < 0 -> Color(0xFFFF8B8B); else -> BrightText },
+                                    fontSize = 11.sp, fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    if (live == null) "Measuring the current preview…" else
+                                        "Sharpness ${live.sharpness} · Exposure ${live.exposure} · Contrast ${live.contrast}",
+                                    color = SoftText, fontSize = 10.sp, modifier = Modifier.padding(top = 3.dp)
+                                )
+                                Text(
+                                    if (live == null) scorePhoto.note else "Reason: ${live.note}",
+                                    color = SoftText, fontSize = 9.sp, lineHeight = 12.sp,
+                                    modifier = Modifier.padding(top = 2.dp)
+                                )
+                            }
+                        }
                         if (compareBeforeAfter) {
                             Text("COMPARISON POSITION  " + (comparePosition * 100).toInt() + "%",
                                 color = SoftText, fontSize = 10.sp, modifier = Modifier.padding(top = 5.dp))
@@ -1466,7 +1536,7 @@ private fun PhotoEditorHome() {
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                if (cropLabel == "Original") "Pinch to zoom · drag to inspect"
+                                if (cropLabel == "Original") "Hold to see original · double-tap to zoom"
                                 else "Drag preview to reposition crop",
                                 color = SoftText, fontSize = 10.sp
                             )
@@ -1498,19 +1568,20 @@ private fun PhotoEditorHome() {
                             Text("Choose one AI editing group at a time to keep the workspace focused.", color = SoftText, fontSize = 10.sp, lineHeight = 14.sp)
                             if (activeEditorPanel == "AI Edit") {
                                 Row(
-                                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(top = 6.dp, bottom = 8.dp),
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    modifier = Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 8.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
                                 ) {
                                     listOf("Subject", "Background", "Remove", "Enhance").forEach { group ->
                                         Button(
                                             onClick = { activeAiSubpanel = group; compareBeforeAfter = false },
-                                            shape = RoundedCornerShape(10.dp),
+                                            modifier = Modifier.weight(1f),
+                                            shape = RoundedCornerShape(9.dp),
                                             colors = ButtonDefaults.buttonColors(
                                                 containerColor = if (activeAiSubpanel == group) Mint else Color(0xFF293333),
                                                 contentColor = if (activeAiSubpanel == group) Ink else BrightText
                                             ),
-                                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 3.dp)
-                                        ) { Text(group, fontSize = 10.sp, fontWeight = FontWeight.SemiBold) }
+                                            contentPadding = PaddingValues(horizontal = 2.dp, vertical = 5.dp)
+                                        ) { Text(group, fontSize = 9.sp, fontWeight = FontWeight.SemiBold, maxLines = 1) }
                                     }
                                 }
                             }
@@ -1740,31 +1811,6 @@ private fun PhotoEditorHome() {
                                     ) { Text(crop, fontSize = 10.sp) }
                                 }
                             }
-                        }
-                        val current = activePhoto
-                        if (current != null && current.score != null) {
-                            val live = editedScore
-                            val delta = if (live != null) live.score - current.score else 0
-                            Text(
-                                if (live == null) "EDITED TECHNICAL SCORE  Calculating…" else
-                                    "EDITED TECHNICAL SCORE  ${live.score}/100  (" +
-                                        (if (delta > 0) "+" else "") + delta + " vs original)",
-                                color = if (live != null && delta < 0) Color(0xFFFFB4A2) else Mint,
-                                fontSize = 11.sp, fontWeight = FontWeight.Bold,
-                                modifier = Modifier.padding(top = 7.dp)
-                            )
-                            Text(
-                                if (live == null) "Re-scoring the current preview…" else
-                                    "Sharpness ${live.sharpness}  ·  Exposure ${live.exposure}  ·  Contrast ${live.contrast}",
-                                color = SoftText, fontSize = 10.sp,
-                                modifier = Modifier.padding(top = 3.dp)
-                            )
-                            Text(
-                                if (live == null) current.note else live.note,
-                                color = SoftText, fontSize = 10.sp,
-                                modifier = Modifier.padding(top = 2.dp)
-                            )
-                            Text("Original score: ${current.score}/100. Scores are technical guidance, not a measure of the photo's personal value.", color = SoftText, fontSize = 9.sp, lineHeight = 12.sp)
                         }
                         val activeIndex = selectedPhotos.indexOfFirst { it.uri == activePhoto?.uri }
                         Row(
@@ -2089,7 +2135,8 @@ private fun PhotoEditorHome() {
                             }
                             val photoRank = rankByUri[photo.uri] ?: 0
                             val liveScore = batchPreviewScores[photo.uri]
-                            val scoreDelta = if (liveScore != null && photo.score != null) liveScore.score - photo.score else null
+                            val baselineScore = batchOriginalScores[photo.uri]
+                            val scoreDelta = if (liveScore != null && baselineScore != null) liveScore.score - baselineScore.score else null
                             Text(
                                 if (liveScore != null) "EDITED ${liveScore.score}/100" +
                                     (scoreDelta?.let { " (${if (it > 0) "+" else ""}$it)" } ?: "")

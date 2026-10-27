@@ -161,6 +161,7 @@ private fun PhotoEditorHome() {
     var subjectBrightness by remember { mutableFloatStateOf(0f) }
     var darkerAreaLift by remember { mutableFloatStateOf(0f) }
     var skinSmoothing by remember { mutableFloatStateOf(0f) }
+    var makeupIntensity by remember { mutableFloatStateOf(0f) }
     var removalBrushMode by remember { mutableStateOf(false) }
     var removalBrushSize by remember { mutableFloatStateOf(24f) }
     val removalStrokes = remember { mutableStateListOf<List<Offset>>() }
@@ -223,7 +224,8 @@ private fun PhotoEditorHome() {
         backgroundBlur = backgroundBlur,
         subjectBrightness = subjectBrightness,
         darkerAreaLift = darkerAreaLift,
-        skinSmoothing = skinSmoothing
+        skinSmoothing = skinSmoothing,
+        makeupIntensity = makeupIntensity
     )
 
     fun recordEditChange() {
@@ -244,6 +246,7 @@ private fun PhotoEditorHome() {
         subjectBrightness = settings.subjectBrightness
         darkerAreaLift = settings.darkerAreaLift
         skinSmoothing = settings.skinSmoothing
+        makeupIntensity = settings.makeupIntensity
         cropOffsetX = settings.cropOffsetX
         cropOffsetY = settings.cropOffsetY
         cropLabel = when (settings.cropRatio) {
@@ -284,13 +287,13 @@ private fun PhotoEditorHome() {
                 backgroundBlur = 0f; subjectBrightness = 0f; darkerAreaLift = 0f
                 cropLabel = "Original"; cropOffsetX = 0f; cropOffsetY = 0f
             }
-            "Natural" -> { brightness = 1f; contrast = 1.02f; saturation = 1.02f; warmth = 0f; backgroundBlur = 0f; subjectBrightness = 0f; darkerAreaLift = 0f; skinSmoothing = 0f }
-            "Vivid" -> { brightness = 0f; contrast = 1.13f; saturation = 1.20f; warmth = 0f; backgroundBlur = 0f; subjectBrightness = 0f; darkerAreaLift = 0f; skinSmoothing = 0f }
-            "Warm" -> { brightness = 2f; contrast = 1.06f; saturation = 1.04f; warmth = 8f; backgroundBlur = 0f; subjectBrightness = 0f; darkerAreaLift = 0f; skinSmoothing = 0f }
-            "Cool" -> { brightness = 0f; contrast = 1.05f; saturation = 1.02f; warmth = -8f; backgroundBlur = 0f; subjectBrightness = 0f; darkerAreaLift = 0f; skinSmoothing = 0f }
-            "Mono" -> { brightness = 0f; contrast = 1.10f; saturation = 0f; warmth = 0f; backgroundBlur = 0f; subjectBrightness = 0f; darkerAreaLift = 0f; skinSmoothing = 0f }
-            "AI Portrait" -> { brightness = 0f; contrast = 1.02f; saturation = 1.02f; warmth = 0f; backgroundBlur = 16f; subjectBrightness = 0f; darkerAreaLift = 0f; skinSmoothing = 0f }
-            else -> { brightness = 0f; contrast = 1.07f; saturation = 1.02f; warmth = 0f; backgroundBlur = 0f; subjectBrightness = 0f; darkerAreaLift = 0f; skinSmoothing = 0f }
+            "Natural" -> { brightness = 1f; contrast = 1.02f; saturation = 1.02f; warmth = 0f; backgroundBlur = 0f; subjectBrightness = 0f; darkerAreaLift = 0f; skinSmoothing = 0f; makeupIntensity = 0f }
+            "Vivid" -> { brightness = 0f; contrast = 1.13f; saturation = 1.20f; warmth = 0f; backgroundBlur = 0f; subjectBrightness = 0f; darkerAreaLift = 0f; skinSmoothing = 0f; makeupIntensity = 0f }
+            "Warm" -> { brightness = 2f; contrast = 1.06f; saturation = 1.04f; warmth = 8f; backgroundBlur = 0f; subjectBrightness = 0f; darkerAreaLift = 0f; skinSmoothing = 0f; makeupIntensity = 0f }
+            "Cool" -> { brightness = 0f; contrast = 1.05f; saturation = 1.02f; warmth = -8f; backgroundBlur = 0f; subjectBrightness = 0f; darkerAreaLift = 0f; skinSmoothing = 0f; makeupIntensity = 0f }
+            "Mono" -> { brightness = 0f; contrast = 1.10f; saturation = 0f; warmth = 0f; backgroundBlur = 0f; subjectBrightness = 0f; darkerAreaLift = 0f; skinSmoothing = 0f; makeupIntensity = 0f }
+            "AI Portrait" -> { brightness = 0f; contrast = 1.02f; saturation = 1.02f; warmth = 0f; backgroundBlur = 16f; subjectBrightness = 0f; darkerAreaLift = 0f; skinSmoothing = 0f; makeupIntensity = 0f }
+            else -> { brightness = 0f; contrast = 1.07f; saturation = 1.02f; warmth = 0f; backgroundBlur = 0f; subjectBrightness = 0f; darkerAreaLift = 0f; skinSmoothing = 0f; makeupIntensity = 0f }
         }
     }
 
@@ -446,6 +449,7 @@ private fun PhotoEditorHome() {
         subjectBrightness = 0f
         darkerAreaLift = 0f
         skinSmoothing = 0f
+        makeupIntensity = 0f
         removalBrushMode = false
         removalStrokes.clear()
         currentRemovalStroke = emptyList()
@@ -508,7 +512,7 @@ private fun PhotoEditorHome() {
     }
 
     // Debounced live preview: controls update the image without an Apply button.
-    LaunchedEffect(activePhoto?.uri, brightness, contrast, saturation, warmth, backgroundBlur, subjectBrightness, darkerAreaLift, skinSmoothing, cropLabel, cropOffsetX, cropOffsetY, selectedStyle) {
+    LaunchedEffect(activePhoto?.uri, brightness, contrast, saturation, warmth, backgroundBlur, subjectBrightness, darkerAreaLift, skinSmoothing, makeupIntensity, cropLabel, cropOffsetX, cropOffsetY, selectedStyle) {
         if (selectedStyle == "Object Removal") return@LaunchedEffect
         val photo = activePhoto
         if (photo != null) {
@@ -524,7 +528,7 @@ private fun PhotoEditorHome() {
                 }
                 if (selectedStyle == "Original") {
                     adjusted = Bitmap.createBitmap(original!!)
-                } else if (selectedStyle == "AI Portrait" || backgroundBlur > 0f || subjectBrightness > 0f || darkerAreaLift > 0f || skinSmoothing > 0f) {
+                } else if (selectedStyle == "AI Portrait" || backgroundBlur > 0f || subjectBrightness > 0f || darkerAreaLift > 0f || skinSmoothing > 0f || makeupIntensity > 0f) {
                     val aiResult = SubjectAwareEnhancer.enhance(original!!, settings, context)
                     adjusted = aiResult.bitmap
                     aiNotice = aiResult.message
@@ -539,7 +543,7 @@ private fun PhotoEditorHome() {
                 showEnhanced = true
                 statusMessage = if (selectedStyle == "Original") {
                     "Original preview. Choose a style or adjust the image to create an edit."
-                } else aiNotice ?: if (selectedStyle == "AI Portrait" || backgroundBlur > 0f || subjectBrightness > 0f || darkerAreaLift > 0f || skinSmoothing > 0f) {
+                } else aiNotice ?: if (selectedStyle == "AI Portrait" || backgroundBlur > 0f || subjectBrightness > 0f || darkerAreaLift > 0f || skinSmoothing > 0f || makeupIntensity > 0f) {
                     "AI Portrait enhancement applied using on-device person segmentation."
                 } else "Live preview updated. Export a copy when you're happy."
             } catch (error: CancellationException) {
@@ -1343,6 +1347,7 @@ private fun PhotoEditorHome() {
                                                 subjectBrightness = learned.subjectBrightness
                                                 darkerAreaLift = learned.darkerAreaLift
                                                 skinSmoothing = learned.skinSmoothing
+                                                makeupIntensity = learned.makeupIntensity
                                                 selectedStyle = "Personal"
                                                 showEnhanced = true
                                                 compareBeforeAfter = false
@@ -1408,6 +1413,14 @@ private fun PhotoEditorHome() {
                                     showEnhanced = true
                                 }, valueRange = 0f..10f)
                                 Text("Subtle local smoothing is blended only into detected skin pixels; keep this low to avoid a plastic look.", color = SoftText, fontSize = 10.sp, lineHeight = 14.sp)
+                                Text("NATURAL MAKEUP · LIP + CHEEK TINT  " + makeupIntensity.toInt(), color = SoftText, fontSize = 11.sp)
+                                Slider(value = makeupIntensity, onValueChange = {
+                                    recordEditChange()
+                                    makeupIntensity = it
+                                    selectedStyle = if (it > 0f || backgroundBlur > 0f || subjectBrightness > 0f || darkerAreaLift > 0f || skinSmoothing > 0f) "AI Portrait" else "Custom"
+                                    showEnhanced = true
+                                }, valueRange = 0f..10f)
+                                Text("Uses detected face contours for a subtle lip and cheek tint. It is optional and remains off at zero.", color = SoftText, fontSize = 10.sp, lineHeight = 14.sp)
                             }
                         }
 
@@ -1560,7 +1573,7 @@ private fun PhotoEditorHome() {
                             Button(
                                 onClick = {
                                     val photo = activePhoto
-                                    if (photo != null) exportOne(photo, currentSettings(), selectedStyle == "AI Portrait" || backgroundBlur > 0f || subjectBrightness > 0f || darkerAreaLift > 0f || skinSmoothing > 0f)
+                                    if (photo != null) exportOne(photo, currentSettings(), selectedStyle == "AI Portrait" || backgroundBlur > 0f || subjectBrightness > 0f || darkerAreaLift > 0f || skinSmoothing > 0f || makeupIntensity > 0f)
                                 },
                                 enabled = previewBitmap != null && !isExporting && selectedStyle != "Original",
                                 modifier = Modifier.weight(1f),

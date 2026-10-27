@@ -610,10 +610,10 @@ private fun PhotoEditorHome() {
                         }
                     }
                     enhanced = upscaleResult.bitmap
-                    aiNotice = if (selectedStyle != "Original") "Current edit settings applied before ESRGAN 4x. " else ""
-                    aiNotice += if (upscaleResult.inputWasResizedForMemory) {
+                    val upscaleNotice = if (upscaleResult.inputWasResizedForMemory) {
                         "ESRGAN 4x ran locally after resizing the input for phone memory. "
                     } else "ESRGAN 4x AI upscaling ran locally. "
+                    aiNotice = (if (selectedStyle != "Original") "Current edit settings applied before ESRGAN 4x. " else "") + upscaleNotice
                 } else if (useAiPortrait) {
                     operationProgress = 22
                     operationStage = "Detecting person, skin, and background masks"

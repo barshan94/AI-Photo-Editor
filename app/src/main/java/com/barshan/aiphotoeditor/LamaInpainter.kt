@@ -32,7 +32,7 @@ internal object LamaInpainter {
         require(!source.isRecycled && source.width > 0 && source.height > 0) { "Choose a valid photo first." }
 
         val modelSize = 512
-        val fullMask = Bitmap.createBitmap(source.width, source.height, Bitmap.Config.ALPHA_8)
+        val fullMask = Bitmap.createBitmap(source.width, source.height, Bitmap.Config.ARGB_8888)
         val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = AndroidColor.WHITE
             style = Paint.Style.STROKE

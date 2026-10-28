@@ -30,19 +30,10 @@ object CaptionSuggestionEngine {
         // The generic ML label "people" also appears on single portraits; require a clearer group cue.
         val groupPhoto = has(words, "group", "crowd", "team", "classmates", "multiple people")
         val portrait = has(words, "person", "face", "portrait", "human", "man", "woman", "child")
-        val scene = if (theme != "Auto") {
-            when (theme) {
-                // Explicit user selection is stronger than uncertain image labels.
-                // This lets a Dashami photo receive Bijoya captions even when ML Kit
-                // only labels clothing, faces, or a crowd.
-                "Durga Puja" -> "Festival"
-                "Festival" -> "General Festival"
-                else -> theme
-            }
-        } else when {
+        val detectedScene = when {
             bijoyaFestival -> "Festival"
             wedding -> "Romantic"
-            generalCelebration -> "Celebration"
+            generalCelebration -> "General Festival"
             food -> "Food"
             pets -> "Pets"
             travel -> "Travel"
@@ -52,6 +43,22 @@ object CaptionSuggestionEngine {
             groupPhoto -> "Group"
             portrait -> "Portrait"
             else -> "Aesthetic"
+        }
+        // A manually selected occasion is a stronger signal than ML Kit's generic
+        // labels. Banglish is treated as a language preference while retaining scene
+        // context, instead of discarding what the photo is actually about.
+        val scene = when (theme) {
+            "Auto" -> detectedScene
+            "Durga Puja" -> "Festival"
+            "Festival" -> "General Festival"
+            "Banglish" -> when (detectedScene) {
+                "Festival" -> "Banglish Festival"
+                "Romantic" -> "Banglish Romantic"
+                "Friends" -> "Banglish Friends"
+                "Travel" -> "Banglish Travel"
+                else -> "Banglish"
+            }
+            else -> theme
         }
 
         val en: List<String>
@@ -97,6 +104,74 @@ object CaptionSuggestionEngine {
                     "কিছু দিন এমনিই একটু বেশি স্পেশাল লাগে।",
                     "আজকের ছোট ছোট মুহূর্তে ক্যামেরা রোল ভরে গেল।",
                     "পরেরবারের অপেক্ষা শুরু হয়ে গেল।"
+                )
+            }
+            "Banglish Festival" -> {
+                en = listOf(
+                    "Shubho Bijoya ❤️ Asche bochhor abar hobe.",
+                    "Pujo shesh, kintu mon ta ekhono mondope.",
+                    "Sindoor khela, chena mukh, ar ektu mon kharap.",
+                    "Ma, abar esho. Amra opekkhay thakbo. ❤️",
+                    "Biday bolchi, kintu dekha abar hobei.",
+                    "Pujor din gulo chhoto, smriti gulo puro bochhorer.",
+                    "Bari firchi, mon ta ekhono pujo te pore."
+                )
+                bn = listOf(
+                    "শুভ বিজয়া ❤️ আসছে বছর আবার হবে।",
+                    "পুজো শেষ, কিন্তু মনটা এখনও মণ্ডপে।",
+                    "সিঁদুর খেলা, চেনা মুখ, আর একটু মনখারাপ।",
+                    "মা, আবার এসো। আমরা অপেক্ষায় থাকব। ❤️",
+                    "বিদায় বলছি, কিন্তু দেখা আবার হবেই।",
+                    "পুজোর দিনগুলো ছোট, স্মৃতিগুলো সারা বছরের।",
+                    "বাড়ি ফিরছি, মনটা এখনও পুজোতেই পড়ে।"
+                )
+            }
+            "Banglish Romantic" -> {
+                en = listOf(
+                    "Tumi thakle random din-o special hoye jay. ❤️",
+                    "Shudhu amra. Caption-er ar dorkar nei.",
+                    "Ektu cheesy, kintu tumi amar favourite person.",
+                    "Photo ta bhalo, kintu tomar presence ta better.",
+                    "Ei moment ta tomar shonge abar choose kortam."
+                )
+                bn = listOf(
+                    "তুমি থাকলে সাধারণ দিনও স্পেশাল হয়ে যায়। ❤️",
+                    "শুধু আমরা। আর ক্যাপশনের দরকার নেই।",
+                    "একটু সিনেমাটিক, কিন্তু তুমি আমার প্রিয় মানুষ।",
+                    "ছবিটা ভালো, কিন্তু তোমার উপস্থিতিটা আরও ভালো।",
+                    "এই মুহূর্তটা তোমার সঙ্গে আবারও বেছে নিতাম।"
+                )
+            }
+            "Banglish Friends" -> {
+                en = listOf(
+                    "Same pagol-gulo, better memories. ❤️",
+                    "Plan chhilo ekta photo, baki ta history.",
+                    "Amar type-er manushjon.",
+                    "Ei chaos ta miss korbo.",
+                    "Shobai ek frame-e—eta-i win."
+                )
+                bn = listOf(
+                    "একই পাগলগুলো, স্মৃতি একটু ভালো। ❤️",
+                    "প্ল্যান ছিল একটা ছবি, বাকিটা ইতিহাস।",
+                    "আমার পছন্দের মানুষজন।",
+                    "এই কোলাহলটাই মিস করব।",
+                    "সবাই এক ফ্রেমে—এটাই জয়।"
+                )
+            }
+            "Banglish Travel" -> {
+                en = listOf(
+                    "Ektu escape dorkar chhilo, tai chole elam.",
+                    "View ta dekhe aro kichhukhon thakte ichchhe korlo.",
+                    "Notun jayga, notun golpo, same camera roll problem.",
+                    "Ferot jawar rasta ta ektu lomba holeo cholbe.",
+                    "Ei jayga ta abar visit korte hobe."
+                )
+                bn = listOf(
+                    "একটু বিরতি দরকার ছিল, তাই চলে এলাম।",
+                    "দৃশ্যটা দেখে আরও কিছুক্ষণ থাকতে ইচ্ছে করল।",
+                    "নতুন জায়গা, নতুন গল্প, ক্যামেরা রোলের সেই পুরোনো সমস্যা।",
+                    "ফেরার রাস্তাটা একটু লম্বা হলেও চলবে।",
+                    "এই জায়গায় আবার আসতে হবে।"
                 )
             }
             "Banglish" -> {

@@ -35,7 +35,10 @@ object CaptionLibrary {
         "Aesthetic" to listOf("soft tones and slower moments", "shadows doing their own art", "little details worth noticing", "the beauty of the ordinary", "a quiet kind of magic", "light, texture, and mood", "the in-between moments", "simple things done beautifully", "a frame that feels like a deep breath", "less noise and more feeling")
     )
 
-    val all: List<Entry> by lazy {
+    @Volatile
+    private var remoteEntries: List<Entry> = emptyList()
+
+    private val bundledEntries: List<Entry> by lazy {
         buildList {
             topics.forEach { (category, categoryTopics) ->
                 categoryTopics.forEachIndexed { topicIndex, topic ->
@@ -48,6 +51,42 @@ object CaptionLibrary {
                 }
             }
         }.distinctBy { it.text }.take(1000)
+    }
+
+    val all: List<Entry>
+        get() = (bundledEntries + remoteEntries).distinctBy { it.text }.take(2000)
+
+    /** Installs validated caption data downloaded from our versioned pack; executable code is never downloaded. */
+    fun installRemotePack(json: String?) {
+        if (json.isNullOrBlank()) {
+            remoteEntries = emptyList()
+            return
+        }
+        remoteEntries = try {
+            val root = org.json.JSONObject(json)
+            val array = root.optJSONArray("entries") ?: return
+            buildList {
+                for (index in 0 until minOf(array.length(), 1000)) {
+                    val item = array.optJSONObject(index) ?: continue
+                    val category = item.optString("category").trim().take(40)
+                    val text = item.optString("text").trim().take(240)
+                    if (category.isBlank() || text.isBlank()) continue
+                    val keywordsJson = item.optJSONArray("keywords")
+                    val keywords = buildSet {
+                        add(category.lowercase())
+                        if (keywordsJson != null) {
+                            for (keyIndex in 0 until minOf(keywordsJson.length(), 20)) {
+                                val keyword = keywordsJson.optString(keyIndex).trim().lowercase()
+                                if (keyword.length in 2..50) add(keyword)
+                            }
+                        }
+                    }
+                    add(Entry("remote-$index", category, text, keywords))
+                }
+            }.distinctBy { it.text }
+        } catch (_: Exception) {
+            emptyList()
+        }
     }
 
     fun search(query: String, category: String = "All", limit: Int = 40): List<Entry> {

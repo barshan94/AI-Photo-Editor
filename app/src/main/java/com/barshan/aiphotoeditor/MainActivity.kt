@@ -293,6 +293,7 @@ private fun PhotoEditorHome() {
     var activeEditorPanel by remember { mutableStateOf(recoveryPrefs.getString("active_editor_panel", "Universal Edit") ?: "Universal Edit") }
     var activeAiSubpanel by remember { mutableStateOf(recoveryPrefs.getString("active_ai_subpanel", "Subject") ?: "Subject") }
     var activeCropSubpanel by remember { mutableStateOf("Crop") }
+    var activeAiTool by remember { mutableStateOf("Retouch") }
     var editedScore by remember { mutableStateOf<PhotoQualityScoring.Score?>(null) }
     var originalPreviewScore by remember { mutableStateOf<PhotoQualityScoring.Score?>(null) }
     var isShowingOriginal by remember { mutableStateOf(false) }
@@ -1598,7 +1599,7 @@ private fun PhotoEditorHome() {
                                 ) {
                                     listOf("Subject", "Background", "Remove", "Enhance").forEach { group ->
                                         Button(
-                                            onClick = { activeAiSubpanel = group; compareBeforeAfter = false },
+                                            onClick = { activeAiSubpanel = group; activeAiTool = when (group) { "Subject" -> "Retouch"; "Background" -> "Blur"; "Remove" -> "Mark object"; else -> "Upscale" }; compareBeforeAfter = false },
                                             modifier = Modifier.weight(1f),
                                             shape = RoundedCornerShape(9.dp),
                                             colors = ButtonDefaults.buttonColors(

@@ -21,6 +21,15 @@ class CaptionSuggestionEngineTest {
     }
 
     @Test
+    fun explicitDurgaPujaContextWorksEvenWhenImageLabelsMissTheCulture() {
+        val result = CaptionSuggestionEngine.fromLabels(
+            listOf("woman" to 0.95f, "red clothing" to 0.80f), 0.9f, "Durga Puja"
+        )
+        assertTrue(result.english.any { it.contains("Shubho Bijoya") })
+        assertTrue(result.bengali.any { it.contains("শুভ বিজয়া") })
+    }
+
+    @Test
     fun genericFestivalLabelsDoNotAssumeDurgaBijoya() {
         val result = CaptionSuggestionEngine.fromLabels(listOf("festival" to 0.95f), 1f)
         assertFalse(result.english.any { it.contains("Bijoya") || it.contains("Durga") })

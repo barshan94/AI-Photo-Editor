@@ -2574,6 +2574,7 @@ private fun PhotoEditorHome() {
                         Text("Analysing each photo for its own captions…", color = SoftText, fontSize = 10.sp)
                     }
                 }
+                Column(modifier = Modifier.fillMaxWidth().heightIn(max = 220.dp).verticalScroll(rememberScrollState())) {
                 batchCaptionResults.forEach { (uri, options) ->
                     Column(modifier = Modifier.fillMaxWidth().padding(vertical = 5.dp),
                         verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -2603,6 +2604,7 @@ private fun PhotoEditorHome() {
                             }
                         }
                     }
+                }
                 }
                 if (showBatchCaptionChoice) {
                     AlertDialog(

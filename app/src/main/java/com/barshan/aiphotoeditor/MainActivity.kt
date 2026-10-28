@@ -10,6 +10,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -1354,38 +1355,55 @@ private fun PhotoEditorHome() {
                         Column(
                             modifier = Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState())
                         ) {
-                            Text("EDIT WORKSPACE", color = Mint, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(top = 2.dp, bottom = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text("EDIT TOOLS", color = Mint, fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold, letterSpacing = 1.1.sp)
+                                Spacer(modifier = Modifier.weight(1f))
+                                Text("Changes preview live", color = SoftText, fontSize = 9.sp)
+                            }
+                            Row(
+                                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                                horizontalArrangement = Arrangement.spacedBy(7.dp)
+                            ) {
                                 listOf("Universal Edit", "AI Edit", "Presets", "Crop & Rotate").forEach { panel ->
-                                    Button(
-                                        onClick = { activeEditorPanel = panel; compareBeforeAfter = false },
-                                        modifier = Modifier.weight(1f),
-                                        shape = RoundedCornerShape(10.dp),
-                                        colors = ButtonDefaults.buttonColors(
-                                            containerColor = if (activeEditorPanel == panel) Mint else Color(0xFF293333),
-                                            contentColor = if (activeEditorPanel == panel) Ink else BrightText
-                                        ),
-                                        contentPadding = PaddingValues(horizontal = 3.dp, vertical = 3.dp)
-                                    ) { Text(panel, fontSize = 10.sp, fontWeight = FontWeight.SemiBold, maxLines = 1) }
+                                    EditorChip(
+                                        label = when (panel) {
+                                            "Universal Edit" -> "Adjust"
+                                            "AI Edit" -> "AI tools"
+                                            "Presets" -> "Looks"
+                                            else -> "Crop & rotate"
+                                        },
+                                        selected = activeEditorPanel == panel,
+                                        onClick = { activeEditorPanel = panel; compareBeforeAfter = false }
+                                    )
                                 }
                             }
-                            Text("Choose one AI editing group at a time to keep the workspace focused.", color = SoftText, fontSize = 10.sp, lineHeight = 14.sp)
+                            Text(
+                                when (activeEditorPanel) {
+                                    "Universal Edit" -> "Fine-tune light and colour without losing the original."
+                                    "AI Edit" -> "Choose a subject, background, removal, or enhancement tool."
+                                    "Presets" -> "Try a look, then fine-tune it to your taste."
+                                    else -> "Straighten, frame, rotate, mirror, and correct perspective."
+                                },
+                                color = SoftText, fontSize = 10.sp, lineHeight = 14.sp,
+                                modifier = Modifier.padding(top = 6.dp, bottom = 3.dp)
+                            )
                             if (activeEditorPanel == "AI Edit") {
                                 Row(
-                                    modifier = Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 8.dp),
-                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())
+                                        .padding(top = 5.dp, bottom = 8.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                                 ) {
                                     listOf("Subject", "Background", "Remove", "Enhance").forEach { group ->
-                                        Button(
-                                            onClick = { activeAiSubpanel = group; compareBeforeAfter = false },
-                                            modifier = Modifier.weight(1f),
-                                            shape = RoundedCornerShape(9.dp),
-                                            colors = ButtonDefaults.buttonColors(
-                                                containerColor = if (activeAiSubpanel == group) Mint else Color(0xFF293333),
-                                                contentColor = if (activeAiSubpanel == group) Ink else BrightText
-                                            ),
-                                            contentPadding = PaddingValues(horizontal = 2.dp, vertical = 5.dp)
-                                        ) { Text(group, fontSize = 9.sp, fontWeight = FontWeight.SemiBold, maxLines = 1) }
+                                        EditorChip(
+                                            label = group,
+                                            selected = activeAiSubpanel == group,
+                                            compact = true,
+                                            onClick = { activeAiSubpanel = group; compareBeforeAfter = false }
+                                        )
                                     }
                                 }
                             }
@@ -1578,11 +1596,33 @@ private fun PhotoEditorHome() {
                             Text("CROP & ROTATE", color = Mint, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                             Text("All framing tools in one place. Edits preview live and remain undoable.", color = SoftText, fontSize = 10.sp, lineHeight = 14.sp)
                             Text("ROTATE & MIRROR", color = BrightText, fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp))
-                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                Button(onClick = { recordEditChange(); rotationDegrees = (rotationDegrees - 90f).mod(360f); selectedStyle = "Custom"; showEnhanced = true }, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 4.dp, vertical = 5.dp), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = BrightText)) { Text("↶ Rotate", fontSize = 10.sp) }
-                                Button(onClick = { recordEditChange(); rotationDegrees = (rotationDegrees + 90f).mod(360f); selectedStyle = "Custom"; showEnhanced = true }, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 4.dp, vertical = 5.dp), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = BrightText)) { Text("Rotate ↻", fontSize = 10.sp) }
-                                Button(onClick = { recordEditChange(); mirrorHorizontal = !mirrorHorizontal; selectedStyle = "Custom"; showEnhanced = true }, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 4.dp, vertical = 5.dp), colors = ButtonDefaults.buttonColors(containerColor = if (mirrorHorizontal) Mint else Color(0xFF293333), contentColor = if (mirrorHorizontal) Ink else BrightText)) { Text("Mirror H", fontSize = 10.sp) }
-                                Button(onClick = { recordEditChange(); mirrorVertical = !mirrorVertical; selectedStyle = "Custom"; showEnhanced = true }, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 4.dp, vertical = 5.dp), colors = ButtonDefaults.buttonColors(containerColor = if (mirrorVertical) Mint else Color(0xFF293333), contentColor = if (mirrorVertical) Ink else BrightText)) { Text("Mirror V", fontSize = 10.sp) }
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Button(
+                                    onClick = { recordEditChange(); rotationDegrees = (rotationDegrees - 90f).mod(360f); selectedStyle = "Custom"; showEnhanced = true },
+                                    modifier = Modifier.weight(1f).height(42.dp), shape = RoundedCornerShape(12.dp),
+                                    contentPadding = PaddingValues(horizontal = 8.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF202828), contentColor = BrightText)
+                                ) { Text("↶  Rotate left 90°", fontSize = 11.sp) }
+                                Button(
+                                    onClick = { recordEditChange(); rotationDegrees = (rotationDegrees + 90f).mod(360f); selectedStyle = "Custom"; showEnhanced = true },
+                                    modifier = Modifier.weight(1f).height(42.dp), shape = RoundedCornerShape(12.dp),
+                                    contentPadding = PaddingValues(horizontal = 8.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF202828), contentColor = BrightText)
+                                ) { Text("Rotate right 90°  ↻", fontSize = 11.sp) }
+                            }
+                            Row(modifier = Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Button(
+                                    onClick = { recordEditChange(); mirrorHorizontal = !mirrorHorizontal; selectedStyle = "Custom"; showEnhanced = true },
+                                    modifier = Modifier.weight(1f).height(42.dp), shape = RoundedCornerShape(12.dp),
+                                    contentPadding = PaddingValues(horizontal = 8.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = if (mirrorHorizontal) Mint else Color(0xFF202828), contentColor = if (mirrorHorizontal) Ink else BrightText)
+                                ) { Text("⇆  Flip horizontal", fontSize = 11.sp) }
+                                Button(
+                                    onClick = { recordEditChange(); mirrorVertical = !mirrorVertical; selectedStyle = "Custom"; showEnhanced = true },
+                                    modifier = Modifier.weight(1f).height(42.dp), shape = RoundedCornerShape(12.dp),
+                                    contentPadding = PaddingValues(horizontal = 8.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = if (mirrorVertical) Mint else Color(0xFF202828), contentColor = if (mirrorVertical) Ink else BrightText)
+                                ) { Text("⇅  Flip vertical", fontSize = 11.sp) }
                             }
                             Text("STRAIGHTEN  ${String.format(java.util.Locale.US, "%.1f", straightenDegrees)}°", color = SoftText, fontSize = 10.sp, modifier = Modifier.padding(top = 8.dp))
                             Slider(value = straightenDegrees, onValueChange = { straightenDegrees = it; selectedStyle = "Custom"; showEnhanced = true }, onValueChangeFinished = { recordEditChange() }, valueRange = -15f..15f)
@@ -1710,49 +1750,70 @@ private fun PhotoEditorHome() {
                             ) { Text("Next →", fontSize = 11.sp) }
                         }
                         Spacer(modifier = Modifier.height(9.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                            Button(onClick = { undoEdit() }, enabled = undoHistory.isNotEmpty() && !isExporting,
-                                modifier = Modifier.weight(0.65f), shape = RoundedCornerShape(10.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = BrightText),
-                                contentPadding = PaddingValues(horizontal = 3.dp, vertical = 2.dp)
-                            ) { Text("Undo", fontSize = 10.sp) }
-                            Button(onClick = { redoEdit() }, enabled = redoHistory.isNotEmpty() && !isExporting,
-                                modifier = Modifier.weight(0.65f), shape = RoundedCornerShape(10.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = BrightText),
-                                contentPadding = PaddingValues(horizontal = 3.dp, vertical = 2.dp)
-                            ) { Text("Redo", fontSize = 10.sp) }
-                            Button(onClick = { compareBeforeAfter = !compareBeforeAfter; showEnhanced = true },
-                                enabled = previewBitmap != null && selectedStyle != "Original", modifier = Modifier.weight(0.85f),
-                                shape = RoundedCornerShape(10.dp),
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Button(
+                                onClick = { undoEdit() },
+                                enabled = undoHistory.isNotEmpty() && !isExporting,
+                                modifier = Modifier.weight(1f).height(42.dp),
+                                shape = RoundedCornerShape(13.dp),
                                 colors = ButtonDefaults.buttonColors(
-                                    containerColor = if (compareBeforeAfter) Mint else Color(0xFF293333),
-                                    contentColor = if (compareBeforeAfter) Ink else BrightText),
-                                contentPadding = PaddingValues(horizontal = 3.dp, vertical = 2.dp)
-                            ) { Text(if (compareBeforeAfter) "Close compare" else "Compare", fontSize = 10.sp) }
+                                    containerColor = Color(0xFF202828), contentColor = BrightText,
+                                    disabledContainerColor = Color(0xFF171D1D), disabledContentColor = SoftText.copy(alpha = 0.55f)
+                                ),
+                                contentPadding = PaddingValues(horizontal = 8.dp)
+                            ) { Text("↶  Undo", fontSize = 12.sp) }
+                            Button(
+                                onClick = { redoEdit() },
+                                enabled = redoHistory.isNotEmpty() && !isExporting,
+                                modifier = Modifier.weight(1f).height(42.dp),
+                                shape = RoundedCornerShape(13.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = Color(0xFF202828), contentColor = BrightText,
+                                    disabledContainerColor = Color(0xFF171D1D), disabledContentColor = SoftText.copy(alpha = 0.55f)
+                                ),
+                                contentPadding = PaddingValues(horizontal = 8.dp)
+                            ) { Text("↻  Redo", fontSize = 12.sp) }
+                            Button(
+                                onClick = { compareBeforeAfter = !compareBeforeAfter; showEnhanced = true },
+                                enabled = previewBitmap != null && selectedStyle != "Original",
+                                modifier = Modifier.weight(1f).height(42.dp),
+                                shape = RoundedCornerShape(13.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = if (compareBeforeAfter) Mint else Color(0xFF202828),
+                                    contentColor = if (compareBeforeAfter) Ink else BrightText
+                                ),
+                                contentPadding = PaddingValues(horizontal = 8.dp)
+                            ) { Text(if (compareBeforeAfter) "Close compare" else "Compare", fontSize = 11.sp) }
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(top = 7.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
                             Button(
                                 onClick = { showEnhanced = !showEnhanced; compareBeforeAfter = false },
                                 enabled = previewBitmap != null && selectedStyle != "Original",
-                                modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier.weight(1f).height(46.dp),
+                                shape = RoundedCornerShape(14.dp),
                                 colors = ButtonDefaults.buttonColors(
-                                    containerColor = Color(0xFF293333), contentColor = BrightText
+                                    containerColor = Color(0xFF202828), contentColor = BrightText
                                 ),
-                                contentPadding = PaddingValues(horizontal = 6.dp)
-                            ) {
-                                Text(if (showEnhanced) "Show original" else "Show enhanced", fontSize = 12.sp)
-                            }
+                                contentPadding = PaddingValues(horizontal = 8.dp)
+                            ) { Text(if (showEnhanced) "Show original" else "Show edited", fontSize = 12.sp) }
                             Button(
                                 onClick = {
                                     val photo = activePhoto
                                     if (photo != null) exportOne(photo, currentSettings(), selectedStyle == "AI Portrait" || backgroundBlur > 0f || backgroundEnhancement > 0f || subjectBrightness > 0f || darkerAreaLift > 0f || skinSmoothing > 0f || makeupIntensity > 0f)
                                 },
                                 enabled = previewBitmap != null && !isExporting && selectedStyle != "Original",
-                                modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier.weight(1f).height(46.dp),
+                                shape = RoundedCornerShape(14.dp),
                                 colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Ink),
-                                contentPadding = PaddingValues(horizontal = 6.dp)
+                                contentPadding = PaddingValues(horizontal = 8.dp)
                             ) {
-                                Text("Export copy", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                Text("Export edited copy  ↓", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                             }
                         }
                         Spacer(modifier = Modifier.height(12.dp))
@@ -1827,16 +1888,21 @@ private fun PhotoEditorHome() {
                         Text("Short, casual caption ideas based on visual clues. Pick a vibe or edit the wording so it sounds like you.",
                             color = SoftText, fontSize = 10.sp, lineHeight = 14.sp,
                             modifier = Modifier.padding(top = 3.dp, bottom = 6.dp))
-                        Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                            listOf("Auto", "Portrait", "Friends", "Festival", "Celebration", "Romantic", "Funny", "Devotional", "Travel", "Family", "Aesthetic").forEach { theme ->
-                                Button(onClick = {
-                                    captionTheme = theme
-                                    val existing = captionSuggestions
-                                    if (existing != null) applyCaptionSuggestions(existing.detectedLabels.map { it to 0.9f }, captionAspectRatio)
-                                }, contentPadding = PaddingValues(horizontal = 9.dp, vertical = 3.dp),
-                                    colors = ButtonDefaults.buttonColors(containerColor = if (captionTheme == theme) Mint else Color(0xFF293333), contentColor = if (captionTheme == theme) Ink else BrightText)) {
-                                    Text(theme, fontSize = 10.sp)
-                                }
+                        Row(
+                            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            listOf("Auto", "Portrait", "Friends", "Festival", "Celebration", "Romantic", "Funny", "Devotional", "Travel", "Family", "Banglish", "Aesthetic").forEach { theme ->
+                                EditorChip(
+                                    label = theme,
+                                    selected = captionTheme == theme,
+                                    compact = true,
+                                    onClick = {
+                                        captionTheme = theme
+                                        val existing = captionSuggestions
+                                        if (existing != null) applyCaptionSuggestions(existing.detectedLabels.map { it to 0.9f }, captionAspectRatio)
+                                    }
+                                )
                             }
                         }
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -1864,9 +1930,27 @@ private fun PhotoEditorHome() {
                         if (captionSuggestions != null) {
                             val detected = captionSuggestions?.detectedLabels.orEmpty()
                             if (detected.isNotEmpty()) {
-                                Text("Visual clues: " + detected.joinToString(" · "),
-                                    color = SoftText, fontSize = 10.sp,
-                                    modifier = Modifier.padding(top = 4.dp, bottom = 3.dp))
+                                Text("VISUAL CLUES  ·  " + detected.take(5).joinToString("  ·  "),
+                                    color = SoftText, fontSize = 9.sp, lineHeight = 13.sp,
+                                    modifier = Modifier.padding(top = 7.dp, bottom = 3.dp))
+                            }
+                            Row(
+                                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())
+                                    .padding(top = 3.dp, bottom = 4.dp),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                captionSuggestions?.english.orEmpty().forEachIndexed { index, suggestion ->
+                                    EditorChip(
+                                        label = if (suggestion.length > 27) suggestion.take(26) + "…" else suggestion,
+                                        selected = captionIndex == index,
+                                        compact = true,
+                                        onClick = {
+                                            captionIndex = index
+                                            captionEnglish = suggestion
+                                            captionBengali = captionSuggestions?.bengali?.getOrNull(index).orEmpty()
+                                        }
+                                    )
+                                }
                             }
                             OutlinedTextField(value = captionEnglish, onValueChange = { captionEnglish = it },
                                 modifier = Modifier.fillMaxWidth().padding(top = 5.dp),
@@ -2563,3 +2647,40 @@ private fun PhotoEditorHome() {
         }
     }
 }
+
+@Composable
+private fun EditorChip(
+    label: String,
+    selected: Boolean,
+    compact: Boolean = false,
+    onClick: () -> Unit
+) {
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(if (compact) 11.dp else 14.dp),
+        color = if (selected) Mint else Color(0xFF202727),
+        contentColor = if (selected) Ink else BrightText,
+        border = BorderStroke(
+            1.dp,
+            if (selected) Mint else Color(0xFF34403E)
+        ),
+        tonalElevation = 0.dp,
+        shadowElevation = 0.dp
+    ) {
+        Box(
+            modifier = Modifier.padding(
+                horizontal = if (compact) 11.dp else 15.dp,
+                vertical = if (compact) 8.dp else 11.dp
+            ),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                label,
+                fontSize = if (compact) 10.sp else 11.sp,
+                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                maxLines = 1
+            )
+        }
+    }
+}
+

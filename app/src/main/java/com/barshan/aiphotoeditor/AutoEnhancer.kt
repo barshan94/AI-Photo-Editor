@@ -163,10 +163,22 @@ object AutoEnhancer {
                 w * (1f - brx), h * (1f - bry),
                 w * blx, h * (1f - bly)
             )
-            val topWidth = kotlin.math.hypot(sourceCorners[2] - sourceCorners[0], sourceCorners[3] - sourceCorners[1])
-            val bottomWidth = kotlin.math.hypot(sourceCorners[4] - sourceCorners[6], sourceCorners[5] - sourceCorners[7])
-            val leftHeight = kotlin.math.hypot(sourceCorners[6] - sourceCorners[0], sourceCorners[7] - sourceCorners[1])
-            val rightHeight = kotlin.math.hypot(sourceCorners[4] - sourceCorners[2], sourceCorners[5] - sourceCorners[3])
+            val topWidth = kotlin.math.hypot(
+                (sourceCorners[2] - sourceCorners[0]).toDouble(),
+                (sourceCorners[3] - sourceCorners[1]).toDouble()
+            ).toFloat()
+            val bottomWidth = kotlin.math.hypot(
+                (sourceCorners[4] - sourceCorners[6]).toDouble(),
+                (sourceCorners[5] - sourceCorners[7]).toDouble()
+            ).toFloat()
+            val leftHeight = kotlin.math.hypot(
+                (sourceCorners[6] - sourceCorners[0]).toDouble(),
+                (sourceCorners[7] - sourceCorners[1]).toDouble()
+            ).toFloat()
+            val rightHeight = kotlin.math.hypot(
+                (sourceCorners[4] - sourceCorners[2]).toDouble(),
+                (sourceCorners[5] - sourceCorners[3]).toDouble()
+            ).toFloat()
             val outWidth = ((topWidth + bottomWidth) / 2f).toInt().coerceIn(2, transformed.width)
             val outHeight = ((leftHeight + rightHeight) / 2f).toInt().coerceIn(2, transformed.height)
             val destinationCorners = floatArrayOf(

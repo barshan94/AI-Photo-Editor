@@ -58,6 +58,14 @@ class CaptionSuggestionEngineTest {
     }
 
     @Test
+    fun banglishKeepsBijoyaContextWhenThePhotoHasSpecificPujaClues() {
+        val result = CaptionSuggestionEngine.fromLabels(
+            listOf("durga" to 0.96f, "sindoor" to 0.89f), 1f, theme = "Banglish"
+        )
+        assertTrue(result.english.any { it.contains("Shubho Bijoya") })
+    }
+
+    @Test
     fun singlePersonGetsCasualPortraitCaptionsInsteadOfFamilyCaptions() {
         val result = CaptionSuggestionEngine.fromLabels(listOf("person" to 0.95f, "people" to 0.62f), 0.8f)
         assertTrue(result.english.any { it.contains("Felt cute") })

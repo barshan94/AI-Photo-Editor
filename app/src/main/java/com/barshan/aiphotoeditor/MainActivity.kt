@@ -47,6 +47,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
@@ -79,7 +80,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.input.pointer.pointerInput
+import com.google.mlkit.vision.common.InputImage
+import com.google.mlkit.vision.label.ImageLabeling
+import com.google.mlkit.vision.label.defaults.ImageLabelerOptions
 import coil.compose.AsyncImage
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -130,9 +136,21 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun PhotoEditorHome() {
     val context = LocalContext.current
+    val clipboardManager = LocalClipboardManager.current
     val scope = rememberCoroutineScope()
+    val recoveryPrefs = remember {
+        context.getSharedPreferences("frame_ai_recovery", android.content.Context.MODE_PRIVATE)
+    }
     var learnedProfile by remember { mutableStateOf(PersonalEditLearning.load(context)) }
-    val selectedPhotos = remember { mutableStateListOf<PhotoItem>() }
+    val recoveredUris = remember {
+        recoveryPrefs.getString("selected_photo_uris", "").orEmpty()
+            .split("\\n").filter { it.isNotBlank() }.mapNotNull {
+                try { Uri.parse(it) } catch (_: Exception) { null }
+            }
+    }
+    val selectedPhotos = remember {
+        mutableStateListOf<PhotoItem>().apply { recoveredUris.forEach { add(PhotoItem(uri = it)) } }
+    }
     var isAnalyzing by remember { mutableStateOf(false) }
     var analysisProgress by remember { mutableIntStateOf(0) }
     var isExporting by remember { mutableStateOf(false) }
@@ -147,7 +165,9 @@ private fun PhotoEditorHome() {
     var batchPreviewFormats by remember { mutableStateOf<Map<Uri, List<String>>>(emptyMap()) }
     var isPreparingBatchPreview by remember { mutableStateOf(false) }
     var batchPreviewProgress by remember { mutableIntStateOf(0) }
-    var activePhoto by remember { mutableStateOf<PhotoItem?>(null) }
+    var activePhoto by remember {
+        mutableStateOf(selectedPhotos.firstOrNull { it.uri.toString() == recoveryPrefs.getString("active_photo_uri", null) })
+    }
     var showBurstComparison by remember { mutableStateOf(false) }
     var showBurstGroupPicker by remember { mutableStateOf(false) }
     var gridFilter by remember { mutableStateOf("All") }
@@ -165,10 +185,10 @@ private fun PhotoEditorHome() {
     var showCropGuides by remember { mutableStateOf(true) }
     val undoHistory = remember { mutableStateListOf<EditSettings>() }
     val redoHistory = remember { mutableStateListOf<EditSettings>() }
-    var brightness by remember { mutableFloatStateOf(0f) }
-    var contrast by remember { mutableFloatStateOf(1.07f) }
-    var saturation by remember { mutableFloatStateOf(1.06f) }
-    var warmth by remember { mutableFloatStateOf(0f) }
+    var brightness by remember { mutableFloatStateOf(recoveryPrefs.getFloat("brightness", 0f)) }
+    var contrast by remember { mutableFloatStateOf(recoveryPrefs.getFloat("contrast", 1.07f)) }
+    var saturation by remember { mutableFloatStateOf(recoveryPrefs.getFloat("saturation", 1.06f)) }
+    var warmth by remember { mutableFloatStateOf(recoveryPrefs.getFloat("warmth", 0f)) }
     var backgroundBlur by remember { mutableFloatStateOf(0f) }
     var backgroundEnhancement by remember { mutableFloatStateOf(0f) }
     var subjectBrightness by remember { mutableFloatStateOf(0f) }
@@ -179,10 +199,10 @@ private fun PhotoEditorHome() {
     var removalBrushSize by remember { mutableFloatStateOf(24f) }
     val removalStrokes = remember { mutableStateListOf<List<Offset>>() }
     var currentRemovalStroke by remember { mutableStateOf<List<Offset>>(emptyList()) }
-    var cropLabel by remember { mutableStateOf("Original") }
-    var cropOffsetX by remember { mutableFloatStateOf(0f) }
-    var cropOffsetY by remember { mutableFloatStateOf(0f) }
-    var selectedStyle by remember { mutableStateOf("Auto") }
+    var cropLabel by remember { mutableStateOf(recoveryPrefs.getString("crop_label", "Original") ?: "Original") }
+    var cropOffsetX by remember { mutableFloatStateOf(recoveryPrefs.getFloat("crop_offset_x", 0f)) }
+    var cropOffsetY by remember { mutableFloatStateOf(recoveryPrefs.getFloat("crop_offset_y", 0f)) }
+    var selectedStyle by remember { mutableStateOf(recoveryPrefs.getString("selected_style", "Auto") ?: "Auto") }
     var activeEditorPanel by remember { mutableStateOf("Universal Edit") }
     var activeAiSubpanel by remember { mutableStateOf("Subject") }
     var editedScore by remember { mutableStateOf<PhotoQualityScoring.Score?>(null) }
@@ -191,6 +211,100 @@ private fun PhotoEditorHome() {
     var statusMessage by remember { mutableStateOf("Choose photos to begin. Analysis and edits run on this device.") }
     var photoAnalysisResult by remember { mutableStateOf<PhotoAnalysisResult?>(null) }
     var isRunningPhotoAnalysis by remember { mutableStateOf(false) }
+
+    var captionSuggestions by remember { mutableStateOf<CaptionSuggestionEngine.Suggestions?>(null) }
+    var captionEnglish by remember { mutableStateOf("") }
+    var captionBengali by remember { mutableStateOf("") }
+    var captionIndex by remember { mutableIntStateOf(0) }
+    var isGeneratingCaptions by remember { mutableStateOf(false) }
+
+    fun applyCaptionSuggestions(labels: List<Pair<String, Float>>, ratio: Float) {
+        val suggestions = CaptionSuggestionEngine.fromLabels(labels, ratio)
+        captionSuggestions = suggestions
+        captionIndex = 0
+        captionEnglish = suggestions.english.first()
+        captionBengali = suggestions.bengali.first()
+        isGeneratingCaptions = false
+    }
+
+    fun suggestCaptions() {
+        val bitmap = previewBitmap
+        if (bitmap == null || bitmap.isRecycled) {
+            statusMessage = "Prepare a photo preview before suggesting captions."
+            return
+        }
+        isGeneratingCaptions = true
+        statusMessage = "Looking for visual clues on this device…"
+        val bitmapForLabels = try { bitmap.copy(Bitmap.Config.ARGB_8888, false) } catch (_: Exception) { null }
+        if (bitmapForLabels == null) {
+            isGeneratingCaptions = false
+            statusMessage = "Could not prepare this photo for caption analysis."
+            return
+        }
+        val labeler = ImageLabeling.getClient(ImageLabelerOptions.DEFAULT_OPTIONS)
+        val ratio = bitmapForLabels.width.toFloat() / bitmapForLabels.height.coerceAtLeast(1).toFloat()
+        try {
+            labeler.process(InputImage.fromBitmap(bitmapForLabels, 0))
+                .addOnSuccessListener { labels ->
+                    applyCaptionSuggestions(labels.map { it.text to it.confidence }, ratio)
+                    statusMessage = if (labels.isEmpty()) {
+                        "No clear visual labels found. Neutral caption starters are ready to edit."
+                    } else {
+                        "Caption starters based on on-device visual labels. Review them before sharing."
+                    }
+                    labeler.close()
+                    if (!bitmapForLabels.isRecycled) bitmapForLabels.recycle()
+                }
+                .addOnFailureListener {
+                    applyCaptionSuggestions(emptyList(), ratio)
+                    statusMessage = "Image labels were unavailable; neutral caption starters are ready."
+                    labeler.close()
+                    if (!bitmapForLabels.isRecycled) bitmapForLabels.recycle()
+                }
+        } catch (_: Exception) {
+            applyCaptionSuggestions(emptyList(), ratio)
+            statusMessage = "Could not analyze visual labels. Neutral caption starters are ready."
+            labeler.close()
+            if (!bitmapForLabels.isRecycled) bitmapForLabels.recycle()
+        }
+    }
+
+    // Restore technical scores for photos recovered after process death.
+    LaunchedEffect(Unit) {
+        val photosNeedingScores = selectedPhotos.filter { it.score == null }.map { it.uri }
+        for (uri in photosNeedingScores) {
+            try {
+                val result = withContext(Dispatchers.Default) {
+                    PhotoQualityAnalyzer.analyze(context.contentResolver, uri)
+                }
+                val position = selectedPhotos.indexOfFirst { it.uri == uri }
+                if (position >= 0 && selectedPhotos[position].score == null) {
+                    selectedPhotos[position] = selectedPhotos[position].copy(
+                        score = result.score, sharpness = result.sharpness,
+                        exposure = result.exposure, contrast = result.contrast, note = result.note
+                    )
+                    if (activePhoto?.uri == uri) activePhoto = selectedPhotos[position]
+                }
+            } catch (_: Exception) {
+                statusMessage = "Some recovered photos could not be reopened. Re-select those photos to continue."
+            }
+        }
+        if (photosNeedingScores.isNotEmpty()) statusMessage = "Recovered your previous photo selection and edit settings."
+    }
+
+    LaunchedEffect(
+        selectedPhotos.map { it.uri.toString() }, activePhoto?.uri?.toString(),
+        brightness, contrast, saturation, warmth, cropLabel, cropOffsetX, cropOffsetY, selectedStyle
+    ) {
+        recoveryPrefs.edit()
+            .putString("selected_photo_uris", selectedPhotos.joinToString("\\n") { it.uri.toString() })
+            .putString("active_photo_uri", activePhoto?.uri?.toString())
+            .putFloat("brightness", brightness).putFloat("contrast", contrast)
+            .putFloat("saturation", saturation).putFloat("warmth", warmth)
+            .putString("crop_label", cropLabel).putFloat("crop_offset_x", cropOffsetX)
+            .putFloat("crop_offset_y", cropOffsetY).putString("selected_style", selectedStyle)
+            .apply()
+    }
 
     val previewTransformState = rememberTransformableState { zoomChange, panChange, _ ->
         val nextScale = (previewScale * zoomChange).coerceIn(1f, 5f)
@@ -1554,6 +1668,60 @@ private fun PhotoEditorHome() {
                                 Text(if (showCropGuides) "Guides on" else "Guides off", color = Mint, fontSize = 10.sp,
                                     modifier = Modifier.clickable { showCropGuides = !showCropGuides }.padding(4.dp))
                             }
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text("BILINGUAL CAPTION STARTERS", color = BrightText, fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold)
+                        Text("Uses on-device image labels for ideas. Review every suggestion; it may misread a scene.",
+                            color = SoftText, fontSize = 10.sp, lineHeight = 14.sp,
+                            modifier = Modifier.padding(top = 3.dp, bottom = 6.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Button(onClick = { suggestCaptions() }, enabled = previewBitmap != null && !isGeneratingCaptions,
+                                shape = RoundedCornerShape(10.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Ink),
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+                            ) { Text(if (isGeneratingCaptions) "Analyzing…" else "Suggest captions", fontSize = 10.sp) }
+                            Button(
+                                onClick = {
+                                    val suggestions = captionSuggestions
+                                    if (suggestions != null) {
+                                        captionIndex = (captionIndex + 1) % suggestions.english.size
+                                        captionEnglish = suggestions.english[captionIndex]
+                                        captionBengali = suggestions.bengali[captionIndex]
+                                    } else suggestCaptions()
+                                },
+                                enabled = captionSuggestions != null && !isGeneratingCaptions,
+                                shape = RoundedCornerShape(10.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = BrightText),
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+                            ) { Text("Regenerate", fontSize = 10.sp) }
+                        }
+                        if (captionSuggestions != null) {
+                            val detected = captionSuggestions?.detectedLabels.orEmpty()
+                            if (detected.isNotEmpty()) {
+                                Text("Visual clues: " + detected.joinToString(" · "),
+                                    color = SoftText, fontSize = 10.sp,
+                                    modifier = Modifier.padding(top = 4.dp, bottom = 3.dp))
+                            }
+                            OutlinedTextField(value = captionEnglish, onValueChange = { captionEnglish = it },
+                                modifier = Modifier.fillMaxWidth().padding(top = 5.dp),
+                                label = { Text("English caption") }, minLines = 2, maxLines = 4)
+                            OutlinedTextField(value = captionBengali, onValueChange = { captionBengali = it },
+                                modifier = Modifier.fillMaxWidth().padding(top = 5.dp),
+                                label = { Text("বাংলা ক্যাপশন") }, minLines = 2, maxLines = 4)
+                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Button(onClick = { clipboardManager.setText(AnnotatedString(captionEnglish)) },
+                                    shape = RoundedCornerShape(10.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = BrightText),
+                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+                                ) { Text("Copy English", fontSize = 10.sp) }
+                                Button(onClick = { clipboardManager.setText(AnnotatedString(captionBengali)) },
+                                    shape = RoundedCornerShape(10.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = BrightText),
+                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+                                ) { Text("Copy বাংলা", fontSize = 10.sp) }
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(10.dp))
                         Text("BRIGHTNESS  " + brightness.toInt(), color = SoftText, fontSize = 11.sp)
                         Slider(value = brightness, onValueChange = {
                             recordEditChange()

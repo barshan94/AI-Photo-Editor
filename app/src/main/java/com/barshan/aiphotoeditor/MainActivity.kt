@@ -1092,7 +1092,12 @@ private fun PhotoEditorHome() {
             // dedicated workspace below it can scroll independently. An outer
             // verticalScroll here gives the nested weighted workspace unbounded
             // height and can make the editing controls appear to disappear.
-            modifier = Modifier.fillMaxSize().padding(horizontal = 18.dp, vertical = 14.dp)
+            modifier = Modifier.fillMaxSize()
+                // The home/gallery content must scroll on short phone screens.
+                // Keep the editor itself bounded because its preview and tool
+                // workspace use weighted layout and their own internal scrolling.
+                .then(if (activePhoto == null) Modifier.verticalScroll(rememberScrollState()) else Modifier)
+                .padding(horizontal = 18.dp, vertical = 14.dp)
         ) {
             if (activePhoto == null) {
             Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {

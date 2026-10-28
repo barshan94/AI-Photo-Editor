@@ -2037,7 +2037,6 @@ private fun PhotoEditorHome() {
                                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = BrightText)
                                 ) { Text("+", fontSize = 20.sp) }
                             }
-                        }
                         Spacer(modifier = Modifier.height(4.dp))
                         if (cropLabel != "Original") {
                             Text("CROP HORIZONTAL  " + (cropOffsetX * 100).toInt() + "%", color = SoftText, fontSize = 11.sp)

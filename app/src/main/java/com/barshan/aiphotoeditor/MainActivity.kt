@@ -1772,8 +1772,20 @@ private fun PhotoEditorHome() {
                             }
                             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                 if (showPerspectiveControls) {
-                                Button(onClick = { recordEditChange(); perspectiveTopLeftX = 0f; perspectiveTopLeftY = 0f; perspectiveTopRightX = 0f; perspectiveTopRightY = 0f; perspectiveBottomRightX = 0f; perspectiveBottomRightY = 0f; perspectiveBottomLeftX = 0f; perspectiveBottomLeftY = 0f; selectedStyle = "Custom"; showEnhanced = true }, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 5.dp, vertical = 5.dp), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = BrightText)) { Text("Reset corners", fontSize = 10.sp) }
-                                } perspectiveTopLeftY = 0f; perspectiveTopRightX = 0f; perspectiveTopRightY = 0f; perspectiveBottomRightX = 0f; perspectiveBottomRightY = 0f; perspectiveBottomLeftX = 0f; perspectiveBottomLeftY = 0f; selectedStyle = "Custom"; showEnhanced = true }, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 5.dp, vertical = 5.dp), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = BrightText)) { Text("Reset corners", fontSize = 10.sp) }
+                                    Button(
+                                        onClick = {
+                                            recordEditChange()
+                                            perspectiveTopLeftX = 0f; perspectiveTopLeftY = 0f
+                                            perspectiveTopRightX = 0f; perspectiveTopRightY = 0f
+                                            perspectiveBottomRightX = 0f; perspectiveBottomRightY = 0f
+                                            perspectiveBottomLeftX = 0f; perspectiveBottomLeftY = 0f
+                                            selectedStyle = "Custom"; showEnhanced = true
+                                        },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 5.dp),
+                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = BrightText)
+                                    ) { Text("Reset corners", fontSize = 10.sp) }
+                                }
                             }
                             if (showPerspectiveControls) {
                                 Text("TOP-LEFT CORNER", color = Mint, fontSize = 10.sp, fontWeight = FontWeight.Bold)

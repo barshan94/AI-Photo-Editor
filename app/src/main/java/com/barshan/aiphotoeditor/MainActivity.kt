@@ -1,5 +1,6 @@
 package com.barshan.aiphotoeditor
 
+import android.content.ClipData
 import android.content.Intent
 import android.graphics.Bitmap
 import android.net.Uri
@@ -156,6 +157,7 @@ private fun PhotoEditorHome() {
     var isAnalyzing by remember { mutableStateOf(false) }
     var analysisProgress by remember { mutableIntStateOf(0) }
     var isExporting by remember { mutableStateOf(false) }
+    var lastExportedUri by remember { mutableStateOf<Uri?>(recoveryPrefs.getString("last_exported_uri", null)?.let { Uri.parse(it) }) }
     var exportProgress by remember { mutableIntStateOf(0) }
     var operationProgress by remember { mutableIntStateOf(0) }
     var operationStage by remember { mutableStateOf("Ready") }
@@ -1014,7 +1016,41 @@ private fun PhotoEditorHome() {
         }
     }
 
-    fun exportOne(photo: PhotoItem, settings: EditSettings, useAiPortrait: Boolean = false, useAiUpscale: Boolean = false) {
+    fun shareImage(uri: Uri, caption: String? = null) {
+        try {
+            val sendIntent = Intent(Intent.ACTION_SEND).apply {
+                type = if (caption.isNullOrBlank()) "image/jpeg" else "text/plain"
+                if (caption.isNullOrBlank()) {
+                    putExtra(Intent.EXTRA_STREAM, uri)
+                    clipData = ClipData.newUri(context.contentResolver, "Edited photo", uri)
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                } else {
+                    putExtra(Intent.EXTRA_TEXT, caption)
+                }
+            }
+            context.startActivity(Intent.createChooser(sendIntent, if (caption.isNullOrBlank()) "Share edited photo" else "Share caption"))
+        } catch (error: Exception) {
+            statusMessage = "Could not open sharing options: " + (error.message ?: "unknown error")
+        }
+    }
+
+    fun shareCaptionOnly(caption: String) {
+        if (caption.isBlank()) {
+            statusMessage = "Choose or write a caption first."
+            return
+        }
+        try {
+            val sendIntent = Intent(Intent.ACTION_SEND).apply {
+                type = "text/plain"
+                putExtra(Intent.EXTRA_TEXT, caption)
+            }
+            context.startActivity(Intent.createChooser(sendIntent, "Share this caption only"))
+        } catch (error: Exception) {
+            statusMessage = "Could not open caption sharing: " + (error.message ?: "unknown error")
+        }
+    }
+
+    fun exportOne(photo: PhotoItem, settings: EditSettings, useAiPortrait: Boolean = false, useAiUpscale: Boolean = false, shareAfterExport: Boolean = false) {
         if (isExporting) return
         isExporting = true
         operationProgress = 2
@@ -1077,9 +1113,12 @@ private fun PhotoEditorHome() {
                 operationStage = "Saving edited copy to Pictures/FRAME AI"
                 val width = enhanced!!.width
                 val height = enhanced!!.height
-                withContext(Dispatchers.IO) {
+                val savedUri = withContext(Dispatchers.IO) {
                     AutoEnhancer.saveJpeg(context.contentResolver, enhanced!!)
                 }
+                lastExportedUri = savedUri
+                recoveryPrefs.edit().putString("last_exported_uri", savedUri.toString()).apply()
+                if (shareAfterExport) shareImage(savedUri)
                 learnedProfile = PersonalEditLearning.recordAccepted(context, settings)
                 operationProgress = 100
                 operationStage = "Finished · original photo preserved"

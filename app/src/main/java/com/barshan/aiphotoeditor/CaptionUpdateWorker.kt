@@ -13,7 +13,7 @@ import java.net.URL
 /** Downloads a versioned caption pack on Wi-Fi and preserves the last good copy on failure. */
 class CaptionUpdateWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result {
-        if (!isWifiConnected()) return Result.retry()
+        if (!isWifiConnected()) return Result.success()
         return try {
             val connection = (URL(PACK_URL).openConnection() as HttpURLConnection).apply {
                 connectTimeout = 12_000

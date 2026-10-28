@@ -228,13 +228,14 @@ private fun PhotoEditorHome() {
     var showEnhanced by remember { mutableStateOf(recoveryPrefs.getBoolean("show_enhanced", true)) }
     var compareBeforeAfter by remember { mutableStateOf(false) }
     var comparePosition by remember { mutableFloatStateOf(0.5f) }
-    var showCropGuides by remember { mutableStateOf(recoveryPrefs.getBoolean("show_crop_guides", true)) }
+    var showCropGuides by remember { mutableStateOf(true) }
     val undoHistory = remember { mutableStateListOf<EditSettings>() }
     val redoHistory = remember { mutableStateListOf<EditSettings>() }
     var brightness by remember { mutableFloatStateOf(recoveryPrefs.getFloat("brightness", 0f)) }
     var contrast by remember { mutableFloatStateOf(recoveryPrefs.getFloat("contrast", 1.07f)) }
     var saturation by remember { mutableFloatStateOf(recoveryPrefs.getFloat("saturation", 1.06f)) }
     var warmth by remember { mutableFloatStateOf(recoveryPrefs.getFloat("warmth", 0f)) }
+    var activeAdjustment by remember { mutableStateOf("Brightness") }
     var backgroundBlur by remember { mutableFloatStateOf(recoveryPrefs.getFloat("background_blur", 0f)) }
     var backgroundEnhancement by remember { mutableFloatStateOf(recoveryPrefs.getFloat("background_enhancement", 0f)) }
     var subjectBrightness by remember { mutableFloatStateOf(recoveryPrefs.getFloat("subject_brightness", 0f)) }
@@ -435,7 +436,7 @@ private fun PhotoEditorHome() {
             .putFloat("perspective_tr_x", perspectiveTopRightX).putFloat("perspective_tr_y", perspectiveTopRightY)
             .putFloat("perspective_br_x", perspectiveBottomRightX).putFloat("perspective_br_y", perspectiveBottomRightY)
             .putFloat("perspective_bl_x", perspectiveBottomLeftX).putFloat("perspective_bl_y", perspectiveBottomLeftY)
-            .putBoolean("show_enhanced", showEnhanced).putBoolean("show_crop_guides", showCropGuides)
+            .putBoolean("show_enhanced", showEnhanced)
             .putBoolean("show_perspective_controls", showPerspectiveControls)
             .putBoolean("removal_brush_mode", removalBrushMode).putFloat("removal_brush_size", removalBrushSize)
             .putString("removal_strokes", (removalStrokes.toList() + listOf(currentRemovalStroke).filter { it.isNotEmpty() })
@@ -1459,6 +1460,35 @@ private fun PhotoEditorHome() {
                                     }
                                 }
                             }
+                            if (activePhoto != null && selectedPhotos.size > 1) {
+                                val photoIndex = selectedPhotos.indexOfFirst { it.uri == activePhoto?.uri }
+                                Box(
+                                    modifier = Modifier.align(Alignment.CenterStart)
+                                        .padding(start = 6.dp).size(width = 38.dp, height = 52.dp)
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(Ink.copy(alpha = 0.72f))
+                                        .clickable(enabled = photoIndex > 0 && !isExporting) {
+                                            if (photoIndex > 0) openEditor(selectedPhotos[photoIndex - 1])
+                                        },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text("‹", color = if (photoIndex > 0) BrightText else SoftText.copy(alpha = 0.35f),
+                                        fontSize = 34.sp, lineHeight = 36.sp, fontWeight = FontWeight.Light)
+                                }
+                                Box(
+                                    modifier = Modifier.align(Alignment.CenterEnd)
+                                        .padding(end = 6.dp).size(width = 38.dp, height = 52.dp)
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(Ink.copy(alpha = 0.72f))
+                                        .clickable(enabled = photoIndex in 0 until selectedPhotos.lastIndex && !isExporting) {
+                                            if (photoIndex in 0 until selectedPhotos.lastIndex) openEditor(selectedPhotos[photoIndex + 1])
+                                        },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text("›", color = if (photoIndex in 0 until selectedPhotos.lastIndex) BrightText else SoftText.copy(alpha = 0.35f),
+                                        fontSize = 34.sp, lineHeight = 36.sp, fontWeight = FontWeight.Light)
+                                }
+                            }
                             if (isPreparingPreview) CircularProgressIndicator(color = Mint)
                             if (isExporting) {
                                 Box(
@@ -1518,7 +1548,6 @@ private fun PhotoEditorHome() {
                         Column(
                             modifier = Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState())
                         ) {
-                            Text("EDIT WORKSPACE", color = Mint, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                             Row(
                                 modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                                 horizontalArrangement = Arrangement.spacedBy(5.dp),
@@ -1544,7 +1573,6 @@ private fun PhotoEditorHome() {
                                     }
                                 }
                             }
-                            Text("Choose one AI editing group at a time to keep the workspace focused.", color = SoftText, fontSize = 10.sp, lineHeight = 14.sp)
                             if (activeEditorPanel == "AI Edit") {
                                 Row(
                                     modifier = Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 8.dp),
@@ -1847,43 +1875,7 @@ private fun PhotoEditorHome() {
                             }
 
                         }
-                        val activeIndex = selectedPhotos.indexOfFirst { it.uri == activePhoto?.uri }
-                        Row(
-                            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Button(
-                                onClick = {
-                                    if (activeIndex > 0) openEditor(selectedPhotos[activeIndex - 1])
-                                },
-                                enabled = activeIndex > 0 && !isExporting,
-                                modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(10.dp),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = Color(0xFF293333), contentColor = BrightText
-                                ),
-                                contentPadding = PaddingValues(horizontal = 5.dp)
-                            ) { Text("← Previous", fontSize = 11.sp) }
-                            Text(
-                                if (activeIndex >= 0) "${activeIndex + 1} / ${selectedPhotos.size}" else "",
-                                color = SoftText, fontSize = 11.sp,
-                                modifier = Modifier.align(Alignment.CenterVertically)
-                            )
-                            Button(
-                                onClick = {
-                                    if (activeIndex >= 0 && activeIndex < selectedPhotos.lastIndex) {
-                                        openEditor(selectedPhotos[activeIndex + 1])
-                                    }
-                                },
-                                enabled = activeIndex >= 0 && activeIndex < selectedPhotos.lastIndex && !isExporting,
-                                modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(10.dp),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = Color(0xFF293333), contentColor = BrightText
-                                ),
-                                contentPadding = PaddingValues(horizontal = 5.dp)
-                            ) { Text("Next →", fontSize = 11.sp) }
-                        }
+                        Spacer(modifier = Modifier.height(8.dp))
                         Spacer(modifier = Modifier.height(12.dp))
                         if (activeEditorPanel == "AI Edit" && activeAiSubpanel == "Enhance") {
                         Button(
@@ -1942,46 +1934,110 @@ private fun PhotoEditorHome() {
                         }
                         }
                         if (activeEditorPanel == "Universal Edit") {
-                            Text("UNIVERSAL EDIT · STANDARD CONTROLS", color = Mint, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                            Text("Brightness, contrast, saturation, warmth, and crop apply alongside any active AI adjustment.", color = SoftText, fontSize = 10.sp, lineHeight = 14.sp)
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text("MANUAL ADJUSTMENTS", color = BrightText, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                Spacer(modifier = Modifier.weight(1f))
-                                Text(if (showCropGuides) "Guides on" else "Guides off", color = Mint, fontSize = 10.sp,
-                                    modifier = Modifier.clickable { showCropGuides = !showCropGuides }.padding(4.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(5.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                listOf("Brightness", "Saturation", "Contrast", "Warmth").forEach { adjustment ->
+                                    Button(
+                                        onClick = { activeAdjustment = adjustment },
+                                        modifier = Modifier.weight(1f).heightIn(min = 38.dp),
+                                        shape = RoundedCornerShape(9.dp),
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = if (activeAdjustment == adjustment) Mint else Color(0xFF293333),
+                                            contentColor = if (activeAdjustment == adjustment) Ink else BrightText
+                                        ),
+                                        contentPadding = PaddingValues(horizontal = 2.dp, vertical = 4.dp)
+                                    ) {
+                                        Text(adjustment, fontSize = 9.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                                    }
+                                }
                             }
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Spacer(modifier = Modifier.height(10.dp))
-                        Text("BRIGHTNESS  " + brightness.toInt(), color = SoftText, fontSize = 11.sp)
-                        Slider(value = brightness, onValueChange = {
-                            recordEditChange()
-                            brightness = it
-                            selectedStyle = "Custom"
-                            showEnhanced = true
-                        }, valueRange = -25f..25f)
-                        Text("CONTRAST  " + String.format(java.util.Locale.US, "%.2f", contrast),
-                            color = SoftText, fontSize = 11.sp)
-                        Slider(value = contrast, onValueChange = {
-                            recordEditChange()
-                            contrast = it
-                            selectedStyle = "Custom"
-                            showEnhanced = true
-                        }, valueRange = 0.75f..1.40f)
-                        Text("SATURATION  " + String.format(java.util.Locale.US, "%.2f", saturation),
-                            color = SoftText, fontSize = 11.sp)
-                        Slider(value = saturation, onValueChange = {
-                            recordEditChange()
-                            saturation = it
-                            selectedStyle = "Custom"
-                            showEnhanced = true
-                        }, valueRange = 0f..1.65f)
-                        Text("WARMTH  " + warmth.toInt(), color = SoftText, fontSize = 11.sp)
-                        Slider(value = warmth, onValueChange = {
-                            recordEditChange()
-                            warmth = it
-                            selectedStyle = "Custom"
-                            showEnhanced = true
-                        }, valueRange = -24f..24f)
+                            val adjustmentValue = when (activeAdjustment) {
+                                "Brightness" -> brightness
+                                "Saturation" -> saturation
+                                "Contrast" -> contrast
+                                else -> warmth
+                            }
+                            val adjustmentRange = when (activeAdjustment) {
+                                "Brightness" -> -25f..25f
+                                "Saturation" -> 0f..1.65f
+                                "Contrast" -> 0.75f..1.40f
+                                else -> -24f..24f
+                            }
+                            val adjustmentStep = when (activeAdjustment) {
+                                "Brightness", "Warmth" -> 0.5f
+                                else -> 0.01f
+                            }
+                            val adjustmentLabel = when (activeAdjustment) {
+                                "Brightness", "Warmth" -> String.format(java.util.Locale.US, "%.1f", adjustmentValue)
+                                else -> String.format(java.util.Locale.US, "%.2f", adjustmentValue)
+                            }
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Button(
+                                    onClick = {
+                                        recordEditChange()
+                                        val value = (adjustmentValue - adjustmentStep).coerceIn(adjustmentRange.start, adjustmentRange.endInclusive)
+                                        when (activeAdjustment) {
+                                            "Brightness" -> brightness = value
+                                            "Saturation" -> saturation = value
+                                            "Contrast" -> contrast = value
+                                            else -> warmth = value
+                                        }
+                                        selectedStyle = "Custom"
+                                        showEnhanced = true
+                                    },
+                                    enabled = adjustmentValue > adjustmentRange.start && !isExporting,
+                                    modifier = Modifier.size(width = 38.dp, height = 36.dp),
+                                    shape = RoundedCornerShape(9.dp),
+                                    contentPadding = PaddingValues(0.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = BrightText)
+                                ) { Text("−", fontSize = 20.sp) }
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text("$activeAdjustment  ·  $adjustmentLabel", color = SoftText, fontSize = 11.sp)
+                                    Slider(
+                                        value = adjustmentValue,
+                                        onValueChange = { newValue ->
+                                            recordEditChange()
+                                            when (activeAdjustment) {
+                                                "Brightness" -> brightness = newValue
+                                                "Saturation" -> saturation = newValue
+                                                "Contrast" -> contrast = newValue
+                                                else -> warmth = newValue
+                                            }
+                                            selectedStyle = "Custom"
+                                            showEnhanced = true
+                                        },
+                                        valueRange = adjustmentRange,
+                                        enabled = !isExporting
+                                    )
+                                }
+                                Button(
+                                    onClick = {
+                                        recordEditChange()
+                                        val value = (adjustmentValue + adjustmentStep).coerceIn(adjustmentRange.start, adjustmentRange.endInclusive)
+                                        when (activeAdjustment) {
+                                            "Brightness" -> brightness = value
+                                            "Saturation" -> saturation = value
+                                            "Contrast" -> contrast = value
+                                            else -> warmth = value
+                                        }
+                                        selectedStyle = "Custom"
+                                        showEnhanced = true
+                                    },
+                                    enabled = adjustmentValue < adjustmentRange.endInclusive && !isExporting,
+                                    modifier = Modifier.size(width = 38.dp, height = 36.dp),
+                                    shape = RoundedCornerShape(9.dp),
+                                    contentPadding = PaddingValues(0.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = BrightText)
+                                ) { Text("+", fontSize = 20.sp) }
+                            }
+                        }
                         Spacer(modifier = Modifier.height(4.dp))
                         if (cropLabel != "Original") {
                             Text("CROP HORIZONTAL  " + (cropOffsetX * 100).toInt() + "%", color = SoftText, fontSize = 11.sp)

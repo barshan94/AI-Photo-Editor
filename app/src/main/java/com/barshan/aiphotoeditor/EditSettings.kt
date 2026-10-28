@@ -14,11 +14,15 @@ data class EditSettings(
     val straightenDegrees: Float = 0f,
     val mirrorHorizontal: Boolean = false,
     val mirrorVertical: Boolean = false,
-    /** Perspective-crop inset controls, normalized 0..0.28. */
-    val perspectiveTopInset: Float = 0f,
-    val perspectiveBottomInset: Float = 0f,
-    val perspectiveLeftInset: Float = 0f,
-    val perspectiveRightInset: Float = 0f,
+    /** Independent normalized inset controls for each perspective-crop corner (0..0.35). */
+    val perspectiveTopLeftX: Float = 0f,
+    val perspectiveTopLeftY: Float = 0f,
+    val perspectiveTopRightX: Float = 0f,
+    val perspectiveTopRightY: Float = 0f,
+    val perspectiveBottomRightX: Float = 0f,
+    val perspectiveBottomRightY: Float = 0f,
+    val perspectiveBottomLeftX: Float = 0f,
+    val perspectiveBottomLeftY: Float = 0f,
     /** 0..20 approximate background blur strength; requires person segmentation. */
     val backgroundBlur: Float = 0f,
     /** 0..10 scene-aware contrast and color lift applied only outside the detected person mask. */

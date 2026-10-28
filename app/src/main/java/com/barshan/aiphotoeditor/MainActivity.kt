@@ -1286,8 +1286,7 @@ private fun PhotoEditorHome() {
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Row(
-                                modifier = Modifier.align(Alignment.TopEnd).padding(8.dp)
-                                    .clip(RoundedCornerShape(14.dp))
+                                modifier = Modifier.clip(RoundedCornerShape(14.dp))
                                     .background(Ink.copy(alpha = 0.86f))
                                     .padding(horizontal = 5.dp, vertical = 4.dp),
                                 horizontalArrangement = Arrangement.spacedBy(3.dp),

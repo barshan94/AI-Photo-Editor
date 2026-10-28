@@ -133,7 +133,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        CaptionCatalogUpdateWorker.schedule(this)
+        // Launch the editor immediately. Optional caption refresh runs asynchronously in the UI scope.
         setContent {
             MaterialTheme(colorScheme = darkColorScheme(
                 primary = Mint, onPrimary = Ink, background = Ink,
@@ -161,14 +161,11 @@ private fun PhotoEditorHome() {
     val clipboardManager = LocalClipboardManager.current
     val scope = rememberCoroutineScope()
     var remoteCaptionEntries by remember {
-        mutableStateOf(CaptionCatalogUpdateWorker.readCachedEntries(context))
+        mutableStateOf(CaptionCatalogRepository.readCachedEntries(context))
     }
     LaunchedEffect(Unit) {
-        // WorkManager fetches in the background; refresh the visible cache briefly after launch.
-        repeat(8) {
-            delay(3000)
-            remoteCaptionEntries = CaptionCatalogUpdateWorker.readCachedEntries(context)
-        }
+        // Network work stays off the main thread and is optional; offline editing never waits for it.
+        remoteCaptionEntries = CaptionCatalogRepository.refresh(context)
     }
     val recoveryPrefs = remember {
         context.getSharedPreferences("frame_ai_recovery", android.content.Context.MODE_PRIVATE)

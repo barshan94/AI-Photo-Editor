@@ -119,27 +119,33 @@ object AutoEnhancer {
             adjusted.setPixels(row, 0, width, 0, y, width, 1)
         }
 
-        val ratio = settings.cropRatio ?: return adjusted
-        if (ratio <= 0f) return adjusted
-
-        val sourceRatio = adjusted.width.toFloat() / adjusted.height.toFloat()
+        val transform = Matrix().apply {
+            postScale(if (settings.mirrorHorizontal) -1f else 1f, if (settings.mirrorVertical) -1f else 1f)
+            postRotate(settings.rotationDegrees + settings.straightenDegrees)
+        }
+        val transformed = if (settings.mirrorHorizontal || settings.mirrorVertical || settings.rotationDegrees % 360f != 0f || settings.straightenDegrees != 0f) {
+            Bitmap.createBitmap(adjusted, 0, 0, adjusted.width, adjusted.height, transform, true).also { if (it !== adjusted) adjusted.recycle() }
+        } else adjusted
+        val ratio = settings.cropRatio ?: return transformed
+        if (ratio <= 0f) return transformed
+        val sourceRatio = transformed.width.toFloat() / transformed.height.toFloat()
         val cropWidth: Int
         val cropHeight: Int
         if (sourceRatio > ratio) {
-            cropHeight = adjusted.height
-            cropWidth = (cropHeight * ratio).toInt().coerceIn(1, adjusted.width)
+            cropHeight = transformed.height
+            cropWidth = (cropHeight * ratio).toInt().coerceIn(1, transformed.width)
         } else {
-            cropWidth = adjusted.width
-            cropHeight = (cropWidth / ratio).toInt().coerceIn(1, adjusted.height)
+            cropWidth = transformed.width
+            cropHeight = (cropWidth / ratio).toInt().coerceIn(1, transformed.height)
         }
-        val availableX = (adjusted.width - cropWidth).coerceAtLeast(0)
-        val availableY = (adjusted.height - cropHeight).coerceAtLeast(0)
+        val availableX = (transformed.width - cropWidth).coerceAtLeast(0)
+        val availableY = (transformed.height - cropHeight).coerceAtLeast(0)
         val left = ((availableX * ((settings.cropOffsetX.coerceIn(-1f, 1f) + 1f) / 2f)).toInt())
             .coerceIn(0, availableX)
         val top = ((availableY * ((settings.cropOffsetY.coerceIn(-1f, 1f) + 1f) / 2f)).toInt())
             .coerceIn(0, availableY)
-        val cropped = Bitmap.createBitmap(adjusted, left, top, cropWidth, cropHeight)
-        if (cropped !== adjusted) adjusted.recycle()
+        val cropped = Bitmap.createBitmap(transformed, left, top, cropWidth, cropHeight)
+        if (cropped !== transformed) transformed.recycle()
         return cropped
     }
 

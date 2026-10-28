@@ -10,6 +10,10 @@ data class EditSettings(
     /** -1..1 positions the crop window within the available image bounds. */
     val cropOffsetX: Float = 0f,
     val cropOffsetY: Float = 0f,
+    val rotationDegrees: Float = 0f,
+    val straightenDegrees: Float = 0f,
+    val mirrorHorizontal: Boolean = false,
+    val mirrorVertical: Boolean = false,
     /** 0..20 approximate background blur strength; requires person segmentation. */
     val backgroundBlur: Float = 0f,
     /** 0..10 scene-aware contrast and color lift applied only outside the detected person mask. */

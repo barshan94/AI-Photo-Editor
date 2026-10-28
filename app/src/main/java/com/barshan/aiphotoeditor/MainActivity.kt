@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -80,6 +81,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.input.pointer.pointerInput
@@ -202,6 +204,10 @@ private fun PhotoEditorHome() {
     var cropLabel by remember { mutableStateOf(recoveryPrefs.getString("crop_label", "Original") ?: "Original") }
     var cropOffsetX by remember { mutableFloatStateOf(recoveryPrefs.getFloat("crop_offset_x", 0f)) }
     var cropOffsetY by remember { mutableFloatStateOf(recoveryPrefs.getFloat("crop_offset_y", 0f)) }
+    var rotationDegrees by remember { mutableFloatStateOf(recoveryPrefs.getFloat("rotation_degrees", 0f)) }
+    var straightenDegrees by remember { mutableFloatStateOf(recoveryPrefs.getFloat("straighten_degrees", 0f)) }
+    var mirrorHorizontal by remember { mutableStateOf(recoveryPrefs.getBoolean("mirror_horizontal", false)) }
+    var mirrorVertical by remember { mutableStateOf(recoveryPrefs.getBoolean("mirror_vertical", false)) }
     var selectedStyle by remember { mutableStateOf(recoveryPrefs.getString("selected_style", "Auto") ?: "Auto") }
     var activeEditorPanel by remember { mutableStateOf("Universal Edit") }
     var activeAiSubpanel by remember { mutableStateOf("Subject") }
@@ -303,7 +309,9 @@ private fun PhotoEditorHome() {
             .putFloat("brightness", brightness).putFloat("contrast", contrast)
             .putFloat("saturation", saturation).putFloat("warmth", warmth)
             .putString("crop_label", cropLabel).putFloat("crop_offset_x", cropOffsetX)
-            .putFloat("crop_offset_y", cropOffsetY).putString("selected_style", selectedStyle)
+            .putFloat("crop_offset_y", cropOffsetY).putFloat("rotation_degrees", rotationDegrees)
+            .putFloat("straighten_degrees", straightenDegrees).putBoolean("mirror_horizontal", mirrorHorizontal)
+            .putBoolean("mirror_vertical", mirrorVertical).putString("selected_style", selectedStyle)
             .apply()
     }
 
@@ -369,6 +377,10 @@ private fun PhotoEditorHome() {
         },
         cropOffsetX = cropOffsetX,
         cropOffsetY = cropOffsetY,
+        rotationDegrees = rotationDegrees,
+        straightenDegrees = straightenDegrees,
+        mirrorHorizontal = mirrorHorizontal,
+        mirrorVertical = mirrorVertical,
         backgroundBlur = backgroundBlur,
         backgroundEnhancement = backgroundEnhancement,
         subjectBrightness = subjectBrightness,
@@ -399,6 +411,10 @@ private fun PhotoEditorHome() {
         makeupIntensity = settings.makeupIntensity
         cropOffsetX = settings.cropOffsetX
         cropOffsetY = settings.cropOffsetY
+        rotationDegrees = settings.rotationDegrees
+        straightenDegrees = settings.straightenDegrees
+        mirrorHorizontal = settings.mirrorHorizontal
+        mirrorVertical = settings.mirrorVertical
         cropLabel = when (settings.cropRatio) {
             1f -> "Square"
             0.8f -> "Portrait 4:5"
@@ -816,7 +832,7 @@ private fun PhotoEditorHome() {
     }
 
     // Debounced live preview: controls update the image without an Apply button.
-    LaunchedEffect(activePhoto?.uri, brightness, contrast, saturation, warmth, backgroundBlur, backgroundEnhancement, subjectBrightness, darkerAreaLift, skinSmoothing, makeupIntensity, cropLabel, cropOffsetX, cropOffsetY, selectedStyle) {
+    LaunchedEffect(activePhoto?.uri, brightness, contrast, saturation, warmth, backgroundBlur, backgroundEnhancement, subjectBrightness, darkerAreaLift, skinSmoothing, makeupIntensity, cropLabel, cropOffsetX, cropOffsetY, rotationDegrees, straightenDegrees, mirrorHorizontal, mirrorVertical, selectedStyle) {
         if (selectedStyle == "Object Removal") return@LaunchedEffect
         val photo = activePhoto
         if (photo != null) {
@@ -1102,8 +1118,10 @@ private fun PhotoEditorHome() {
                         } ?: activePhoto?.let {
                             if (it.width > 0 && it.height > 0) it.width.toFloat() / it.height.toFloat() else 1f
                         } ?: 1f
+                        val screenHeight = LocalConfiguration.current.screenHeightDp.dp
                         Box(
-                            modifier = Modifier.fillMaxWidth().aspectRatio(previewAspectRatio.coerceIn(0.25f, 4f))
+                            modifier = Modifier.fillMaxWidth().heightIn(max = screenHeight * 0.42f)
+                                .aspectRatio(previewAspectRatio.coerceIn(0.25f, 4f))
                                 .clip(RoundedCornerShape(14.dp)).background(Ink)
                                 .onSizeChanged { size ->
                                     previewWidthPx = size.width
@@ -1537,7 +1555,27 @@ private fun PhotoEditorHome() {
                                     ) { Text(style, fontSize = 10.sp) }
                                 }
                             }
-                            Text("CROP RATIO", color = BrightText, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            Text("CROP & TRANSFORM", color = BrightText, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                                Button(onClick = { recordEditChange(); rotationDegrees = (rotationDegrees - 90f).mod(360f); showEnhanced = true }, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 3.dp, vertical = 4.dp), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = BrightText)) { Text("↶ Rotate", fontSize = 10.sp) }
+                                Button(onClick = { recordEditChange(); rotationDegrees = (rotationDegrees + 90f).mod(360f); showEnhanced = true }, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 3.dp, vertical = 4.dp), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = BrightText)) { Text("Rotate ↻", fontSize = 10.sp) }
+                                Button(onClick = { recordEditChange(); mirrorHorizontal = !mirrorHorizontal; showEnhanced = true }, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 3.dp, vertical = 4.dp), colors = ButtonDefaults.buttonColors(containerColor = if (mirrorHorizontal) Mint else Color(0xFF293333), contentColor = if (mirrorHorizontal) Ink else BrightText)) { Text("Mirror H", fontSize = 10.sp) }
+                                Button(onClick = { recordEditChange(); mirrorVertical = !mirrorVertical; showEnhanced = true }, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 3.dp, vertical = 4.dp), colors = ButtonDefaults.buttonColors(containerColor = if (mirrorVertical) Mint else Color(0xFF293333), contentColor = if (mirrorVertical) Ink else BrightText)) { Text("Mirror V", fontSize = 10.sp) }
+                            }
+                            Text("STRAIGHTEN", color = BrightText, fontSize = 10.sp, modifier = Modifier.padding(top = 5.dp))
+                            Slider(value = straightenDegrees, onValueChange = { straightenDegrees = it; showEnhanced = true }, onValueChangeFinished = { recordEditChange() }, valueRange = -15f..15f)
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Button(onClick = {
+                                    recordEditChange()
+                                    val photo = activePhoto
+                                    val w = photo?.width ?: 0; val h = photo?.height ?: 0
+                                    cropLabel = when { w <= 0 || h <= 0 -> "Original"; w.toFloat() / h < 0.85f -> "Portrait 4:5"; w.toFloat() / h > 1.15f -> "Landscape 16:9"; else -> "Square" }
+                                    cropOffsetX = 0f; cropOffsetY = 0f; showEnhanced = true
+                                    statusMessage = "Auto frame selected a crop based on the photo orientation. Drag the preview to refine."
+                                }, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 4.dp, vertical = 5.dp), colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Ink)) { Text("Auto frame", fontSize = 10.sp) }
+                                Button(onClick = { recordEditChange(); cropLabel = "Original"; cropOffsetX = 0f; cropOffsetY = 0f; rotationDegrees = 0f; straightenDegrees = 0f; mirrorHorizontal = false; mirrorVertical = false; showEnhanced = true }, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 4.dp, vertical = 5.dp), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = BrightText)) { Text("Reset framing", fontSize = 10.sp) }
+                            }
+                            Text("CROP RATIO", color = BrightText, fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 7.dp))
                             Row(
                                 modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                                 horizontalArrangement = Arrangement.spacedBy(6.dp)

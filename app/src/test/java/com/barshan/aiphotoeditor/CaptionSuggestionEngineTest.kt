@@ -27,6 +27,28 @@ class CaptionSuggestionEngineTest {
     }
 
     @Test
+    fun manuallyChoosingFestivalDoesNotForceBijoyaWithoutSpecificClues() {
+        val result = CaptionSuggestionEngine.fromLabels(
+            listOf("festival" to 0.95f), 1f, theme = "Festival"
+        )
+        assertTrue(result.english.any { it.contains("tradition") })
+        assertFalse(result.english.any { it.contains("Bijoya") || it.contains("Durga") })
+    }
+
+    @Test
+    fun genericGroupDoesNotAssumeThePeopleAreFriends() {
+        val result = CaptionSuggestionEngine.fromLabels(listOf("group" to 0.92f), 1f)
+        assertFalse(result.english.any { it.contains("Same idiots") })
+    }
+
+    @Test
+    fun banglishThemeIncludesNaturalRomanizedBengali() {
+        val result = CaptionSuggestionEngine.fromLabels(emptyList(), 1f, theme = "Banglish")
+        assertTrue(result.english.any { it.contains("Shobai mile") })
+        assertTrue(result.bengali.isNotEmpty())
+    }
+
+    @Test
     fun singlePersonGetsCasualPortraitCaptionsInsteadOfFamilyCaptions() {
         val result = CaptionSuggestionEngine.fromLabels(listOf("person" to 0.95f), 0.8f)
         assertTrue(result.english.any { it.contains("Felt cute") })

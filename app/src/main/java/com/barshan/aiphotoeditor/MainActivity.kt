@@ -1770,7 +1770,42 @@ private fun PhotoEditorHome() {
                                 Button(onClick = { recordEditChange(); rotationDegrees = (rotationDegrees + 90f).mod(360f); selectedStyle = "Custom"; showEnhanced = true }, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 3.dp, vertical = 4.dp)) { Text("Rotate", fontSize = 10.sp) }
                                 Button(onClick = { recordEditChange(); mirrorHorizontal = !mirrorHorizontal; selectedStyle = "Custom"; showEnhanced = true }, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 3.dp, vertical = 4.dp)) { Text("Mirror H", fontSize = 10.sp) }
                                 Button(onClick = { recordEditChange(); mirrorVertical = !mirrorVertical; selectedStyle = "Custom"; showEnhanced = true }, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 3.dp, vertical = 4.dp)) { Text("Mirror V", fontSize = 10.sp) }
-                                Button(onClick = { recordEditChange(); val p = activePhoto; val w = previewBitmap?.width ?: p?.width ?: 0; val h = previewBitmap?.height ?: p?.height ?: 0; cropLabel = when { w <= 0 || h <= 0 -> "Original"; w.toFloat() / h < 0.85f -> "Portrait 4:5"; w.toFloat() / h > 1.15f -> "Landscape 16:9"; else -> "Square" }; cropOffsetX = 0f; cropOffsetY = 0f; selectedStyle = "Custom"; showEnhanced = true }, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 3.dp, vertical = 4.dp)) { Text("Auto frame", fontSize = 10.sp) }
+                                Button(onClick = {
+                                    val bitmap = previewBitmap
+                                    if (bitmap == null || bitmap.isRecycled) {
+                                        statusMessage = "Open a photo preview before auto-leveling."
+                                    } else {
+                                        statusMessage = "Finding likely horizontal lines…"
+                                        scope.launch {
+                                            val correction = withContext(Dispatchers.Default) { AutoLeveler.estimateCorrectionDegrees(bitmap) }
+                                            if (correction == null) {
+                                                statusMessage = "No reliable horizon or horizontal line found. Use Straighten manually."
+                                            } else {
+                                                recordEditChange()
+                                                straightenDegrees = (straightenDegrees + correction).coerceIn(-15f, 15f)
+                                                selectedStyle = "Custom"
+                                                showEnhanced = true
+                                                statusMessage = if (correction == 0f) "Photo already looks level." else "Auto-level applied " + correction + "°. Fine-tune with Straighten if needed."
+                                            }
+                                        }
+                                    }
+                                }, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 3.dp, vertical = 4.dp)) { Text("Auto-level", fontSize = 10.sp) }
+                            }
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                                Button(onClick = { showPerspectiveControls = !showPerspectiveControls }, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp), colors = ButtonDefaults.buttonColors(containerColor = if (showPerspectiveControls) Mint else Color(0xFF293333), contentColor = if (showPerspectiveControls) Ink else BrightText)) { Text(if (showPerspectiveControls) "Hide perspective crop" else "Perspective crop", fontSize = 10.sp) }
+                                Button(onClick = { recordEditChange(); perspectiveTopInset = 0f; perspectiveBottomInset = 0f; perspectiveLeftInset = 0f; perspectiveRightInset = 0f; selectedStyle = "Custom"; showEnhanced = true }, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = BrightText)) { Text("Reset perspective", fontSize = 10.sp) }
+                            }
+                            if (showPerspectiveControls) {
+                                Text("PERSPECTIVE CROP · ADJUST EACH EDGE", color = Mint, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                Text("Move each edge inward to select the area to keep. The four-sided selection is rectified into a straight rectangular image.", color = SoftText, fontSize = 10.sp, lineHeight = 14.sp)
+                                Text("TOP EDGE  ${(perspectiveTopInset * 100).toInt()}%", color = SoftText, fontSize = 10.sp)
+                                Slider(value = perspectiveTopInset, onValueChange = { recordEditChange(); perspectiveTopInset = it; selectedStyle = "Custom"; showEnhanced = true }, valueRange = 0f..0.28f)
+                                Text("BOTTOM EDGE  ${(perspectiveBottomInset * 100).toInt()}%", color = SoftText, fontSize = 10.sp)
+                                Slider(value = perspectiveBottomInset, onValueChange = { recordEditChange(); perspectiveBottomInset = it; selectedStyle = "Custom"; showEnhanced = true }, valueRange = 0f..0.28f)
+                                Text("LEFT EDGE  ${(perspectiveLeftInset * 100).toInt()}%", color = SoftText, fontSize = 10.sp)
+                                Slider(value = perspectiveLeftInset, onValueChange = { recordEditChange(); perspectiveLeftInset = it; selectedStyle = "Custom"; showEnhanced = true }, valueRange = 0f..0.28f)
+                                Text("RIGHT EDGE  ${(perspectiveRightInset * 100).toInt()}%", color = SoftText, fontSize = 10.sp)
+                                Slider(value = perspectiveRightInset, onValueChange = { recordEditChange(); perspectiveRightInset = it; selectedStyle = "Custom"; showEnhanced = true }, valueRange = 0f..0.28f)
                             }
                             Text("STRAIGHTEN ${straightenDegrees.toInt()}°", color = SoftText, fontSize = 10.sp)
                             Slider(value = straightenDegrees, onValueChange = { straightenDegrees = it; selectedStyle = "Custom"; showEnhanced = true }, onValueChangeFinished = { recordEditChange() }, valueRange = -15f..15f)

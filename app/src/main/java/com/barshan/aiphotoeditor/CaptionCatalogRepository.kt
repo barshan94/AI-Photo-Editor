@@ -26,7 +26,7 @@ object CaptionCatalogRepository {
             val split = line.split('\t', limit = 2)
             if (split.size != 2 || split[0].isBlank() || split[1].isBlank()) null
             else {
-                val words = Regex("[^\\\\p{L}\\\\p{N}]+").split(split[1].lowercase())
+                val words = Regex("[^\\p{L}\\p{N}]+").split(split[1].lowercase())
                     .filter { it.length > 1 }.toSet() + split[0].lowercase()
                 CaptionLibrary.Entry("remote-$index", split[0], split[1], "বাংলা অনুবাদ উপলভ্য নয়।", words)
             }
@@ -57,9 +57,9 @@ object CaptionCatalogRepository {
                 for (i in 0 until captions.length()) {
                     val item = captions.optJSONObject(i) ?: continue
                     val category = item.optString("category").trim().take(32)
-                    val text = item.optString("text").replace('\\n', ' ').replace('\\r', ' ').trim().take(240)
-                    if (category.isNotBlank() && text.length >= 4 && !text.contains('\\t')) {
-                        add("$category\\t$text")
+                    val text = item.optString("text").replace('\n', ' ').replace('\r', ' ').trim().take(240)
+                    if (category.isNotBlank() && text.length >= 4 && !text.contains('\t')) {
+                        add("$category\t$text")
                     }
                 }
             }.distinct().take(MAX_CAPTIONS)
@@ -69,7 +69,7 @@ object CaptionCatalogRepository {
             if (version >= previousVersion && cleaned.isNotEmpty()) {
                 val saved = prefs.edit()
                     .putInt("remote_caption_version", version)
-                    .putString("remote_caption_entries", cleaned.joinToString("\\n"))
+                    .putString("remote_caption_entries", cleaned.joinToString("\n"))
                     .putLong("remote_caption_updated_ms", System.currentTimeMillis())
                     .commit()
                 if (!saved) return@withContext cached

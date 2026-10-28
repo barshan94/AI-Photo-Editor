@@ -24,6 +24,13 @@ class CaptionLibraryTest {
     }
 
     @Test
+    fun visualLabelsCanRecommendCategoryRelevantCaptions() {
+        val results = CaptionLibrary.recommend(listOf("mountain", "travel", "landscape"), "Auto")
+        assertTrue(results.isNotEmpty())
+        assertTrue(results.all { it.category == "Travel" })
+    }
+
+    @Test
     fun blankSearchCanBeLimitedAndCategoryFiltered() {
         val results = CaptionLibrary.search("", category = "Portrait", limit = 5)
         assertEquals(5, results.size)

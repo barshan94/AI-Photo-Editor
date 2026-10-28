@@ -1733,6 +1733,20 @@ private fun PhotoEditorHome() {
                                 Text(if (showCropGuides) "Guides on" else "Guides off", color = Mint, fontSize = 10.sp,
                                     modifier = Modifier.clickable { showCropGuides = !showCropGuides }.padding(4.dp))
                             }
+                            Text("CROP & FRAME", color = BrightText, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                                Button(onClick = { recordEditChange(); rotationDegrees = (rotationDegrees + 90f).mod(360f); selectedStyle = "Custom"; showEnhanced = true }, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 3.dp, vertical = 4.dp)) { Text("Rotate", fontSize = 10.sp) }
+                                Button(onClick = { recordEditChange(); mirrorHorizontal = !mirrorHorizontal; selectedStyle = "Custom"; showEnhanced = true }, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 3.dp, vertical = 4.dp)) { Text("Mirror H", fontSize = 10.sp) }
+                                Button(onClick = { recordEditChange(); mirrorVertical = !mirrorVertical; selectedStyle = "Custom"; showEnhanced = true }, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 3.dp, vertical = 4.dp)) { Text("Mirror V", fontSize = 10.sp) }
+                                Button(onClick = { recordEditChange(); val p = activePhoto; val w = previewBitmap?.width ?: p?.width ?: 0; val h = previewBitmap?.height ?: p?.height ?: 0; cropLabel = when { w <= 0 || h <= 0 -> "Original"; w.toFloat() / h < 0.85f -> "Portrait 4:5"; w.toFloat() / h > 1.15f -> "Landscape 16:9"; else -> "Square" }; cropOffsetX = 0f; cropOffsetY = 0f; selectedStyle = "Custom"; showEnhanced = true }, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 3.dp, vertical = 4.dp)) { Text("Auto frame", fontSize = 10.sp) }
+                            }
+                            Text("STRAIGHTEN ${straightenDegrees.toInt()}°", color = SoftText, fontSize = 10.sp)
+                            Slider(value = straightenDegrees, onValueChange = { straightenDegrees = it; selectedStyle = "Custom"; showEnhanced = true }, onValueChangeFinished = { recordEditChange() }, valueRange = -15f..15f)
+                            Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                                listOf("Original", "Square", "Portrait 4:5", "Story 9:16", "Landscape 16:9").forEach { crop ->
+                                    Button(onClick = { recordEditChange(); cropLabel = crop; cropOffsetX = 0f; cropOffsetY = 0f; selectedStyle = "Custom"; showEnhanced = true }, contentPadding = PaddingValues(horizontal = 7.dp, vertical = 3.dp)) { Text(crop, fontSize = 10.sp) }
+                                }
+                            }
                         Spacer(modifier = Modifier.height(12.dp))
                         Text("BILINGUAL CAPTION STARTERS", color = BrightText, fontSize = 11.sp,
                             fontWeight = FontWeight.Bold)

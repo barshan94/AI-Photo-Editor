@@ -1817,9 +1817,21 @@ private fun PhotoEditorHome() {
                         Spacer(modifier = Modifier.height(12.dp))
                         Text("BILINGUAL CAPTION STARTERS", color = BrightText, fontSize = 11.sp,
                             fontWeight = FontWeight.Bold)
-                        Text("Uses on-device image labels for ideas. Review every suggestion; it may misread a scene.",
+                        Text("Uses on-device image labels for ideas. Pick a context if the photo's cultural vibe is missed; captions are editable.",
                             color = SoftText, fontSize = 10.sp, lineHeight = 14.sp,
                             modifier = Modifier.padding(top = 3.dp, bottom = 6.dp))
+                        Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                            listOf("Auto", "Festival", "Romantic", "Funny", "Devotional", "Travel", "Family", "Aesthetic").forEach { theme ->
+                                Button(onClick = {
+                                    captionTheme = theme
+                                    val existing = captionSuggestions
+                                    if (existing != null) applyCaptionSuggestions(existing.detectedLabels.map { it to 0.9f }, captionAspectRatio)
+                                }, contentPadding = PaddingValues(horizontal = 9.dp, vertical = 3.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = if (captionTheme == theme) Mint else Color(0xFF293333), contentColor = if (captionTheme == theme) Ink else BrightText)) {
+                                    Text(theme, fontSize = 10.sp)
+                                }
+                            }
+                        }
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             Button(onClick = { suggestCaptions() }, modifier = Modifier.weight(1f), enabled = previewBitmap != null && !isGeneratingCaptions,
                                 shape = RoundedCornerShape(10.dp),

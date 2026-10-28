@@ -208,6 +208,11 @@ private fun PhotoEditorHome() {
     var straightenDegrees by remember { mutableFloatStateOf(recoveryPrefs.getFloat("straighten_degrees", 0f)) }
     var mirrorHorizontal by remember { mutableStateOf(recoveryPrefs.getBoolean("mirror_horizontal", false)) }
     var mirrorVertical by remember { mutableStateOf(recoveryPrefs.getBoolean("mirror_vertical", false)) }
+    var perspectiveTopInset by remember { mutableFloatStateOf(recoveryPrefs.getFloat("perspective_top_inset", 0f)) }
+    var perspectiveBottomInset by remember { mutableFloatStateOf(recoveryPrefs.getFloat("perspective_bottom_inset", 0f)) }
+    var perspectiveLeftInset by remember { mutableFloatStateOf(recoveryPrefs.getFloat("perspective_left_inset", 0f)) }
+    var perspectiveRightInset by remember { mutableFloatStateOf(recoveryPrefs.getFloat("perspective_right_inset", 0f)) }
+    var showPerspectiveControls by remember { mutableStateOf(false) }
     var selectedStyle by remember { mutableStateOf(recoveryPrefs.getString("selected_style", "Auto") ?: "Auto") }
     var activeEditorPanel by remember { mutableStateOf("Universal Edit") }
     var activeAiSubpanel by remember { mutableStateOf("Subject") }
@@ -224,9 +229,12 @@ private fun PhotoEditorHome() {
     var captionIndex by remember { mutableIntStateOf(0) }
     var captionPhotoUri by remember { mutableStateOf<String?>(null) }
     var isGeneratingCaptions by remember { mutableStateOf(false) }
+    var captionTheme by remember { mutableStateOf("Auto") }
+    var captionAspectRatio by remember { mutableFloatStateOf(1f) }
 
     fun applyCaptionSuggestions(labels: List<Pair<String, Float>>, ratio: Float) {
-        val suggestions = CaptionSuggestionEngine.fromLabels(labels, ratio)
+        captionAspectRatio = ratio
+        val suggestions = CaptionSuggestionEngine.fromLabels(labels, ratio, captionTheme)
         captionSuggestions = suggestions
         captionIndex = 0
         captionEnglish = suggestions.english.first()
@@ -301,7 +309,8 @@ private fun PhotoEditorHome() {
 
     LaunchedEffect(
         selectedPhotos.map { it.uri.toString() }, activePhoto?.uri?.toString(),
-        brightness, contrast, saturation, warmth, cropLabel, cropOffsetX, cropOffsetY, selectedStyle
+        brightness, contrast, saturation, warmth, cropLabel, cropOffsetX, cropOffsetY, selectedStyle,
+        perspectiveTopInset, perspectiveBottomInset, perspectiveLeftInset, perspectiveRightInset
     ) {
         recoveryPrefs.edit()
             .putString("selected_photo_uris", selectedPhotos.joinToString("\\n") { it.uri.toString() })
@@ -311,7 +320,12 @@ private fun PhotoEditorHome() {
             .putString("crop_label", cropLabel).putFloat("crop_offset_x", cropOffsetX)
             .putFloat("crop_offset_y", cropOffsetY).putFloat("rotation_degrees", rotationDegrees)
             .putFloat("straighten_degrees", straightenDegrees).putBoolean("mirror_horizontal", mirrorHorizontal)
-            .putBoolean("mirror_vertical", mirrorVertical).putString("selected_style", selectedStyle)
+            .putBoolean("mirror_vertical", mirrorVertical)
+            .putFloat("perspective_top_inset", perspectiveTopInset)
+            .putFloat("perspective_bottom_inset", perspectiveBottomInset)
+            .putFloat("perspective_left_inset", perspectiveLeftInset)
+            .putFloat("perspective_right_inset", perspectiveRightInset)
+            .putString("selected_style", selectedStyle)
             .apply()
     }
 
@@ -381,6 +395,10 @@ private fun PhotoEditorHome() {
         straightenDegrees = straightenDegrees,
         mirrorHorizontal = mirrorHorizontal,
         mirrorVertical = mirrorVertical,
+        perspectiveTopInset = perspectiveTopInset,
+        perspectiveBottomInset = perspectiveBottomInset,
+        perspectiveLeftInset = perspectiveLeftInset,
+        perspectiveRightInset = perspectiveRightInset,
         backgroundBlur = backgroundBlur,
         backgroundEnhancement = backgroundEnhancement,
         subjectBrightness = subjectBrightness,
@@ -415,6 +433,10 @@ private fun PhotoEditorHome() {
         straightenDegrees = settings.straightenDegrees
         mirrorHorizontal = settings.mirrorHorizontal
         mirrorVertical = settings.mirrorVertical
+        perspectiveTopInset = settings.perspectiveTopInset
+        perspectiveBottomInset = settings.perspectiveBottomInset
+        perspectiveLeftInset = settings.perspectiveLeftInset
+        perspectiveRightInset = settings.perspectiveRightInset
         cropLabel = when (settings.cropRatio) {
             1f -> "Square"
             0.8f -> "Portrait 4:5"
@@ -631,6 +653,15 @@ private fun PhotoEditorHome() {
         cropLabel = "Original"
         cropOffsetX = 0f
         cropOffsetY = 0f
+        rotationDegrees = 0f
+        straightenDegrees = 0f
+        mirrorHorizontal = false
+        mirrorVertical = false
+        perspectiveTopInset = 0f
+        perspectiveBottomInset = 0f
+        perspectiveLeftInset = 0f
+        perspectiveRightInset = 0f
+        showPerspectiveControls = false
         selectedStyle = "Original"
         showEnhanced = true
         undoHistory.clear()
@@ -832,7 +863,7 @@ private fun PhotoEditorHome() {
     }
 
     // Debounced live preview: controls update the image without an Apply button.
-    LaunchedEffect(activePhoto?.uri, brightness, contrast, saturation, warmth, backgroundBlur, backgroundEnhancement, subjectBrightness, darkerAreaLift, skinSmoothing, makeupIntensity, cropLabel, cropOffsetX, cropOffsetY, rotationDegrees, straightenDegrees, mirrorHorizontal, mirrorVertical, selectedStyle) {
+    LaunchedEffect(activePhoto?.uri, brightness, contrast, saturation, warmth, backgroundBlur, backgroundEnhancement, subjectBrightness, darkerAreaLift, skinSmoothing, makeupIntensity, cropLabel, cropOffsetX, cropOffsetY, rotationDegrees, straightenDegrees, mirrorHorizontal, mirrorVertical, perspectiveTopInset, perspectiveBottomInset, perspectiveLeftInset, perspectiveRightInset, selectedStyle) {
         if (selectedStyle == "Object Removal") return@LaunchedEffect
         val photo = activePhoto
         if (photo != null) {

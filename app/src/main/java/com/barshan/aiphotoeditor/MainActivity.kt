@@ -332,6 +332,7 @@ private fun PhotoEditorHome() {
     var captionIndex by remember { mutableIntStateOf(0) }
     var captionGenerationRound by remember { mutableIntStateOf(0) }
     var captionPhotoUri by remember { mutableStateOf<String?>(recoveryPrefs.getString("caption_photo_uri", null)) }
+    var captionSourceSignature by remember { mutableStateOf("") }
     var isGeneratingCaptions by remember { mutableStateOf(false) }
     var showBatchCaptionChoice by remember { mutableStateOf(false) }
     var showIndividualBatchCaptionPicker by remember { mutableStateOf(false) }
@@ -440,6 +441,8 @@ private fun PhotoEditorHome() {
             statusMessage = "Prepare a photo preview before suggesting captions."
             return
         }
+        captionPhotoUri = activePhoto?.uri?.toString()
+        captionSourceSignature = currentSettings().toString()
         isGeneratingCaptions = true
         statusMessage = "Looking for visual clues on this device…"
         val bitmapForLabels = try { bitmap.copy(Bitmap.Config.ARGB_8888, false) } catch (_: Exception) { null }
@@ -1711,7 +1714,7 @@ private fun PhotoEditorHome() {
                                                 val photo = activePhoto
                                                 val bitmap = previewBitmap
                                                 if (photo != null && bitmap != null && !bitmap.isRecycled &&
-                                                    (captionPhotoUri != photo.uri.toString() || captionSuggestions?.english.isNullOrEmpty())) {
+                                                    (captionPhotoUri != photo.uri.toString() || captionSuggestions?.english.isNullOrEmpty() || captionSourceSignature != currentSettings().toString())) {
                                                     captionPhotoUri = photo.uri.toString()
                                                     suggestCaptions(bitmap)
                                                 }

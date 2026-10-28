@@ -228,7 +228,7 @@ private fun PhotoEditorHome() {
     var showEnhanced by remember { mutableStateOf(recoveryPrefs.getBoolean("show_enhanced", true)) }
     var compareBeforeAfter by remember { mutableStateOf(false) }
     var comparePosition by remember { mutableFloatStateOf(0.5f) }
-    var showCropGuides by remember { mutableStateOf(recoveryPrefs.getBoolean("show_crop_guides", true)) }
+    var showCropGuides by remember { mutableStateOf(true) }
     val undoHistory = remember { mutableStateListOf<EditSettings>() }
     val redoHistory = remember { mutableStateListOf<EditSettings>() }
     var brightness by remember { mutableFloatStateOf(recoveryPrefs.getFloat("brightness", 0f)) }
@@ -290,6 +290,7 @@ private fun PhotoEditorHome() {
     var showPerspectiveControls by remember { mutableStateOf(recoveryPrefs.getBoolean("show_perspective_controls", false)) }
     var selectedStyle by remember { mutableStateOf(recoveryPrefs.getString("selected_style", "Auto") ?: "Auto") }
     var activeEditorPanel by remember { mutableStateOf(recoveryPrefs.getString("active_editor_panel", "Universal Edit") ?: "Universal Edit") }
+    var activeManualControl by remember { mutableStateOf("Brightness") }
     var activeAiSubpanel by remember { mutableStateOf(recoveryPrefs.getString("active_ai_subpanel", "Subject") ?: "Subject") }
     var editedScore by remember { mutableStateOf<PhotoQualityScoring.Score?>(null) }
     var originalPreviewScore by remember { mutableStateOf<PhotoQualityScoring.Score?>(null) }
@@ -1459,6 +1460,33 @@ private fun PhotoEditorHome() {
                                     }
                                 }
                             }
+                            val photoIndexForNavigation = selectedPhotos.indexOfFirst { it.uri == activePhoto?.uri }
+                            if (selectedPhotos.size > 1 && photoIndexForNavigation >= 0) {
+                                Box(
+                                    modifier = Modifier.align(Alignment.CenterStart).padding(start = 8.dp)
+                                        .size(40.dp).clip(RoundedCornerShape(20.dp))
+                                        .background(Color(0xCC101313))
+                                        .clickable(enabled = photoIndexForNavigation > 0 && !isExporting) {
+                                            openEditor(selectedPhotos[photoIndexForNavigation - 1])
+                                        },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text("‹", color = if (photoIndexForNavigation > 0 && !isExporting) BrightText else SoftText.copy(alpha = 0.35f),
+                                        fontSize = 29.sp, lineHeight = 32.sp, fontWeight = FontWeight.Medium)
+                                }
+                                Box(
+                                    modifier = Modifier.align(Alignment.CenterEnd).padding(end = 8.dp)
+                                        .size(40.dp).clip(RoundedCornerShape(20.dp))
+                                        .background(Color(0xCC101313))
+                                        .clickable(enabled = photoIndexForNavigation < selectedPhotos.lastIndex && !isExporting) {
+                                            openEditor(selectedPhotos[photoIndexForNavigation + 1])
+                                        },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text("›", color = if (photoIndexForNavigation < selectedPhotos.lastIndex && !isExporting) BrightText else SoftText.copy(alpha = 0.35f),
+                                        fontSize = 29.sp, lineHeight = 32.sp, fontWeight = FontWeight.Medium)
+                                }
+                            }
                             if (isPreparingPreview) CircularProgressIndicator(color = Mint)
                             if (isExporting) {
                                 Box(
@@ -1847,44 +1875,7 @@ private fun PhotoEditorHome() {
                             }
 
                         }
-                        val activeIndex = selectedPhotos.indexOfFirst { it.uri == activePhoto?.uri }
-                        Row(
-                            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Button(
-                                onClick = {
-                                    if (activeIndex > 0) openEditor(selectedPhotos[activeIndex - 1])
-                                },
-                                enabled = activeIndex > 0 && !isExporting,
-                                modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(10.dp),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = Color(0xFF293333), contentColor = BrightText
-                                ),
-                                contentPadding = PaddingValues(horizontal = 5.dp)
-                            ) { Text("← Previous", fontSize = 11.sp) }
-                            Text(
-                                if (activeIndex >= 0) "${activeIndex + 1} / ${selectedPhotos.size}" else "",
-                                color = SoftText, fontSize = 11.sp,
-                                modifier = Modifier.align(Alignment.CenterVertically)
-                            )
-                            Button(
-                                onClick = {
-                                    if (activeIndex >= 0 && activeIndex < selectedPhotos.lastIndex) {
-                                        openEditor(selectedPhotos[activeIndex + 1])
-                                    }
-                                },
-                                enabled = activeIndex >= 0 && activeIndex < selectedPhotos.lastIndex && !isExporting,
-                                modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(10.dp),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = Color(0xFF293333), contentColor = BrightText
-                                ),
-                                contentPadding = PaddingValues(horizontal = 5.dp)
-                            ) { Text("Next →", fontSize = 11.sp) }
-                        }
-                        Spacer(modifier = Modifier.height(12.dp))
+remove previous-next row                        Spacer(modifier = Modifier.height(12.dp))
                         if (activeEditorPanel == "AI Edit" && activeAiSubpanel == "Enhance") {
                         Button(
                             onClick = {
@@ -1942,46 +1933,105 @@ private fun PhotoEditorHome() {
                         }
                         }
                         if (activeEditorPanel == "Universal Edit") {
-                            Text("UNIVERSAL EDIT · STANDARD CONTROLS", color = Mint, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                            Text("Brightness, contrast, saturation, warmth, and crop apply alongside any active AI adjustment.", color = SoftText, fontSize = 10.sp, lineHeight = 14.sp)
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text("MANUAL ADJUSTMENTS", color = BrightText, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                Spacer(modifier = Modifier.weight(1f))
-                                Text(if (showCropGuides) "Guides on" else "Guides off", color = Mint, fontSize = 10.sp,
-                                    modifier = Modifier.clickable { showCropGuides = !showCropGuides }.padding(4.dp))
+                            val manualControls = listOf("Brightness", "Contrast", "Saturation", "Warmth")
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(5.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                manualControls.forEach { control ->
+                                    val controlValue = when (control) {
+                                        "Brightness" -> brightness
+                                        "Contrast" -> contrast
+                                        "Saturation" -> saturation
+                                        else -> warmth
+                                    }
+                                    val valueLabel = when (control) {
+                                        "Brightness", "Warmth" -> controlValue.toInt().toString()
+                                        else -> String.format(java.util.Locale.US, "%.2f", controlValue)
+                                    }
+                                    Button(
+                                        onClick = { activeManualControl = control },
+                                        modifier = Modifier.weight(1f).heightIn(min = 44.dp),
+                                        shape = RoundedCornerShape(10.dp),
+                                        contentPadding = PaddingValues(horizontal = 2.dp, vertical = 5.dp),
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = if (activeManualControl == control) Mint else Color(0xFF293333),
+                                            contentColor = if (activeManualControl == control) Ink else BrightText
+                                        )
+                                    ) {
+                                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                            Text(control, fontSize = 9.sp, maxLines = 1)
+                                            Text(valueLabel, fontSize = 10.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                                        }
+                                    }
+                                }
                             }
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Spacer(modifier = Modifier.height(10.dp))
-                        Text("BRIGHTNESS  " + brightness.toInt(), color = SoftText, fontSize = 11.sp)
-                        Slider(value = brightness, onValueChange = {
-                            recordEditChange()
-                            brightness = it
-                            selectedStyle = "Custom"
-                            showEnhanced = true
-                        }, valueRange = -25f..25f)
-                        Text("CONTRAST  " + String.format(java.util.Locale.US, "%.2f", contrast),
-                            color = SoftText, fontSize = 11.sp)
-                        Slider(value = contrast, onValueChange = {
-                            recordEditChange()
-                            contrast = it
-                            selectedStyle = "Custom"
-                            showEnhanced = true
-                        }, valueRange = 0.75f..1.40f)
-                        Text("SATURATION  " + String.format(java.util.Locale.US, "%.2f", saturation),
-                            color = SoftText, fontSize = 11.sp)
-                        Slider(value = saturation, onValueChange = {
-                            recordEditChange()
-                            saturation = it
-                            selectedStyle = "Custom"
-                            showEnhanced = true
-                        }, valueRange = 0f..1.65f)
-                        Text("WARMTH  " + warmth.toInt(), color = SoftText, fontSize = 11.sp)
-                        Slider(value = warmth, onValueChange = {
-                            recordEditChange()
-                            warmth = it
-                            selectedStyle = "Custom"
-                            showEnhanced = true
-                        }, valueRange = -24f..24f)
+                            val activeValue = when (activeManualControl) {
+                                "Brightness" -> brightness
+                                "Contrast" -> contrast
+                                "Saturation" -> saturation
+                                else -> warmth
+                            }
+                            val activeRange = when (activeManualControl) {
+                                "Brightness" -> -25f..25f
+                                "Contrast" -> 0.75f..1.40f
+                                "Saturation" -> 0f..1.65f
+                                else -> -24f..24f
+                            }
+                            val activeStep = when (activeManualControl) {
+                                "Brightness", "Warmth" -> 1f
+                                "Contrast" -> 0.02f
+                                else -> 0.05f
+                            }
+                            val adjustActiveControl: (Float) -> Unit = { direction ->
+                                recordEditChange()
+                                when (activeManualControl) {
+                                    "Brightness" -> brightness = (brightness + direction * activeStep).coerceIn(-25f, 25f)
+                                    "Contrast" -> contrast = (contrast + direction * activeStep).coerceIn(0.75f, 1.40f)
+                                    "Saturation" -> saturation = (saturation + direction * activeStep).coerceIn(0f, 1.65f)
+                                    else -> warmth = (warmth + direction * activeStep).coerceIn(-24f, 24f)
+                                }
+                                selectedStyle = "Custom"
+                                showEnhanced = true
+                            }
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(top = 7.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(5.dp)
+                            ) {
+                                Button(
+                                    onClick = { adjustActiveControl(-1f) },
+                                    modifier = Modifier.size(38.dp),
+                                    shape = RoundedCornerShape(10.dp),
+                                    contentPadding = PaddingValues(0.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = BrightText)
+                                ) { Text("−", fontSize = 20.sp, fontWeight = FontWeight.Bold) }
+                                Slider(
+                                    modifier = Modifier.weight(1f),
+                                    value = activeValue,
+                                    onValueChange = { value ->
+                                        recordEditChange()
+                                        when (activeManualControl) {
+                                            "Brightness" -> brightness = value
+                                            "Contrast" -> contrast = value
+                                            "Saturation" -> saturation = value
+                                            else -> warmth = value
+                                        }
+                                        selectedStyle = "Custom"
+                                        showEnhanced = true
+                                    },
+                                    valueRange = activeRange
+                                )
+                                Button(
+                                    onClick = { adjustActiveControl(1f) },
+                                    modifier = Modifier.size(38.dp),
+                                    shape = RoundedCornerShape(10.dp),
+                                    contentPadding = PaddingValues(0.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = BrightText)
+                                ) { Text("+", fontSize = 20.sp, fontWeight = FontWeight.Bold) }
+                            }
+                        }
                         Spacer(modifier = Modifier.height(4.dp))
                         if (cropLabel != "Original") {
                             Text("CROP HORIZONTAL  " + (cropOffsetX * 100).toInt() + "%", color = SoftText, fontSize = 11.sp)

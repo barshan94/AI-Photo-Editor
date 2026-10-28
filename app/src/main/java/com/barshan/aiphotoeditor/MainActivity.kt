@@ -27,6 +27,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.weight
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -290,7 +291,7 @@ private fun PhotoEditorHome() {
     var showPerspectiveControls by remember { mutableStateOf(recoveryPrefs.getBoolean("show_perspective_controls", false)) }
     var selectedStyle by remember { mutableStateOf(recoveryPrefs.getString("selected_style", "Auto") ?: "Auto") }
     var activeEditorPanel by remember { mutableStateOf(recoveryPrefs.getString("active_editor_panel", "Universal Edit") ?: "Universal Edit") }
-    var activeManualControl by remember { mutableStateOf("Brightness") }
+    var activeManualControl by remember { mutableStateOf<String?>(null) }
     var activeAiSubpanel by remember { mutableStateOf(recoveryPrefs.getString("active_ai_subpanel", "Subject") ?: "Subject") }
     var editedScore by remember { mutableStateOf<PhotoQualityScoring.Score?>(null) }
     var originalPreviewScore by remember { mutableStateOf<PhotoQualityScoring.Score?>(null) }
@@ -1875,7 +1876,7 @@ private fun PhotoEditorHome() {
                             }
 
                         }
-remove previous-next row                        Spacer(modifier = Modifier.height(12.dp))
+                        Spacer(modifier = Modifier.height(12.dp))
                         if (activeEditorPanel == "AI Edit" && activeAiSubpanel == "Enhance") {
                         Button(
                             onClick = {
@@ -1951,7 +1952,7 @@ remove previous-next row                        Spacer(modifier = Modifier.heigh
                                         else -> String.format(java.util.Locale.US, "%.2f", controlValue)
                                     }
                                     Button(
-                                        onClick = { activeManualControl = control },
+                                        onClick = { activeManualControl = if (activeManualControl == control) null else control },
                                         modifier = Modifier.weight(1f).heightIn(min = 44.dp),
                                         shape = RoundedCornerShape(10.dp),
                                         contentPadding = PaddingValues(horizontal = 2.dp, vertical = 5.dp),
@@ -1967,26 +1968,28 @@ remove previous-next row                        Spacer(modifier = Modifier.heigh
                                     }
                                 }
                             }
-                            val activeValue = when (activeManualControl) {
+                            if (activeManualControl != null) {
+                            val selectedManualControl = activeManualControl!!
+                            val activeValue = when (selectedManualControl) {
                                 "Brightness" -> brightness
                                 "Contrast" -> contrast
                                 "Saturation" -> saturation
                                 else -> warmth
                             }
-                            val activeRange = when (activeManualControl) {
+                            val activeRange = when (selectedManualControl) {
                                 "Brightness" -> -25f..25f
                                 "Contrast" -> 0.75f..1.40f
                                 "Saturation" -> 0f..1.65f
                                 else -> -24f..24f
                             }
-                            val activeStep = when (activeManualControl) {
+                            val activeStep = when (selectedManualControl) {
                                 "Brightness", "Warmth" -> 1f
                                 "Contrast" -> 0.02f
                                 else -> 0.05f
                             }
                             val adjustActiveControl: (Float) -> Unit = { direction ->
                                 recordEditChange()
-                                when (activeManualControl) {
+                                when (selectedManualControl) {
                                     "Brightness" -> brightness = (brightness + direction * activeStep).coerceIn(-25f, 25f)
                                     "Contrast" -> contrast = (contrast + direction * activeStep).coerceIn(0.75f, 1.40f)
                                     "Saturation" -> saturation = (saturation + direction * activeStep).coerceIn(0f, 1.65f)
@@ -2012,7 +2015,7 @@ remove previous-next row                        Spacer(modifier = Modifier.heigh
                                     value = activeValue,
                                     onValueChange = { value ->
                                         recordEditChange()
-                                        when (activeManualControl) {
+                                        when (selectedManualControl) {
                                             "Brightness" -> brightness = value
                                             "Contrast" -> contrast = value
                                             "Saturation" -> saturation = value
@@ -2030,6 +2033,7 @@ remove previous-next row                        Spacer(modifier = Modifier.heigh
                                     contentPadding = PaddingValues(0.dp),
                                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = BrightText)
                                 ) { Text("+", fontSize = 20.sp, fontWeight = FontWeight.Bold) }
+                            }
                             }
                         }
                         Spacer(modifier = Modifier.height(4.dp))

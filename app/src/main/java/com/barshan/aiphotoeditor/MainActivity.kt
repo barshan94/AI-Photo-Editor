@@ -1635,7 +1635,19 @@ private fun PhotoEditorHome() {
                             ) {
                                 listOf("Universal Edit", "AI Edit", "Presets", "Crop & Rotate", "Caption").forEach { panel ->
                                     Button(
-                                        onClick = { activeEditorPanel = panel; compareBeforeAfter = false },
+                                        onClick = {
+                                            activeEditorPanel = panel
+                                            compareBeforeAfter = false
+                                            if (panel == "Caption") {
+                                                val photo = activePhoto
+                                                val bitmap = previewBitmap
+                                                if (photo != null && bitmap != null && !bitmap.isRecycled &&
+                                                    (captionPhotoUri != photo.uri.toString() || captionSuggestions?.english.isNullOrEmpty())) {
+                                                    captionPhotoUri = photo.uri.toString()
+                                                    suggestCaptions(bitmap)
+                                                }
+                                            }
+                                        },
                                         modifier = Modifier.width(96.dp).heightIn(min = 44.dp),
                                         shape = RoundedCornerShape(11.dp),
                                         colors = ButtonDefaults.buttonColors(

@@ -335,7 +335,7 @@ private fun PhotoEditorHome() {
     var isGeneratingCaptions by remember { mutableStateOf(false) }
     var showBatchCaptionChoice by remember { mutableStateOf(false) }
     var showIndividualBatchCaptionPicker by remember { mutableStateOf(false) }
-    var batchCaptionResults by remember { mutableStateOf<Map<Uri, Pair<String, String>>>(emptyMap()) }
+    var batchCaptionResults by remember { mutableStateOf<Map<Uri, List<Pair<String, String>>>>(emptyMap()) }
     var batchCaptionTheme by remember { mutableStateOf("Auto") }
     var batchCaptionRound by remember { mutableIntStateOf(0) }
     var isGeneratingBatchCaptions by remember { mutableStateOf(false) }
@@ -394,15 +394,17 @@ private fun PhotoEditorHome() {
             bitmap = withContext(Dispatchers.IO) {
                 AutoEnhancer.decodeForEditing(context.contentResolver, photo.uri, maxDimension = 640)
             }
-            val workingBitmap = bitmap
+            val workingBitmap = bitmap ?: return listOf("A moment worth keeping." to "মনে রাখার মতো একটি মুহূর্ত।")
             val ratio = workingBitmap.width.toFloat() / workingBitmap.height.coerceAtLeast(1).toFloat()
             val analysis = PhotoAnalysisEngine.analyze(workingBitmap)
             val labels = analysis.labels.map { label -> label.substringBefore(" (") to 0.9f }
             val ideas = CaptionSuggestionEngine.fromLabels(labels, ratio, theme)
             val count = minOf(ideas.english.size, ideas.bengali.size)
-            if (count <= 0) return "A moment worth keeping." to "মনে রাখার মতো একটি মুহূর্ত।"
-            val index = round.mod(count)
-            return ideas.english[index] to ideas.bengali[index]
+            if (count <= 0) return listOf("A moment worth keeping." to "মনে রাখার মতো একটি মুহূর্ত।")
+            (0 until minOf(3, count)).map { offset ->
+                val index = (round + offset).mod(count)
+                ideas.english[index] to ideas.bengali[index]
+            }.distinctBy { it.first }
         } finally {
             bitmap?.let { if (!it.isRecycled) it.recycle() }
         }
@@ -417,11 +419,11 @@ private fun PhotoEditorHome() {
             try {
                 for ((index, photo) in eligible.withIndex()) {
                     try {
-                        val pair = createBatchCaption(photo, theme, round + index)
-                        batchCaptionResults = batchCaptionResults + (photo.uri to pair)
+                        val options = createBatchCaption(photo, theme, round + index)
+                        batchCaptionResults = batchCaptionResults + (photo.uri to options)
                     } catch (_: Exception) {
                         batchCaptionResults = batchCaptionResults + (photo.uri to
-                            ("A moment worth keeping." to "মনে রাখার মতো একটি মুহূর্ত।"))
+                            listOf("A moment worth keeping." to "মনে রাখার মতো একটি মুহূর্ত।"))
                     }
                 }
                 statusMessage = "Photo-specific $theme captions are ready. Generate more to see alternatives."
@@ -2561,14 +2563,33 @@ private fun PhotoEditorHome() {
                         Text("Analysing each photo for its own captions…", color = SoftText, fontSize = 10.sp)
                     }
                 }
-                batchCaptionResults.forEach { (uri, pair) ->
-                    Column(modifier = Modifier.fillMaxWidth().padding(vertical = 5.dp)) {
-                        Text("Photo " + (selectedPhotos.indexOfFirst { it.uri == uri } + 1), color = Mint, fontSize = 10.sp)
-                        if (captionShareLanguage == "English" || captionShareLanguage == "Both") {
-                            Text(pair.first, color = BrightText, fontSize = 11.sp)
-                        }
-                        if (captionShareLanguage == "বাংলা" || captionShareLanguage == "Both") {
-                            Text(pair.second, color = SoftText, fontSize = 11.sp)
+                batchCaptionResults.forEach { (uri, options) ->
+                    Column(modifier = Modifier.fillMaxWidth().padding(vertical = 5.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text("Photo " + (selectedPhotos.indexOfFirst { it.uri == uri } + 1) + " · choose a caption",
+                            color = Mint, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        options.forEachIndexed { optionIndex, pair ->
+                            Button(
+                                onClick = {
+                                    captionEnglish = pair.first
+                                    captionBengali = pair.second
+                                    statusMessage = "Caption option " + (optionIndex + 1) + " selected for Photo " +
+                                        (selectedPhotos.indexOfFirst { it.uri == uri } + 1) + "."
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(9.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF202626), contentColor = BrightText),
+                                contentPadding = PaddingValues(horizontal = 9.dp, vertical = 7.dp)
+                            ) {
+                                Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                                    if (captionShareLanguage == "English" || captionShareLanguage == "Both") {
+                                        Text(pair.first, fontSize = 11.sp, lineHeight = 14.sp)
+                                    }
+                                    if (captionShareLanguage == "বাংলা" || captionShareLanguage == "Both") {
+                                        Text(pair.second, color = SoftText, fontSize = 11.sp, lineHeight = 14.sp)
+                                    }
+                                }
+                            }
                         }
                     }
                 }

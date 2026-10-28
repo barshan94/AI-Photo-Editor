@@ -27,7 +27,8 @@ object CaptionSuggestionEngine {
         val nature = has(words, "flower", "plant", "garden", "tree", "forest", "lake", "river", "sunset", "sunrise", "sky", "cloud")
         val family = has(words, "family", "parents", "siblings", "relatives")
         val friends = has(words, "friends", "friendship", "classmates", "best friend", "best friends")
-        val groupPhoto = has(words, "group", "crowd", "team", "people")
+        // The generic ML label "people" also appears on single portraits; require a clearer group cue.
+        val groupPhoto = has(words, "group", "crowd", "team", "classmates", "multiple people")
         val portrait = has(words, "person", "face", "portrait", "human", "man", "woman", "child")
         val scene = if (theme != "Auto") {
             when (theme) {

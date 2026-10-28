@@ -1281,7 +1281,7 @@ private fun PhotoEditorHome() {
                 }
                 if (useAiUpscale && enhanced != null) editedScore = scoreEditedBitmap(enhanced!!)
                 operationProgress = 94
-                operationStage = "Saving edited copy to Pictures/FRAME AI"
+                operationStage = "Saving edited copy to Pictures/PixelCraft"
                 val width = enhanced!!.width
                 val height = enhanced!!.height
                 val savedUri = withContext(Dispatchers.IO) {
@@ -1294,7 +1294,7 @@ private fun PhotoEditorHome() {
                 statusMessage = (aiNotice?.let { "$it " } ?: if (useAiPortrait) {
                     "AI Portrait enhancement applied. "
                 } else "") + (if (useAiUpscale) "Saved AI-upscaled " else "Saved full-resolution ") + width + "x" + height +
-                    " copy to Pictures/FRAME AI. Original untouched."
+                    " copy to Pictures/PixelCraft. Original untouched."
             } catch (error: CancellationException) {
                 statusMessage = "Export cancelled. No original photo was changed."
                 throw error
@@ -1346,7 +1346,7 @@ private fun PhotoEditorHome() {
                 removalBrushMode = false
                 removalStrokes.clear()
                 currentRemovalStroke = emptyList()
-                statusMessage = "Object removal finished locally. Saved the edited copy to Pictures/FRAME AI; original untouched."
+                statusMessage = "Object removal finished locally. Saved the edited copy to Pictures/PixelCraft; original untouched."
             } catch (error: CancellationException) {
                 statusMessage = "Object removal cancelled. Original photo remains untouched."
                 throw error

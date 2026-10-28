@@ -142,21 +142,33 @@ object AutoEnhancer {
             transformed = croppedForRotation
         }
 
-        // Perspective crop: map a user-defined four-sided crop quadrilateral to a rectangle.
-        val topInset = settings.perspectiveTopInset.coerceIn(0f, 0.28f)
-        val bottomInset = settings.perspectiveBottomInset.coerceIn(0f, 0.28f)
-        val leftInset = settings.perspectiveLeftInset.coerceIn(0f, 0.28f)
-        val rightInset = settings.perspectiveRightInset.coerceIn(0f, 0.28f)
-        if (topInset + bottomInset < 0.56f && leftInset + rightInset < 0.56f &&
-            (topInset + bottomInset + leftInset + rightInset) > 0.001f) {
-            val outWidth = (transformed.width * (1f - (topInset + bottomInset) / 2f)).toInt().coerceAtLeast(2)
-            val outHeight = (transformed.height * (1f - (leftInset + rightInset) / 2f)).toInt().coerceAtLeast(2)
+        // Perspective crop: independently place all four corners, then rectify the quadrilateral.
+        val tlx = settings.perspectiveTopLeftX.coerceIn(0f, 0.35f)
+        val tly = settings.perspectiveTopLeftY.coerceIn(0f, 0.35f)
+        val trx = settings.perspectiveTopRightX.coerceIn(0f, 0.35f)
+        val tryy = settings.perspectiveTopRightY.coerceIn(0f, 0.35f)
+        val brx = settings.perspectiveBottomRightX.coerceIn(0f, 0.35f)
+        val bry = settings.perspectiveBottomRightY.coerceIn(0f, 0.35f)
+        val blx = settings.perspectiveBottomLeftX.coerceIn(0f, 0.35f)
+        val bly = settings.perspectiveBottomLeftY.coerceIn(0f, 0.35f)
+        val perspectiveActive = (tlx + tly + trx + tryy + brx + bry + blx + bly) > 0.001f
+        val validQuadrilateral = tlx + trx < 0.88f && blx + brx < 0.88f &&
+            tly + bly < 0.88f && tryy + bry < 0.88f
+        if (perspectiveActive && validQuadrilateral) {
+            val w = transformed.width.toFloat()
+            val h = transformed.height.toFloat()
             val sourceCorners = floatArrayOf(
-                transformed.width * topInset, transformed.height * leftInset,
-                transformed.width * (1f - topInset), transformed.height * rightInset,
-                transformed.width * (1f - bottomInset), transformed.height * (1f - rightInset),
-                transformed.width * bottomInset, transformed.height * (1f - leftInset)
+                w * tlx, h * tly,
+                w * (1f - trx), h * tryy,
+                w * (1f - brx), h * (1f - bry),
+                w * blx, h * (1f - bly)
             )
+            val topWidth = kotlin.math.hypot(sourceCorners[2] - sourceCorners[0], sourceCorners[3] - sourceCorners[1])
+            val bottomWidth = kotlin.math.hypot(sourceCorners[4] - sourceCorners[6], sourceCorners[5] - sourceCorners[7])
+            val leftHeight = kotlin.math.hypot(sourceCorners[6] - sourceCorners[0], sourceCorners[7] - sourceCorners[1])
+            val rightHeight = kotlin.math.hypot(sourceCorners[4] - sourceCorners[2], sourceCorners[5] - sourceCorners[3])
+            val outWidth = ((topWidth + bottomWidth) / 2f).toInt().coerceIn(2, transformed.width)
+            val outHeight = ((leftHeight + rightHeight) / 2f).toInt().coerceIn(2, transformed.height)
             val destinationCorners = floatArrayOf(
                 0f, 0f, outWidth.toFloat(), 0f,
                 outWidth.toFloat(), outHeight.toFloat(), 0f, outHeight.toFloat()
@@ -164,7 +176,9 @@ object AutoEnhancer {
             val perspective = Matrix()
             if (perspective.setPolyToPoly(sourceCorners, 0, destinationCorners, 0, 4)) {
                 val rectified = Bitmap.createBitmap(outWidth, outHeight, Bitmap.Config.ARGB_8888)
-                android.graphics.Canvas(rectified).drawBitmap(transformed, perspective, android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG))
+                android.graphics.Canvas(rectified).drawBitmap(
+                    transformed, perspective, android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG)
+                )
                 transformed.recycle()
                 transformed = rectified
             }

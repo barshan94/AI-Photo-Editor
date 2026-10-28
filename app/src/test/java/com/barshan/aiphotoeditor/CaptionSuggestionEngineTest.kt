@@ -59,7 +59,7 @@ class CaptionSuggestionEngineTest {
 
     @Test
     fun singlePersonGetsCasualPortraitCaptionsInsteadOfFamilyCaptions() {
-        val result = CaptionSuggestionEngine.fromLabels(listOf("person" to 0.95f), 0.8f)
+        val result = CaptionSuggestionEngine.fromLabels(listOf("person" to 0.95f, "people" to 0.62f), 0.8f)
         assertTrue(result.english.any { it.contains("Felt cute") })
         assertFalse(result.english.any { it.contains("family album") })
     }

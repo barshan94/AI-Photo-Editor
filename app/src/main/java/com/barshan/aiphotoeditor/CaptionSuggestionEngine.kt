@@ -18,7 +18,13 @@ object CaptionSuggestionEngine {
             .take(5)
 
         val labelText = trusted.joinToString(" ").lowercase()
+        val isFestival = listOf("sindoor", "sindur", "vermilion", "durga", "bijoya", "dashami", "puja", "worship", "religious festival", "festival", "celebration", "temple", "idol", "goddess", "garland", "sari", "saree")
+            .any { it in labelText }
         val scene = when {
+            isFestival -> Scene(
+                "Shubho Bijoya ❤️",
+                "শুভ বিজয়া ❤️"
+            )
             listOf("wedding", "bride", "groom", "ceremony", "marriage").any { it in labelText } -> Scene(
                 "A beautiful moment, kept forever.",
                 "সুন্দর একটি মুহূর্ত, স্মৃতিতে থাকুক চিরকাল।"

@@ -3043,7 +3043,14 @@ private fun PhotoEditorHome() {
                                 .pointerInput(photo.uri) {
                                     detectTapGestures(
                                         onTap = { openEditor(photo) },
-                                        onLongPress = { originalHoldPhoto = photo }
+                                        onLongPress = { originalHoldPhoto = photo },
+                                        onPress = {
+                                            try {
+                                                awaitRelease()
+                                            } finally {
+                                                originalHoldPhoto = null
+                                            }
+                                        }
                                     )
                                 }
                                 .padding(5.dp)

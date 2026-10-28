@@ -232,6 +232,7 @@ private fun PhotoEditorHome() {
     var captionEnglish by remember { mutableStateOf("") }
     var captionBengali by remember { mutableStateOf("") }
     var captionIndex by remember { mutableIntStateOf(0) }
+    var captionPhotoUri by remember { mutableStateOf<String?>(null) }
     var isGeneratingCaptions by remember { mutableStateOf(false) }
     var captionTheme by remember { mutableStateOf("Auto") }
     var captionAspectRatio by remember { mutableFloatStateOf(1f) }
@@ -653,6 +654,7 @@ private fun PhotoEditorHome() {
         captionEnglish = ""
         captionBengali = ""
         captionIndex = 0
+        captionPhotoUri = null
         captionTheme = "Auto"
         captionAspectRatio = 1f
         photoAnalysisResult = null

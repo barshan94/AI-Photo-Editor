@@ -1355,18 +1355,29 @@ private fun PhotoEditorHome() {
                             modifier = Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState())
                         ) {
                             Text("EDIT WORKSPACE", color = Mint, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
                                 listOf("Universal Edit", "AI Edit", "Presets", "Crop & Rotate").forEach { panel ->
                                     Button(
                                         onClick = { activeEditorPanel = panel; compareBeforeAfter = false },
-                                        modifier = Modifier.weight(1f),
-                                        shape = RoundedCornerShape(10.dp),
+                                        modifier = Modifier.weight(1f).heightIn(min = 36.dp),
+                                        shape = RoundedCornerShape(9.dp),
                                         colors = ButtonDefaults.buttonColors(
                                             containerColor = if (activeEditorPanel == panel) Mint else Color(0xFF293333),
                                             contentColor = if (activeEditorPanel == panel) Ink else BrightText
                                         ),
-                                        contentPadding = PaddingValues(horizontal = 3.dp, vertical = 3.dp)
-                                    ) { Text(panel, fontSize = 10.sp, fontWeight = FontWeight.SemiBold, maxLines = 1) }
+                                        contentPadding = PaddingValues(horizontal = 1.dp, vertical = 4.dp)
+                                    ) {
+                                        Text(
+                                            panel,
+                                            fontSize = 9.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            maxLines = 1
+                                        )
+                                    }
                                 }
                             }
                             Text("Choose one AI editing group at a time to keep the workspace focused.", color = SoftText, fontSize = 10.sp, lineHeight = 14.sp)

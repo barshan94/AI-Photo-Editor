@@ -1899,6 +1899,49 @@ private fun PhotoEditorHome() {
                                 Text("Share", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                             }
                         }
+                        // These are app-targeted handoffs, not silent/direct publishing.
+                        // Each social network still controls its own final post/story/profile workflow.
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            listOf(
+                                "Instagram" to "com.instagram.android",
+                                "Facebook" to "com.facebook.katana",
+                                "WhatsApp" to "com.whatsapp",
+                                "TikTok" to "com.zhiliaoapp.musically"
+                            ).forEach { (platform, packageName) ->
+                                OutlinedButton(
+                                    onClick = {
+                                        val uri = lastExportUri
+                                        if (uri == null) {
+                                            statusMessage = "Export an edited copy first."
+                                        } else {
+                                            try {
+                                                val targetIntent = Intent(Intent.ACTION_SEND).apply {
+                                                    type = "image/jpeg"
+                                                    putExtra(Intent.EXTRA_STREAM, uri)
+                                                    if (captionEnglish.isNotBlank()) putExtra(Intent.EXTRA_TEXT, captionEnglish)
+                                                    clipData = android.content.ClipData.newUri(context.contentResolver, "Edited photo", uri)
+                                                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                                    setPackage(packageName)
+                                                }
+                                                context.startActivity(targetIntent)
+                                                statusMessage = "Continue sharing in $platform. The app controls final publishing options."
+                                            } catch (_: Exception) {
+                                                statusMessage = "$platform could not accept this image share. Try Share to choose an available destination."
+                                            }
+                                        }
+                                    },
+                                    enabled = lastExportUri != null && !isExporting,
+                                    modifier = Modifier.weight(1f),
+                                    shape = RoundedCornerShape(10.dp),
+                                    contentPadding = PaddingValues(horizontal = 2.dp, vertical = 8.dp)
+                                ) {
+                                    Text(platform, fontSize = 9.sp, maxLines = 1)
+                                }
+                            }
+                        }
                         Spacer(modifier = Modifier.height(12.dp))
                         if (activeEditorPanel == "AI Edit" && activeAiSubpanel == "Enhance") {
                         Button(

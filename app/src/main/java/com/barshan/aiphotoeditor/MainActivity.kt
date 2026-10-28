@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -1279,6 +1280,43 @@ private fun PhotoEditorHome() {
                             }
                         }
 
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(bottom = 7.dp),
+                            horizontalArrangement = Arrangement.End,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(
+                                modifier = Modifier.align(Alignment.TopEnd).padding(8.dp)
+                                    .clip(RoundedCornerShape(14.dp))
+                                    .background(Ink.copy(alpha = 0.86f))
+                                    .padding(horizontal = 5.dp, vertical = 4.dp),
+                                horizontalArrangement = Arrangement.spacedBy(3.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                EditorImageAction("↶", "Undo", undoHistory.isNotEmpty() && !isExporting) { undoEdit() }
+                                EditorImageAction("↷", "Redo", redoHistory.isNotEmpty() && !isExporting) { redoEdit() }
+                                EditorImageAction("⇩", "Export", previewBitmap != null && !isExporting && selectedStyle != "Original") {
+                                    val photo = activePhoto
+                                    if (photo != null) exportOne(photo, currentSettings(),
+                                        selectedStyle == "AI Portrait" || backgroundBlur > 0f ||
+                                            backgroundEnhancement > 0f || subjectBrightness > 0f ||
+                                            darkerAreaLift > 0f || skinSmoothing > 0f || makeupIntensity > 0f)
+                                }
+                                EditorImageAction("↗", "Share", lastExportedUri != null && !isExporting) {
+                                    val uri = lastExportedUri
+                                    if (uri != null) {
+                                        val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                                            type = "image/jpeg"
+                                            putExtra(Intent.EXTRA_STREAM, uri)
+                                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                        }
+                                        context.startActivity(Intent.createChooser(shareIntent, "Share edited photo"))
+                                    } else {
+                                        statusMessage = "Export an edited copy first, then tap Share."
+                                    }
+                                }
+                            }
+                        }
                         Spacer(modifier = Modifier.height(8.dp))
                         val previewAspectRatio = previewBitmap?.let {
                             it.width.toFloat() / it.height.coerceAtLeast(1).toFloat()
@@ -1345,37 +1383,6 @@ private fun PhotoEditorHome() {
                                 ),
                             contentAlignment = Alignment.Center
                         ) {
-                            Row(
-                                modifier = Modifier.align(Alignment.TopEnd).padding(8.dp)
-                                    .clip(RoundedCornerShape(14.dp))
-                                    .background(Ink.copy(alpha = 0.86f))
-                                    .padding(horizontal = 5.dp, vertical = 4.dp),
-                                horizontalArrangement = Arrangement.spacedBy(3.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                EditorImageAction("↶", "Undo", undoHistory.isNotEmpty() && !isExporting) { undoEdit() }
-                                EditorImageAction("↷", "Redo", redoHistory.isNotEmpty() && !isExporting) { redoEdit() }
-                                EditorImageAction("⇩", "Export", previewBitmap != null && !isExporting && selectedStyle != "Original") {
-                                    val photo = activePhoto
-                                    if (photo != null) exportOne(photo, currentSettings(),
-                                        selectedStyle == "AI Portrait" || backgroundBlur > 0f ||
-                                            backgroundEnhancement > 0f || subjectBrightness > 0f ||
-                                            darkerAreaLift > 0f || skinSmoothing > 0f || makeupIntensity > 0f)
-                                }
-                                EditorImageAction("↗", "Share", lastExportedUri != null && !isExporting) {
-                                    val uri = lastExportedUri
-                                    if (uri != null) {
-                                        val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                                            type = "image/jpeg"
-                                            putExtra(Intent.EXTRA_STREAM, uri)
-                                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                                        }
-                                        context.startActivity(Intent.createChooser(shareIntent, "Share edited photo"))
-                                    } else {
-                                        statusMessage = "Export an edited copy first, then tap Share."
-                                    }
-                                }
-                            }
                             val active = activePhoto
                             if (active != null) {
                                 if (isShowingOriginal) {
@@ -1519,14 +1526,14 @@ private fun PhotoEditorHome() {
                         ) {
                             Text("EDIT WORKSPACE", color = Mint, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                             Row(
-                                modifier = Modifier.fillMaxWidth(),
+                                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                                 horizontalArrangement = Arrangement.spacedBy(5.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                listOf("Universal Edit", "AI Edit", "Presets", "Crop & Rotate").forEach { panel ->
+                                listOf("Universal Edit", "AI Edit", "Presets", "Crop & Rotate", "Caption").forEach { panel ->
                                     Button(
                                         onClick = { activeEditorPanel = panel; compareBeforeAfter = false },
-                                        modifier = Modifier.weight(1f).heightIn(min = 44.dp),
+                                        modifier = Modifier.width(96.dp).heightIn(min = 44.dp),
                                         shape = RoundedCornerShape(11.dp),
                                         colors = ButtonDefaults.buttonColors(
                                             containerColor = if (activeEditorPanel == panel) Mint else Color(0xFF293333),
@@ -1950,134 +1957,6 @@ private fun PhotoEditorHome() {
                                     modifier = Modifier.clickable { showCropGuides = !showCropGuides }.padding(4.dp))
                             }
                         Spacer(modifier = Modifier.height(12.dp))
-                        Text("CAPTION STUDIO", color = BrightText, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                        Text("On-device visual suggestions plus a searchable offline library. Edit before copying or sharing.",
-                            color = SoftText, fontSize = 11.sp, lineHeight = 16.sp,
-                            modifier = Modifier.padding(top = 3.dp, bottom = 8.dp))
-                        OutlinedTextField(
-                            value = captionSearchQuery, onValueChange = { captionSearchQuery = it },
-                            modifier = Modifier.fillMaxWidth(), label = { Text("Search 1,000 offline captions") },
-                            singleLine = true, shape = RoundedCornerShape(14.dp)
-                        )
-                        Text("${CaptionLibrary.all.size} bundled captions · ${remoteCaptionEntries.size} online additions cached · Wi-Fi updates enabled",
-                            color = Mint, fontSize = 10.sp, fontWeight = FontWeight.SemiBold,
-                            modifier = Modifier.padding(top = 4.dp, bottom = 2.dp))
-                        Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                            horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                            CaptionLibrary.categories.forEach { category ->
-                                Button(
-                                    onClick = { captionLibraryCategory = category },
-                                    modifier = Modifier.heightIn(min = 44.dp), shape = RoundedCornerShape(18.dp),
-                                    contentPadding = PaddingValues(horizontal = 11.dp, vertical = 5.dp),
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = if (captionLibraryCategory == category) Mint else Color(0xFF293333),
-                                        contentColor = if (captionLibraryCategory == category) Ink else BrightText
-                                    )
-                                ) { Text(category, fontSize = 10.sp, maxLines = 1) }
-                            }
-                        }
-                        val normalizedCaptionQuery = captionSearchQuery.trim()
-                        val remoteMatches = remoteCaptionEntries.filter { preset ->
-                            (captionLibraryCategory == "All" || preset.category == captionLibraryCategory) &&
-                                (normalizedCaptionQuery.isBlank() ||
-                                    preset.text.contains(normalizedCaptionQuery, ignoreCase = true) ||
-                                    preset.bengali.contains(normalizedCaptionQuery) ||
-                                    preset.category.contains(normalizedCaptionQuery, ignoreCase = true) ||
-                                    preset.keywords.any { it.contains(normalizedCaptionQuery, ignoreCase = true) })
-                        }
-                        val matchingPresets = (remoteMatches + CaptionLibrary.search(captionSearchQuery, captionLibraryCategory, 6))
-                            .distinctBy { it.text }.take(6)
-                            if (matchingPresets.isEmpty()) {
-                                Text("No matches yet. Try a broader word or another category.", color = SoftText, fontSize = 11.sp)
-                            } else {
-                                matchingPresets.forEach { preset ->
-                                    Button(
-                                        onClick = {
-                                            captionEnglish = preset.text
-                                            captionBengali = preset.bengali
-                                            captionSuggestions = CaptionSuggestionEngine.Suggestions(
-                                                detectedLabels = captionSuggestions?.detectedLabels.orEmpty(),
-                                                english = listOf(preset.text), bengali = listOf(captionBengali)
-                                            )
-                                            captionIndex = 0
-                                            statusMessage = "Caption selected from the offline ${preset.category} library. You can edit it before copying."
-                                        },
-                                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-                                        shape = RoundedCornerShape(12.dp),
-                                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 9.dp),
-                                        colors = ButtonDefaults.buttonColors(
-                                            containerColor = Color(0xFF202929), contentColor = BrightText
-                                        )
-                                    ) {
-                                        Column(modifier = Modifier.fillMaxWidth()) {
-                                            Text(preset.text, fontSize = 12.sp, lineHeight = 16.sp, maxLines = 3)
-                                            Text(preset.bengali, color = SoftText, fontSize = 11.sp, lineHeight = 15.sp, maxLines = 2, modifier = Modifier.padding(top = 3.dp))
-                                            Text(preset.category.uppercase(), color = Mint, fontSize = 9.sp,
-                                                fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 3.dp))
-                                        }
-                                    }
-                                }
-                            }
-                        Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                            listOf("Auto", "Portrait", "Friends", "Festival", "Celebration", "Romantic", "Funny", "Devotional", "Travel", "Family", "Aesthetic").forEach { theme ->
-                                Button(onClick = {
-                                    captionTheme = theme
-                                    val existing = captionSuggestions
-                                    if (existing != null) applyCaptionSuggestions(existing.detectedLabels.map { it to 0.9f }, captionAspectRatio)
-                                }, contentPadding = PaddingValues(horizontal = 9.dp, vertical = 3.dp),
-                                    colors = ButtonDefaults.buttonColors(containerColor = if (captionTheme == theme) Mint else Color(0xFF293333), contentColor = if (captionTheme == theme) Ink else BrightText)) {
-                                    Text(theme, fontSize = 10.sp)
-                                }
-                            }
-                        }
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Button(onClick = { suggestCaptions() }, modifier = Modifier.weight(1f).heightIn(min = 44.dp), enabled = previewBitmap != null && !isGeneratingCaptions,
-                                shape = RoundedCornerShape(12.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Ink),
-                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
-                            ) { Text(if (isGeneratingCaptions) "Analyzing…" else "Analyze photo", fontSize = 11.sp) }
-                            Button(
-                                onClick = {
-                                    val suggestions = captionSuggestions
-                                    if (suggestions != null) {
-                                        captionIndex = (captionIndex + 1) % suggestions.english.size
-                                        captionEnglish = suggestions.english[captionIndex]
-                                        captionBengali = suggestions.bengali[captionIndex]
-                                    } else suggestCaptions()
-                                },
-                                enabled = captionSuggestions != null && !isGeneratingCaptions,
-                                modifier = Modifier.weight(1f).heightIn(min = 44.dp),
-                                shape = RoundedCornerShape(12.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = BrightText),
-                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp)
-                            ) { Text("New suggestions", fontSize = 11.sp) }
-                        }
-                        if (captionSuggestions != null) {
-                            val detected = captionSuggestions?.detectedLabels.orEmpty()
-                            if (detected.isNotEmpty()) {
-                                Text("Visual clues: " + detected.joinToString(" · "),
-                                    color = SoftText, fontSize = 10.sp,
-                                    modifier = Modifier.padding(top = 4.dp, bottom = 3.dp))
-                            }
-                            OutlinedTextField(value = captionEnglish, onValueChange = { captionEnglish = it },
-                                modifier = Modifier.fillMaxWidth().padding(top = 5.dp),
-                                label = { Text("English caption") }, minLines = 2, maxLines = 4)
-                            OutlinedTextField(value = captionBengali, onValueChange = { captionBengali = it },
-                                modifier = Modifier.fillMaxWidth().padding(top = 5.dp),
-                                label = { Text("বাংলা ক্যাপশন") }, minLines = 2, maxLines = 4)
-                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                Button(onClick = { clipboardManager.setText(AnnotatedString(captionEnglish)) },
-                                    shape = RoundedCornerShape(10.dp),
-                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = BrightText),
-                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
-                                ) { Text("Copy English", fontSize = 10.sp) }
-                                Button(onClick = { clipboardManager.setText(AnnotatedString(captionBengali)) },
-                                    shape = RoundedCornerShape(10.dp),
-                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = BrightText),
-                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
-                                ) { Text("Copy বাংলা", fontSize = 10.sp) }
-                            }
-                        }
                         Spacer(modifier = Modifier.height(10.dp))
                         Text("BRIGHTNESS  " + brightness.toInt(), color = SoftText, fontSize = 11.sp)
                         Slider(value = brightness, onValueChange = {
@@ -2150,6 +2029,74 @@ private fun PhotoEditorHome() {
                         }
                         }
                     }
+                }
+            }
+
+            if (activePhoto != null && activeEditorPanel == "Caption") {
+                Column(modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("CAPTION", color = Mint, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    Text("Generate a caption from the selected photo, choose a style, then edit or copy it.",
+                        color = SoftText, fontSize = 11.sp, lineHeight = 16.sp)
+                    Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                                                listOf("Auto", "Portrait", "Friends", "Festival", "Celebration", "Romantic", "Funny", "Devotional", "Travel", "Family", "Aesthetic").forEach { theme ->
+                                                    Button(onClick = {
+                                                        captionTheme = theme
+                                                        val existing = captionSuggestions
+                                                        if (existing != null) applyCaptionSuggestions(existing.detectedLabels.map { it to 0.9f }, captionAspectRatio)
+                                                    }, contentPadding = PaddingValues(horizontal = 9.dp, vertical = 3.dp),
+                                                        colors = ButtonDefaults.buttonColors(containerColor = if (captionTheme == theme) Mint else Color(0xFF293333), contentColor = if (captionTheme == theme) Ink else BrightText)) {
+                                                        Text(theme, fontSize = 10.sp)
+                                                    }
+                                                }
+                                            }
+                                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                                Button(onClick = { suggestCaptions() }, modifier = Modifier.weight(1f).heightIn(min = 44.dp), enabled = previewBitmap != null && !isGeneratingCaptions,
+                                                    shape = RoundedCornerShape(12.dp),
+                                                    colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Ink),
+                                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
+                                                ) { Text(if (isGeneratingCaptions) "Analyzing…" else "Analyze photo", fontSize = 11.sp) }
+                                                Button(
+                                                    onClick = {
+                                                        val suggestions = captionSuggestions
+                                                        if (suggestions != null) {
+                                                            captionIndex = (captionIndex + 1) % suggestions.english.size
+                                                            captionEnglish = suggestions.english[captionIndex]
+                                                            captionBengali = suggestions.bengali[captionIndex]
+                                                        } else suggestCaptions()
+                                                    },
+                                                    enabled = captionSuggestions != null && !isGeneratingCaptions,
+                                                    modifier = Modifier.weight(1f).heightIn(min = 44.dp),
+                                                    shape = RoundedCornerShape(12.dp),
+                                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = BrightText),
+                                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp)
+                                                ) { Text("New suggestions", fontSize = 11.sp) }
+                                            }
+                                            if (captionSuggestions != null) {
+                                                val detected = captionSuggestions?.detectedLabels.orEmpty()
+                                                if (detected.isNotEmpty()) {
+                                                    Text("Visual clues: " + detected.joinToString(" · "),
+                                                        color = SoftText, fontSize = 10.sp,
+                                                        modifier = Modifier.padding(top = 4.dp, bottom = 3.dp))
+                                                }
+                                                OutlinedTextField(value = captionEnglish, onValueChange = { captionEnglish = it },
+                                                    modifier = Modifier.fillMaxWidth().padding(top = 5.dp),
+                                                    label = { Text("English caption") }, minLines = 2, maxLines = 4)
+                                                OutlinedTextField(value = captionBengali, onValueChange = { captionBengali = it },
+                                                    modifier = Modifier.fillMaxWidth().padding(top = 5.dp),
+                                                    label = { Text("বাংলা ক্যাপশন") }, minLines = 2, maxLines = 4)
+                                                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                                    Button(onClick = { clipboardManager.setText(AnnotatedString(captionEnglish)) },
+                                                        shape = RoundedCornerShape(10.dp),
+                                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = BrightText),
+                                                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+                                                    ) { Text("Copy English", fontSize = 10.sp) }
+                                                    Button(onClick = { clipboardManager.setText(AnnotatedString(captionBengali)) },
+                                                        shape = RoundedCornerShape(10.dp),
+                                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = BrightText),
+                                                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+                                                    ) { Text("Copy বাংলা", fontSize = 10.sp) }
+                                                }
+                                            }
                 }
             }
 

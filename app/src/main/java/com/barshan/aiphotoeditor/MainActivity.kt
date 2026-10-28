@@ -232,7 +232,6 @@ private fun PhotoEditorHome() {
     var captionEnglish by remember { mutableStateOf("") }
     var captionBengali by remember { mutableStateOf("") }
     var captionIndex by remember { mutableIntStateOf(0) }
-    var captionPhotoUri by remember { mutableStateOf<String?>(null) }
     var isGeneratingCaptions by remember { mutableStateOf(false) }
     var captionTheme by remember { mutableStateOf("Auto") }
     var captionAspectRatio by remember { mutableFloatStateOf(1f) }
@@ -650,6 +649,13 @@ private fun PhotoEditorHome() {
         activeAiSubpanel = "Subject"
         compareBeforeAfter = false
         comparePosition = 0.5f
+        captionSuggestions = null
+        captionEnglish = ""
+        captionBengali = ""
+        captionIndex = 0
+        captionTheme = "Auto"
+        captionAspectRatio = 1f
+        photoAnalysisResult = null
         previewBitmap?.let { if (!it.isRecycled) it.recycle() }
         previewBitmap = null
 
@@ -1910,11 +1916,11 @@ private fun PhotoEditorHome() {
                             }
                         }
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Button(onClick = { suggestCaptions() }, modifier = Modifier.weight(1f), enabled = previewBitmap != null && !isGeneratingCaptions,
+                            Button(onClick = { suggestCaptions() }, modifier = Modifier.weight(1f).height(44.dp), enabled = previewBitmap != null && !isGeneratingCaptions,
                                 shape = RoundedCornerShape(10.dp),
                                 colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Ink),
                                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
-                            ) { Text(if (isGeneratingCaptions) "Analyzing…" else "Suggest captions", fontSize = 10.sp) }
+                            ) { Text(if (isGeneratingCaptions) "Analyzing…" else "Find caption ideas", fontSize = 11.sp) }
                             Button(
                                 onClick = {
                                     val suggestions = captionSuggestions
@@ -1925,11 +1931,11 @@ private fun PhotoEditorHome() {
                                     } else suggestCaptions()
                                 },
                                 enabled = captionSuggestions != null && !isGeneratingCaptions,
-                                modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(10.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = BrightText),
+                                modifier = Modifier.weight(1f).height(44.dp),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF202828), contentColor = BrightText),
                                 contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
-                            ) { Text("Next idea  ↻", fontSize = 10.sp) }
+                            ) { Text("Next idea  ↻", fontSize = 11.sp) }
                         }
                         if (captionSuggestions != null) {
                             val detected = captionSuggestions?.detectedLabels.orEmpty()
@@ -2674,7 +2680,7 @@ private fun EditorChip(
         shadowElevation = 0.dp
     ) {
         Box(
-            modifier = Modifier.padding(
+            modifier = Modifier.heightIn(min = if (compact) 44.dp else 48.dp).padding(
                 horizontal = if (compact) 11.dp else 15.dp,
                 vertical = if (compact) 8.dp else 11.dp
             ),
@@ -2682,7 +2688,7 @@ private fun EditorChip(
         ) {
             Text(
                 label,
-                fontSize = if (compact) 10.sp else 11.sp,
+                fontSize = if (compact) 11.sp else 12.sp,
                 fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
                 maxLines = 1
             )

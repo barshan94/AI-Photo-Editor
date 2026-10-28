@@ -2120,9 +2120,11 @@ private fun PhotoEditorHome() {
             if (activePhoto != null && activeEditorPanel == "Caption") {
                 Column(modifier = Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                     OutlinedTextField(value = captionEnglish, onValueChange = { captionEnglish = it },
-                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp, max = 72.dp), label = { Text("English caption") }, minLines = 1, maxLines = 2,
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp, max = 72.dp), label = { Text("English caption") }, minLines = 1, maxLines = 2
+                    )
                     OutlinedTextField(value = captionBengali, onValueChange = { captionBengali = it },
-                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp, max = 72.dp), label = { Text("বাংলা ক্যাপশন") }, minLines = 1, maxLines = 2,
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp, max = 72.dp), label = { Text("বাংলা ক্যাপশন") }, minLines = 1, maxLines = 2
+                    )
                     Button(onClick = { suggestCaptions() },
                         modifier = Modifier.fillMaxWidth().heightIn(min = 38.dp),
                         enabled = previewBitmap != null && !isGeneratingCaptions,

@@ -389,7 +389,7 @@ private fun PhotoEditorHome() {
         isGeneratingCaptions = false
     }
 
-    suspend fun createBatchCaption(photo: PhotoItem, theme: String, round: Int): Pair<String, String> {
+    suspend fun createBatchCaption(photo: PhotoItem, theme: String, round: Int): List<Pair<String, String>> {
         var bitmap: Bitmap? = null
         try {
             bitmap = withContext(Dispatchers.IO) {

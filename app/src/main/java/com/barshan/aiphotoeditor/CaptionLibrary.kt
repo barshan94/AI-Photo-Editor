@@ -3,14 +3,15 @@ package com.barshan.aiphotoeditor
 /**
  * Offline caption preset bank. Entries are generated from curated, category-specific
  * phrase sets so search is instant, works without network access, and adds no large runtime dependency.
- * Dataset inspiration/reference: CC0 Flickr8k captions (https://huggingface.co/datasets/intro/flickr8k).
- * This app's social-caption wording below is original; it does not redistribute that dataset's text.
+ * External dataset candidate for a future factual-image-caption pack: CC0 Flickr8k
+ * (https://huggingface.co/datasets/intro/flickr8k). The social-caption presets below are original;
+ * no raw rows from that online dataset are bundled in this library.
  */
 object CaptionLibrary {
     data class Entry(val id: String, val category: String, val text: String, val keywords: Set<String>)
 
     private val templates = listOf(
-        "A little %s goes a long way.",
+        "A moment for %s.",
         "Here for the %s and staying for the memories.",
         "Collecting moments of %s, one frame at a time.",
         "Some days are made for %s.",

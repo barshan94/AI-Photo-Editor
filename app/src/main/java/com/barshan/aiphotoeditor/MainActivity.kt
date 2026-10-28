@@ -191,12 +191,12 @@ private fun PhotoEditorHome() {
     var contrast by remember { mutableFloatStateOf(recoveryPrefs.getFloat("contrast", 1.07f)) }
     var saturation by remember { mutableFloatStateOf(recoveryPrefs.getFloat("saturation", 1.06f)) }
     var warmth by remember { mutableFloatStateOf(recoveryPrefs.getFloat("warmth", 0f)) }
-    var backgroundBlur by remember { mutableFloatStateOf(0f) }
-    var backgroundEnhancement by remember { mutableFloatStateOf(0f) }
-    var subjectBrightness by remember { mutableFloatStateOf(0f) }
-    var darkerAreaLift by remember { mutableFloatStateOf(0f) }
-    var skinSmoothing by remember { mutableFloatStateOf(0f) }
-    var makeupIntensity by remember { mutableFloatStateOf(0f) }
+    var backgroundBlur by remember { mutableFloatStateOf(recoveryPrefs.getFloat("background_blur", 0f)) }
+    var backgroundEnhancement by remember { mutableFloatStateOf(recoveryPrefs.getFloat("background_enhancement", 0f)) }
+    var subjectBrightness by remember { mutableFloatStateOf(recoveryPrefs.getFloat("subject_brightness", 0f)) }
+    var darkerAreaLift by remember { mutableFloatStateOf(recoveryPrefs.getFloat("darker_area_lift", 0f)) }
+    var skinSmoothing by remember { mutableFloatStateOf(recoveryPrefs.getFloat("skin_smoothing", 0f)) }
+    var makeupIntensity by remember { mutableFloatStateOf(recoveryPrefs.getFloat("makeup_intensity", 0f)) }
     var removalBrushMode by remember { mutableStateOf(false) }
     var removalBrushSize by remember { mutableFloatStateOf(24f) }
     val removalStrokes = remember { mutableStateListOf<List<Offset>>() }
@@ -218,8 +218,8 @@ private fun PhotoEditorHome() {
     var perspectiveBottomLeftY by remember { mutableFloatStateOf(recoveryPrefs.getFloat("perspective_bl_y", 0f)) }
     var showPerspectiveControls by remember { mutableStateOf(false) }
     var selectedStyle by remember { mutableStateOf(recoveryPrefs.getString("selected_style", "Auto") ?: "Auto") }
-    var activeEditorPanel by remember { mutableStateOf("Universal Edit") }
-    var activeAiSubpanel by remember { mutableStateOf("Subject") }
+    var activeEditorPanel by remember { mutableStateOf(recoveryPrefs.getString("active_editor_panel", "Universal Edit") ?: "Universal Edit") }
+    var activeAiSubpanel by remember { mutableStateOf(recoveryPrefs.getString("active_ai_subpanel", "Subject") ?: "Subject") }
     var editedScore by remember { mutableStateOf<PhotoQualityScoring.Score?>(null) }
     var originalPreviewScore by remember { mutableStateOf<PhotoQualityScoring.Score?>(null) }
     var isShowingOriginal by remember { mutableStateOf(false) }
@@ -227,14 +227,26 @@ private fun PhotoEditorHome() {
     var photoAnalysisResult by remember { mutableStateOf<PhotoAnalysisResult?>(null) }
     var isRunningPhotoAnalysis by remember { mutableStateOf(false) }
 
-    var captionSuggestions by remember { mutableStateOf<CaptionSuggestionEngine.Suggestions?>(null) }
-    var captionEnglish by remember { mutableStateOf("") }
-    var captionBengali by remember { mutableStateOf("") }
+    var captionSuggestions by remember {
+        mutableStateOf(
+            recoveryPrefs.getString("caption_english", "").orEmpty().takeIf { it.isNotBlank() }?.let { savedEnglish ->
+                CaptionSuggestionEngine.Suggestions(
+                    detectedLabels = emptyList(),
+                    english = listOf(savedEnglish),
+                    bengali = listOf(recoveryPrefs.getString("caption_bengali", "").orEmpty())
+                )
+            }
+        )
+    }
+    var captionEnglish by remember { mutableStateOf(recoveryPrefs.getString("caption_english", "").orEmpty()) }
+    var captionBengali by remember { mutableStateOf(recoveryPrefs.getString("caption_bengali", "").orEmpty()) }
     var captionIndex by remember { mutableIntStateOf(0) }
-    var captionPhotoUri by remember { mutableStateOf<String?>(null) }
+    var captionPhotoUri by remember { mutableStateOf<String?>(recoveryPrefs.getString("caption_photo_uri", null)) }
     var isGeneratingCaptions by remember { mutableStateOf(false) }
-    var captionTheme by remember { mutableStateOf("Auto") }
-    var captionAspectRatio by remember { mutableFloatStateOf(1f) }
+    var captionTheme by remember { mutableStateOf(recoveryPrefs.getString("caption_theme", "Auto") ?: "Auto") }
+    var captionAspectRatio by remember { mutableFloatStateOf(recoveryPrefs.getFloat("caption_aspect_ratio", 1f)) }
+    var captionSearchQuery by remember { mutableStateOf(recoveryPrefs.getString("caption_search_query", "").orEmpty()) }
+    var captionLibraryCategory by remember { mutableStateOf(recoveryPrefs.getString("caption_library_category", "All") ?: "All") }
 
     fun applyCaptionSuggestions(labels: List<Pair<String, Float>>, ratio: Float) {
         captionAspectRatio = ratio
@@ -311,17 +323,28 @@ private fun PhotoEditorHome() {
         if (photosNeedingScores.isNotEmpty()) statusMessage = "Recovered your previous photo selection and edit settings."
     }
 
+    // Durable session checkpoint: every editable value and caption is written whenever it changes.
+    // This intentionally stores settings/text/URI references only; original image bytes are never overwritten.
     LaunchedEffect(
         selectedPhotos.map { it.uri.toString() }, activePhoto?.uri?.toString(),
-        brightness, contrast, saturation, warmth, cropLabel, cropOffsetX, cropOffsetY, selectedStyle,
+        brightness, contrast, saturation, warmth, backgroundBlur, backgroundEnhancement,
+        subjectBrightness, darkerAreaLift, skinSmoothing, makeupIntensity,
+        cropLabel, cropOffsetX, cropOffsetY, rotationDegrees, straightenDegrees,
+        mirrorHorizontal, mirrorVertical, selectedStyle, showEnhanced, showCropGuides,
+        showPerspectiveControls, removalBrushMode, removalBrushSize,
         perspectiveTopLeftX, perspectiveTopLeftY, perspectiveTopRightX, perspectiveTopRightY,
-        perspectiveBottomRightX, perspectiveBottomRightY, perspectiveBottomLeftX, perspectiveBottomLeftY
+        perspectiveBottomRightX, perspectiveBottomRightY, perspectiveBottomLeftX, perspectiveBottomLeftY,
+        activeEditorPanel, activeAiSubpanel, captionEnglish, captionBengali, captionTheme,
+        captionAspectRatio, captionSearchQuery, captionLibraryCategory
     ) {
         recoveryPrefs.edit()
             .putString("selected_photo_uris", selectedPhotos.joinToString("\\n") { it.uri.toString() })
             .putString("active_photo_uri", activePhoto?.uri?.toString())
             .putFloat("brightness", brightness).putFloat("contrast", contrast)
             .putFloat("saturation", saturation).putFloat("warmth", warmth)
+            .putFloat("background_blur", backgroundBlur).putFloat("background_enhancement", backgroundEnhancement)
+            .putFloat("subject_brightness", subjectBrightness).putFloat("darker_area_lift", darkerAreaLift)
+            .putFloat("skin_smoothing", skinSmoothing).putFloat("makeup_intensity", makeupIntensity)
             .putString("crop_label", cropLabel).putFloat("crop_offset_x", cropOffsetX)
             .putFloat("crop_offset_y", cropOffsetY).putFloat("rotation_degrees", rotationDegrees)
             .putFloat("straighten_degrees", straightenDegrees).putBoolean("mirror_horizontal", mirrorHorizontal)
@@ -330,7 +353,17 @@ private fun PhotoEditorHome() {
             .putFloat("perspective_tr_x", perspectiveTopRightX).putFloat("perspective_tr_y", perspectiveTopRightY)
             .putFloat("perspective_br_x", perspectiveBottomRightX).putFloat("perspective_br_y", perspectiveBottomRightY)
             .putFloat("perspective_bl_x", perspectiveBottomLeftX).putFloat("perspective_bl_y", perspectiveBottomLeftY)
+            .putBoolean("show_enhanced", showEnhanced).putBoolean("show_crop_guides", showCropGuides)
+            .putBoolean("show_perspective_controls", showPerspectiveControls)
+            .putBoolean("removal_brush_mode", removalBrushMode).putFloat("removal_brush_size", removalBrushSize)
             .putString("selected_style", selectedStyle)
+            .putString("active_editor_panel", activeEditorPanel).putString("active_ai_subpanel", activeAiSubpanel)
+            .putString("caption_english", captionEnglish).putString("caption_bengali", captionBengali)
+            .putString("caption_theme", captionTheme).putFloat("caption_aspect_ratio", captionAspectRatio)
+            .putString("caption_photo_uri", captionPhotoUri)
+            .putString("caption_search_query", captionSearchQuery)
+            .putString("caption_library_category", captionLibraryCategory)
+            .putLong("last_session_checkpoint_ms", System.currentTimeMillis())
             .apply()
     }
 

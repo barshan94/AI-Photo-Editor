@@ -1618,9 +1618,17 @@ private fun PhotoEditorHome() {
                             shape = RoundedCornerShape(14.dp)
                         ) {
                             Column(modifier = Modifier.fillMaxWidth().padding(12.dp)) {
-                                Text("AI EDIT ACTIONS", color = Mint, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                                Text("Improve detail, remove unwanted objects, inspect the scene, and build a personal editing style.", color = SoftText, fontSize = 10.sp, lineHeight = 14.sp, modifier = Modifier.padding(top = 3.dp, bottom = 8.dp))
                                 if (activeAiSubpanel == "Enhance") {
+                                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                        listOf("Upscale", "My style").forEach { tool ->
+                                            Button(onClick = { activeAiTool = tool }, modifier = Modifier.weight(1f).heightIn(min = 36.dp),
+                                                shape = RoundedCornerShape(8.dp),
+                                                colors = ButtonDefaults.buttonColors(containerColor = if (activeAiTool == tool) Mint else Color(0xFF293333), contentColor = if (activeAiTool == tool) Ink else BrightText),
+                                                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp)) { Text(tool, fontSize = 10.sp) }
+                                        }
+                                    }
+                                }
+                                if (activeAiSubpanel == "Enhance" && activeAiTool == "Upscale") {
                                 Button(
                                     onClick = {
                                         val photo = activePhoto
@@ -1679,7 +1687,7 @@ private fun PhotoEditorHome() {
                                     ) { Text(if (isExporting) "Removing object…" else "Remove marked area") }
                                 }
                                 }
-                                if (activeAiSubpanel == "Enhance") {
+                                if (activeAiSubpanel == "Enhance" && activeAiTool == "My style") {
                                 Text("PERSONAL EDIT LEARNING · PRIVATE ON THIS DEVICE", color = Mint, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                                 Text(
                                     if (learnedProfile.acceptedEdits == 0) "No accepted edits learned yet. Export an edit you like; the app will remember its settings locally and use them as your personal starting point."
@@ -2112,9 +2120,9 @@ private fun PhotoEditorHome() {
             if (activePhoto != null && activeEditorPanel == "Caption") {
                 Column(modifier = Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                     OutlinedTextField(value = captionEnglish, onValueChange = { captionEnglish = it },
-                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp, max = 76.dp), label = { Text("English caption") }, minLines = 2, maxLines = 3,
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp, max = 72.dp), label = { Text("English caption") }, minLines = 1, maxLines = 2,
                     OutlinedTextField(value = captionBengali, onValueChange = { captionBengali = it },
-                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp, max = 76.dp), label = { Text("বাংলা ক্যাপশন") }, minLines = 2, maxLines = 3,
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp, max = 72.dp), label = { Text("বাংলা ক্যাপশন") }, minLines = 1, maxLines = 2,
                     Button(onClick = { suggestCaptions() },
                         modifier = Modifier.fillMaxWidth().heightIn(min = 38.dp),
                         enabled = previewBitmap != null && !isGeneratingCaptions,

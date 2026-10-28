@@ -199,8 +199,35 @@ private fun PhotoEditorHome() {
     var makeupIntensity by remember { mutableFloatStateOf(recoveryPrefs.getFloat("makeup_intensity", 0f)) }
     var removalBrushMode by remember { mutableStateOf(recoveryPrefs.getBoolean("removal_brush_mode", false)) }
     var removalBrushSize by remember { mutableFloatStateOf(recoveryPrefs.getFloat("removal_brush_size", 24f)) }
-    val removalStrokes = remember { mutableStateListOf<List<Offset>>() }
-    var currentRemovalStroke by remember { mutableStateOf<List<Offset>>(emptyList()) }
+    val removalStrokes = remember {
+        mutableStateListOf<List<Offset>>().apply {
+            val saved = recoveryPrefs.getString("removal_strokes", "").orEmpty()
+            saved.split("|").filter { it.isNotBlank() }.forEach { encodedStroke ->
+                val points = encodedStroke.split(";").mapNotNull { encodedPoint ->
+                    val parts = encodedPoint.split(",")
+                    if (parts.size != 2) null else {
+                        val x = parts[0].toFloatOrNull()
+                        val y = parts[1].toFloatOrNull()
+                        if (x == null || y == null) null else Offset(x, y)
+                    }
+                }
+                if (points.isNotEmpty()) add(points)
+            }
+        }
+    }
+    var currentRemovalStroke by remember {
+        mutableStateOf(
+            recoveryPrefs.getString("current_removal_stroke", "").orEmpty()
+                .split(";").mapNotNull { encodedPoint ->
+                    val parts = encodedPoint.split(",")
+                    if (parts.size != 2) null else {
+                        val x = parts[0].toFloatOrNull()
+                        val y = parts[1].toFloatOrNull()
+                        if (x == null || y == null) null else Offset(x, y)
+                    }
+                }
+        )
+    }
     var cropLabel by remember { mutableStateOf(recoveryPrefs.getString("crop_label", "Original") ?: "Original") }
     var cropOffsetX by remember { mutableFloatStateOf(recoveryPrefs.getFloat("crop_offset_x", 0f)) }
     var cropOffsetY by remember { mutableFloatStateOf(recoveryPrefs.getFloat("crop_offset_y", 0f)) }
@@ -344,6 +371,7 @@ private fun PhotoEditorHome() {
         showPerspectiveControls, removalBrushMode, removalBrushSize,
         perspectiveTopLeftX, perspectiveTopLeftY, perspectiveTopRightX, perspectiveTopRightY,
         perspectiveBottomRightX, perspectiveBottomRightY, perspectiveBottomLeftX, perspectiveBottomLeftY,
+        removalStrokes.toList(), currentRemovalStroke,
         activeEditorPanel, activeAiSubpanel, captionEnglish, captionBengali, captionTheme,
         captionAspectRatio, captionSearchQuery, captionLibraryCategory
     ) {
@@ -366,6 +394,9 @@ private fun PhotoEditorHome() {
             .putBoolean("show_enhanced", showEnhanced).putBoolean("show_crop_guides", showCropGuides)
             .putBoolean("show_perspective_controls", showPerspectiveControls)
             .putBoolean("removal_brush_mode", removalBrushMode).putFloat("removal_brush_size", removalBrushSize)
+            .putString("removal_strokes", (removalStrokes.toList() + listOf(currentRemovalStroke).filter { it.isNotEmpty() })
+                .joinToString("|") { stroke -> stroke.joinToString(";") { point -> "${point.x},${point.y}" } })
+            .putString("current_removal_stroke", "")
             .putString("selected_style", selectedStyle)
             .putString("active_editor_panel", activeEditorPanel).putString("active_ai_subpanel", activeAiSubpanel)
             .putString("caption_english", captionEnglish).putString("caption_bengali", captionBengali)

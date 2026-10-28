@@ -1,7 +1,23 @@
 package com.barshan.aiphotoeditor
 
+import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Color as AndroidColor
+import android.graphics.Paint
+import android.graphics.Path
+import android.graphics.RectF
+import android.graphics.RadialGradient
+import android.graphics.Shader
+import android.renderscript.Allocation
+import android.renderscript.Element
+import android.renderscript.RenderScript
+import android.renderscript.ScriptIntrinsicBlur
 import com.google.mlkit.vision.common.InputImage
+import com.google.mlkit.vision.face.Face
+import com.google.mlkit.vision.face.FaceContour
+import com.google.mlkit.vision.face.FaceDetection
+import com.google.mlkit.vision.face.FaceDetectorOptions
 import com.google.mlkit.vision.segmentation.Segmentation
 import com.google.mlkit.vision.segmentation.SegmentationMask
 import com.google.mlkit.vision.segmentation.selfie.SelfieSegmenterOptions
@@ -27,8 +43,10 @@ object SubjectAwareEnhancer {
         Segmentation.getClient(options)
     }
 
-    suspend fun enhance(source: Bitmap, settings: EditSettings = EditSettings()): Result {
+    suspend fun enhance(source: Bitmap, settings: EditSettings = EditSettings(), context: Context? = null): Result {
         var maskInput: Bitmap? = null
+        var usedMulticlassModel = false
+        var makeupWarning: String? = null
         try {
             maskInput = withContext(Dispatchers.Default) {
                 val largest = maxOf(source.width, source.height)
@@ -43,24 +61,62 @@ object SubjectAwareEnhancer {
                     )
                 }
             }
-            val mask = getPersonMask(maskInput!!)
+            val mask = if (context != null) {
+                try {
+                    getMulticlassPersonMask(context, maskInput!!).also { usedMulticlassModel = true }
+                } catch (_: Exception) {
+                    // Keep portrait blur available if the additional model cannot initialize.
+                    getPersonMask(maskInput!!)
+                }
+            } else {
+                getPersonMask(maskInput!!)
+            }
             val enhanced = withContext(Dispatchers.Default) { AutoEnhancer.enhance(source, settings) }
+            var blurredBackground: Bitmap? = null
             try {
+                if (settings.backgroundBlur > 0f) {
+                    blurredBackground = withContext(Dispatchers.Default) {
+                        createBlurredBackground(source, settings.backgroundBlur, context)
+                    }
+                }
                 withContext(Dispatchers.Default) {
                     applyPersonAwareLook(
                         bitmap = enhanced,
                         confidence = mask.values,
+                        skinConfidence = mask.skinValues,
                         maskWidth = mask.width,
                         maskHeight = mask.height,
                         sourceWidth = source.width,
                         sourceHeight = source.height,
-                        settings = settings
+                        settings = settings,
+                        blurredBackground = blurredBackground
                     )
                 }
-                return Result(enhanced, true)
+                if (settings.makeupIntensity > 0f) {
+                    try {
+                        val detectedFaces = applyNaturalMakeup(enhanced, settings)
+                        if (detectedFaces == 0) {
+                            makeupWarning = "No clear face contours were detected; makeup was skipped. Other adjustments were kept."
+                        }
+                    } catch (_: Exception) {
+                        makeupWarning = "Face-contour makeup was unavailable; the other portrait adjustments were kept."
+                    }
+                }
+                val fallbackWarning = if (!usedMulticlassModel) {
+                    "Fallback person segmentation was used. Skin-only lightening and softening are disabled because the skin-mask model did not initialize."
+                } else null
+                val warnings = listOfNotNull(fallbackWarning, makeupWarning)
+                val combinedWarning: String? = if (warnings.isEmpty()) null else warnings.joinToString(" ")
+                return Result(
+                    bitmap = enhanced,
+                    usedAi = usedMulticlassModel,
+                    message = combinedWarning
+                )
             } catch (error: Exception) {
                 if (!enhanced.isRecycled) enhanced.recycle()
                 throw error
+            } finally {
+                blurredBackground?.let { if (!it.isRecycled) it.recycle() }
             }
         } catch (error: CancellationException) {
             throw error
@@ -75,7 +131,193 @@ object SubjectAwareEnhancer {
         }
     }
 
-    private data class PersonMask(val width: Int, val height: Int, val values: FloatArray)
+    /**
+     * Gaussian background blur via Android's RenderScript intrinsic, operating on a
+     * reduced-size copy to limit memory. The person mask is composited over it afterward.
+     * A visibly stronger downscale/upscale fallback is used if no Context is supplied.
+     */
+    @Suppress("DEPRECATION")
+    private fun createBlurredBackground(source: Bitmap, strength: Float, context: Context?): Bitmap {
+        val amount = strength.coerceIn(0f, 20f)
+        val scale = minOf(1f, 900f / maxOf(source.width, source.height).toFloat())
+        val small = if (scale < 1f) {
+            Bitmap.createScaledBitmap(
+                source,
+                (source.width * scale).toInt().coerceAtLeast(1),
+                (source.height * scale).toInt().coerceAtLeast(1),
+                true
+            )
+        } else {
+            source.copy(Bitmap.Config.ARGB_8888, false)
+        }
+
+        if (context == null) {
+            val factor = (2f + amount * 0.35f).toInt().coerceIn(2, 9)
+            val tiny = Bitmap.createScaledBitmap(
+                small,
+                (small.width / factor).coerceAtLeast(1),
+                (small.height / factor).coerceAtLeast(1),
+                true
+            )
+            return try {
+                val blurredSmall = Bitmap.createScaledBitmap(tiny, small.width, small.height, true)
+                if (small !== source && !small.isRecycled) small.recycle()
+                Bitmap.createScaledBitmap(blurredSmall, source.width, source.height, true).also {
+                    if (!blurredSmall.isRecycled) blurredSmall.recycle()
+                }
+            } finally {
+                if (!tiny.isRecycled) tiny.recycle()
+            }
+        }
+
+        var rs: RenderScript? = null
+        var input: Allocation? = null
+        var output: Allocation? = null
+        var intrinsic: ScriptIntrinsicBlur? = null
+        val blurredSmall = Bitmap.createBitmap(small.width, small.height, Bitmap.Config.ARGB_8888)
+        try {
+            rs = RenderScript.create(context.applicationContext)
+            input = Allocation.createFromBitmap(rs, small)
+            output = Allocation.createFromBitmap(rs, blurredSmall)
+            intrinsic = ScriptIntrinsicBlur.create(rs, Element.U8_4(rs))
+            intrinsic.setInput(input)
+            intrinsic.setRadius((amount * 1.25f).coerceIn(1f, 25f))
+            intrinsic.forEach(output)
+            output.copyTo(blurredSmall)
+            return if (blurredSmall.width == source.width && blurredSmall.height == source.height) {
+                blurredSmall
+            } else {
+                Bitmap.createScaledBitmap(blurredSmall, source.width, source.height, true).also {
+                    if (!blurredSmall.isRecycled) blurredSmall.recycle()
+                }
+            }
+        } finally {
+            intrinsic?.destroy()
+            output?.destroy()
+            input?.destroy()
+            rs?.destroy()
+            if (small !== source && !small.isRecycled) small.recycle()
+        }
+    }
+
+
+    /** Applies a subtle contour-guided lip and cheek tint; no face image leaves the device. */
+    private suspend fun applyNaturalMakeup(bitmap: Bitmap, settings: EditSettings): Int {
+        if (settings.makeupIntensity <= 0f || bitmap.isRecycled || bitmap.width <= 0 || bitmap.height <= 0) return 0
+        val options = FaceDetectorOptions.Builder()
+            .setContourMode(FaceDetectorOptions.CONTOUR_MODE_ALL)
+            .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_ACCURATE)
+            .build()
+        val detector = FaceDetection.getClient(options)
+        val faces = try {
+            suspendCancellableCoroutine<List<Face>> { continuation ->
+                detector.process(InputImage.fromBitmap(bitmap, 0))
+                    .addOnSuccessListener { result -> if (continuation.isActive) continuation.resume(result) }
+                    .addOnFailureListener { error -> if (continuation.isActive) continuation.resumeWithException(error) }
+                continuation.invokeOnCancellation { detector.close() }
+            }
+        } finally {
+            detector.close()
+        }
+        if (faces.isEmpty()) return 0
+        withContext(Dispatchers.Default) {
+            val strength = settings.makeupIntensity.coerceIn(0f, 10f) / 10f
+            val canvas = Canvas(bitmap)
+            val lipPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                // Visible at normal viewing size, but still translucent enough to retain lip detail.
+                color = AndroidColor.argb((strength * 96f).toInt().coerceIn(0, 96), 176, 62, 94)
+                style = Paint.Style.FILL
+            }
+            val cheekPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                style = Paint.Style.FILL
+            }
+            for (face in faces) {
+                val upper = face.getContour(FaceContour.UPPER_LIP_TOP)?.points.orEmpty()
+                val lower = face.getContour(FaceContour.LOWER_LIP_BOTTOM)?.points.orEmpty()
+                if (upper.size >= 3 && lower.size >= 3) {
+                    val lipPath = Path().apply {
+                        moveTo(upper.first().x, upper.first().y)
+                        upper.drop(1).forEach { lineTo(it.x, it.y) }
+                        lower.asReversed().forEach { lineTo(it.x, it.y) }
+                        close()
+                    }
+                    canvas.drawPath(lipPath, lipPaint)
+                }
+                val radius = face.boundingBox.width() * 0.085f
+                for (contourType in listOf(FaceContour.LEFT_CHEEK, FaceContour.RIGHT_CHEEK)) {
+                    val points = face.getContour(contourType)?.points.orEmpty()
+                    if (points.isNotEmpty() && radius > 1f) {
+                        val centerX = points.map { it.x }.average().toFloat()
+                        val centerY = points.map { it.y }.average().toFloat()
+                        val peakAlpha = (strength * 58f).toInt().coerceIn(0, 58)
+                        cheekPaint.shader = RadialGradient(
+                            centerX, centerY, radius,
+                            intArrayOf(
+                                AndroidColor.argb(peakAlpha, 226, 76, 112),
+                                AndroidColor.argb(0, 226, 76, 112)
+                            ), floatArrayOf(0f, 1f), Shader.TileMode.CLAMP
+                        )
+                        canvas.drawOval(RectF(centerX - radius, centerY - radius * 0.58f, centerX + radius, centerY + radius * 0.58f), cheekPaint)
+                    }
+                }
+                cheekPaint.shader = null
+            }
+        }
+        return faces.size
+    }
+
+    private data class PersonMask(
+        val width: Int,
+        val height: Int,
+        val values: FloatArray,
+        /** Separate skin-only mask when the multiclass model is available. */
+        val skinValues: FloatArray = FloatArray(0)
+    )
+
+    /**
+     * Uses the additional MediaPipe neural network to retain hair, face, body, and clothing
+     * while blurring the background. Its output is categorical rather than a skin mask.
+     */
+    private suspend fun getMulticlassPersonMask(
+        context: Context,
+        bitmap: Bitmap
+    ): PersonMask {
+        val segmented = MulticlassSegmentationEngine.segment(context, bitmap)
+        val values = FloatArray(segmented.classes.size)
+        val skinValues = FloatArray(segmented.classes.size)
+        for (index in segmented.classes.indices) {
+            when (segmented.classes[index].toInt() and 0xFF) {
+                MulticlassSegmentationEngine.HAIR,
+                MulticlassSegmentationEngine.BODY,
+                MulticlassSegmentationEngine.FACE,
+                MulticlassSegmentationEngine.CLOTHES -> values[index] = 1f
+            }
+            // The official multiclass model labels body-skin and face-skin separately.
+            when (segmented.classes[index].toInt() and 0xFF) {
+                MulticlassSegmentationEngine.BODY,
+                MulticlassSegmentationEngine.FACE -> skinValues[index] = 1f
+            }
+        }
+        // Feather hard category edges slightly to reduce a cut-out look around hair and shoulders.
+        val smoothed = values.copyOf()
+        val smoothedSkin = skinValues.copyOf()
+        for (y in 1 until segmented.height - 1) {
+            for (x in 1 until segmented.width - 1) {
+                val i = y * segmented.width + x
+                var personTotal = 0f
+                var skinTotal = 0f
+                for (dy in -1..1) for (dx in -1..1) {
+                    val neighbor = (y + dy) * segmented.width + x + dx
+                    personTotal += values[neighbor]
+                    skinTotal += skinValues[neighbor]
+                }
+                smoothed[i] = (values[i] * 0.55f + (personTotal / 9f) * 0.45f).coerceIn(0f, 1f)
+                smoothedSkin[i] = (skinValues[i] * 0.55f + (skinTotal / 9f) * 0.45f).coerceIn(0f, 1f)
+            }
+        }
+        return PersonMask(segmented.width, segmented.height, smoothed, smoothedSkin)
+    }
+
 
     private suspend fun getPersonMask(bitmap: Bitmap): PersonMask =
         suspendCancellableCoroutine { continuation ->
@@ -99,11 +341,13 @@ object SubjectAwareEnhancer {
     private fun applyPersonAwareLook(
         bitmap: Bitmap,
         confidence: FloatArray,
+        skinConfidence: FloatArray,
         maskWidth: Int,
         maskHeight: Int,
         sourceWidth: Int,
         sourceHeight: Int,
-        settings: EditSettings
+        settings: EditSettings,
+        blurredBackground: Bitmap?
     ) {
         if (maskWidth <= 0 || maskHeight <= 0 || confidence.size < maskWidth * maskHeight) return
 
@@ -126,33 +370,87 @@ object SubjectAwareEnhancer {
         val top = ((sourceHeight - cropHeight) * ((settings.cropOffsetY.coerceIn(-1f, 1f) + 1f) / 2f))
             .toInt().coerceIn(0, sourceHeight - cropHeight)
 
-        val row = IntArray(bitmap.width)
-        for (y in 0 until bitmap.height) {
-            bitmap.getPixels(row, 0, bitmap.width, 0, y, bitmap.width, 1)
-            val sourceY = top + (y.toFloat() / bitmap.height * cropHeight).toInt().coerceIn(0, cropHeight - 1)
+        val width = bitmap.width
+        val height = bitmap.height
+        var previousRow = IntArray(width)
+        var row = IntArray(width)
+        var nextRow = IntArray(width)
+        val outputRow = IntArray(width)
+        bitmap.getPixels(row, 0, width, 0, 0, width, 1)
+        previousRow = row.copyOf()
+        if (height > 1) bitmap.getPixels(nextRow, 0, width, 0, 1, width, 1) else nextRow = row.copyOf()
+        for (y in 0 until height) {
+            val sourceY = top + (y.toFloat() / height * cropHeight).toInt().coerceIn(0, cropHeight - 1)
             val maskY = (sourceY.toFloat() / sourceHeight * maskHeight).toInt().coerceIn(0, maskHeight - 1)
-            for (x in 0 until bitmap.width) {
-                val sourceX = left + (x.toFloat() / bitmap.width * cropWidth).toInt().coerceIn(0, cropWidth - 1)
+            for (x in 0 until width) {
+                val sourceX = left + (x.toFloat() / width * cropWidth).toInt().coerceIn(0, cropWidth - 1)
                 val maskX = (sourceX.toFloat() / sourceWidth * maskWidth).toInt().coerceIn(0, maskWidth - 1)
-                val subject = confidence[maskY * maskWidth + maskX].coerceIn(0f, 1f)
+                val maskIndex = maskY * maskWidth + maskX
+                val subject = confidence[maskIndex].coerceIn(0f, 1f)
+                val skin = if (skinConfidence.size >= maskWidth * maskHeight) skinConfidence[maskIndex].coerceIn(0f, 1f) else 0f
                 val pixel = row[x]
+                val backgroundPixel = if (blurredBackground != null) blurredBackground.getPixel(sourceX.coerceIn(0, blurredBackground.width - 1), sourceY.coerceIn(0, blurredBackground.height - 1)) else pixel
                 val alpha = pixel ushr 24 and 0xFF
-                val red = (pixel shr 16 and 0xFF).toDouble()
-                val green = (pixel shr 8 and 0xFF).toDouble()
-                val blue = (pixel and 0xFF).toDouble()
+                var red = (pixel shr 16 and 0xFF).toDouble()
+                var green = (pixel shr 8 and 0xFF).toDouble()
+                var blue = (pixel and 0xFF).toDouble()
+                val smoothMix = (settings.skinSmoothing.coerceIn(0f, 10f) / 10f * 0.72f * skin).toDouble()
+                if (smoothMix > 0.001) {
+                    var sumRed = 0.0; var sumGreen = 0.0; var sumBlue = 0.0
+                    for (dy in -1..1) {
+                        val neighborRow = when (dy) { -1 -> previousRow; 0 -> row; else -> nextRow }
+                        for (dx in -1..1) {
+                            val neighbor = neighborRow[(x + dx).coerceIn(0, width - 1)]
+                            sumRed += (neighbor shr 16 and 0xFF).toDouble()
+                            sumGreen += (neighbor shr 8 and 0xFF).toDouble()
+                            sumBlue += (neighbor and 0xFF).toDouble()
+                        }
+                    }
+                    red = red * (1.0 - smoothMix) + (sumRed / 9.0) * smoothMix
+                    green = green * (1.0 - smoothMix) + (sumGreen / 9.0) * smoothMix
+                    blue = blue * (1.0 - smoothMix) + (sumBlue / 9.0) * smoothMix
+                }
                 val luma = 0.2126 * red + 0.7152 * green + 0.0722 * blue
-                val saturation = 0.94 + 0.20 * subject
-                val contrast = 1.02 + 0.04 * subject
-                val brightness = 3.0 * subject
-                val outRed = (128.0 + (luma + (red - luma) * saturation - 128.0) * contrast + brightness)
-                    .toInt().coerceIn(0, 255)
-                val outGreen = (128.0 + (luma + (green - luma) * saturation - 128.0) * contrast + brightness)
-                    .toInt().coerceIn(0, 255)
-                val outBlue = (128.0 + (luma + (blue - luma) * saturation - 128.0) * contrast + brightness)
-                    .toInt().coerceIn(0, 255)
-                row[x] = (alpha shl 24) or (outRed shl 16) or (outGreen shl 8) or outBlue
+                val overallSkinLift = settings.subjectBrightness.coerceIn(0f, 25f).toDouble() * skin
+                val darkPixelFactor = ((175.0 - luma) / 175.0).coerceIn(0.0, 1.0)
+                val adaptiveDarkLift = settings.darkerAreaLift.coerceIn(0f, 30f).toDouble() * darkPixelFactor * skin
+                val brightness = overallSkinLift + adaptiveDarkLift
+                val blurMix = (settings.backgroundBlur.coerceIn(0f, 20f) / 20f * (1f - subject)).coerceIn(0f, 1f)
+                val bgRed = (backgroundPixel shr 16 and 0xFF).toDouble()
+                val bgGreen = (backgroundPixel shr 8 and 0xFF).toDouble()
+                val bgBlue = (backgroundPixel and 0xFF).toDouble()
+                val baseRed = luma + (red - luma) + brightness
+                val baseGreen = luma + (green - luma) + brightness
+                val baseBlue = luma + (blue - luma) + brightness
+                // Scene-aware background enhancement is restricted to the non-person mask.
+                // It adds restrained local contrast, color separation, and a small exposure lift.
+                val sceneStrength = settings.backgroundEnhancement.coerceIn(0f, 10f).toDouble()
+                val sceneMix = (sceneStrength / 10.0 * (1.0 - subject)).coerceIn(0.0, 1.0)
+                val sceneLuma = 0.2126 * baseRed + 0.7152 * baseGreen + 0.0722 * baseBlue
+                val sceneContrast = 1.0 + sceneStrength * 0.025
+                val sceneSaturation = 1.0 + sceneStrength * 0.10
+                val contrastRed = (baseRed - 128.0) * sceneContrast + 128.0
+                val contrastGreen = (baseGreen - 128.0) * sceneContrast + 128.0
+                val contrastBlue = (baseBlue - 128.0) * sceneContrast + 128.0
+                val enhancedSceneRed = sceneLuma + (contrastRed - sceneLuma) * sceneSaturation + sceneStrength * 0.35
+                val enhancedSceneGreen = sceneLuma + (contrastGreen - sceneLuma) * sceneSaturation + sceneStrength * 0.35
+                val enhancedSceneBlue = sceneLuma + (contrastBlue - sceneLuma) * sceneSaturation + sceneStrength * 0.35
+                val sceneRed = baseRed * (1.0 - sceneMix) + enhancedSceneRed * sceneMix
+                val sceneGreen = baseGreen * (1.0 - sceneMix) + enhancedSceneGreen * sceneMix
+                val sceneBlue = baseBlue * (1.0 - sceneMix) + enhancedSceneBlue * sceneMix
+                val outRed = (sceneRed * (1.0 - blurMix) + bgRed * blurMix).toInt().coerceIn(0, 255)
+                val outGreen = (sceneGreen * (1.0 - blurMix) + bgGreen * blurMix).toInt().coerceIn(0, 255)
+                val outBlue = (sceneBlue * (1.0 - blurMix) + bgBlue * blurMix).toInt().coerceIn(0, 255)
+                outputRow[x] = (alpha shl 24) or (outRed shl 16) or (outGreen shl 8) or outBlue
             }
-            bitmap.setPixels(row, 0, bitmap.width, 0, y, bitmap.width, 1)
+            bitmap.setPixels(outputRow, 0, width, 0, y, width, 1)
+            if (y + 1 < height) {
+                val reusable = previousRow
+                previousRow = row
+                row = nextRow
+                nextRow = reusable
+                if (y + 2 < height) bitmap.getPixels(nextRow, 0, width, 0, y + 2, width, 1) else nextRow = row.copyOf()
+            }
         }
     }
 }

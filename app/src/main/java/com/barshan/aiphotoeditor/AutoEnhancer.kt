@@ -119,28 +119,131 @@ object AutoEnhancer {
             adjusted.setPixels(row, 0, width, 0, y, width, 1)
         }
 
-        val ratio = settings.cropRatio ?: return adjusted
-        if (ratio <= 0f) return adjusted
+        val angle = settings.rotationDegrees + settings.straightenDegrees
+        val transform = Matrix().apply {
+            postScale(if (settings.mirrorHorizontal) -1f else 1f, if (settings.mirrorVertical) -1f else 1f)
+            postRotate(angle)
+        }
+        var transformed = if (settings.mirrorHorizontal || settings.mirrorVertical || angle % 360f != 0f) {
+            Bitmap.createBitmap(adjusted, 0, 0, adjusted.width, adjusted.height, transform, true)
+                .also { if (it !== adjusted) adjusted.recycle() }
+        } else adjusted
 
-        val sourceRatio = adjusted.width.toFloat() / adjusted.height.toFloat()
+        // Remove transparent corner wedges introduced by small straighten rotations.
+        if (kotlin.math.abs(angle % 90f) > 0.05f) {
+            val quarterTurn = (kotlin.math.round(angle / 90f).toInt() % 2) != 0
+            val cropBaseWidth = if (quarterTurn) height else width
+            val cropBaseHeight = if (quarterTurn) width else height
+            val croppedForRotation = cropToOpaqueCenter(
+                transformed, cropBaseWidth.toFloat() / cropBaseHeight.coerceAtLeast(1),
+                cropBaseWidth, cropBaseHeight
+            )
+            if (croppedForRotation !== transformed) transformed.recycle()
+            transformed = croppedForRotation
+        }
+
+        // Perspective crop: independently place all four corners, then rectify the quadrilateral.
+        val tlx = settings.perspectiveTopLeftX.coerceIn(0f, 0.35f)
+        val tly = settings.perspectiveTopLeftY.coerceIn(0f, 0.35f)
+        val trx = settings.perspectiveTopRightX.coerceIn(0f, 0.35f)
+        val tryy = settings.perspectiveTopRightY.coerceIn(0f, 0.35f)
+        val brx = settings.perspectiveBottomRightX.coerceIn(0f, 0.35f)
+        val bry = settings.perspectiveBottomRightY.coerceIn(0f, 0.35f)
+        val blx = settings.perspectiveBottomLeftX.coerceIn(0f, 0.35f)
+        val bly = settings.perspectiveBottomLeftY.coerceIn(0f, 0.35f)
+        val perspectiveActive = (tlx + tly + trx + tryy + brx + bry + blx + bly) > 0.001f
+        val validQuadrilateral = tlx + trx < 0.88f && blx + brx < 0.88f &&
+            tly + bly < 0.88f && tryy + bry < 0.88f
+        if (perspectiveActive && validQuadrilateral) {
+            val w = transformed.width.toFloat()
+            val h = transformed.height.toFloat()
+            val sourceCorners = floatArrayOf(
+                w * tlx, h * tly,
+                w * (1f - trx), h * tryy,
+                w * (1f - brx), h * (1f - bry),
+                w * blx, h * (1f - bly)
+            )
+            val topWidth = kotlin.math.hypot(
+                (sourceCorners[2] - sourceCorners[0]).toDouble(),
+                (sourceCorners[3] - sourceCorners[1]).toDouble()
+            ).toFloat()
+            val bottomWidth = kotlin.math.hypot(
+                (sourceCorners[4] - sourceCorners[6]).toDouble(),
+                (sourceCorners[5] - sourceCorners[7]).toDouble()
+            ).toFloat()
+            val leftHeight = kotlin.math.hypot(
+                (sourceCorners[6] - sourceCorners[0]).toDouble(),
+                (sourceCorners[7] - sourceCorners[1]).toDouble()
+            ).toFloat()
+            val rightHeight = kotlin.math.hypot(
+                (sourceCorners[4] - sourceCorners[2]).toDouble(),
+                (sourceCorners[5] - sourceCorners[3]).toDouble()
+            ).toFloat()
+            val outWidth = ((topWidth + bottomWidth) / 2f).toInt().coerceIn(2, transformed.width)
+            val outHeight = ((leftHeight + rightHeight) / 2f).toInt().coerceIn(2, transformed.height)
+            val destinationCorners = floatArrayOf(
+                0f, 0f, outWidth.toFloat(), 0f,
+                outWidth.toFloat(), outHeight.toFloat(), 0f, outHeight.toFloat()
+            )
+            val perspective = Matrix()
+            if (perspective.setPolyToPoly(sourceCorners, 0, destinationCorners, 0, 4)) {
+                val rectified = Bitmap.createBitmap(outWidth, outHeight, Bitmap.Config.ARGB_8888)
+                android.graphics.Canvas(rectified).drawBitmap(
+                    transformed, perspective, android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG)
+                )
+                transformed.recycle()
+                transformed = rectified
+            }
+        }
+
+        val ratio = settings.cropRatio ?: return transformed
+        if (ratio <= 0f) return transformed
+        val sourceRatio = transformed.width.toFloat() / transformed.height.toFloat()
         val cropWidth: Int
         val cropHeight: Int
         if (sourceRatio > ratio) {
-            cropHeight = adjusted.height
-            cropWidth = (cropHeight * ratio).toInt().coerceIn(1, adjusted.width)
+            cropHeight = transformed.height
+            cropWidth = (cropHeight * ratio).toInt().coerceIn(1, transformed.width)
         } else {
-            cropWidth = adjusted.width
-            cropHeight = (cropWidth / ratio).toInt().coerceIn(1, adjusted.height)
+            cropWidth = transformed.width
+            cropHeight = (cropWidth / ratio).toInt().coerceIn(1, transformed.height)
         }
-        val availableX = (adjusted.width - cropWidth).coerceAtLeast(0)
-        val availableY = (adjusted.height - cropHeight).coerceAtLeast(0)
+        val availableX = (transformed.width - cropWidth).coerceAtLeast(0)
+        val availableY = (transformed.height - cropHeight).coerceAtLeast(0)
         val left = ((availableX * ((settings.cropOffsetX.coerceIn(-1f, 1f) + 1f) / 2f)).toInt())
             .coerceIn(0, availableX)
         val top = ((availableY * ((settings.cropOffsetY.coerceIn(-1f, 1f) + 1f) / 2f)).toInt())
             .coerceIn(0, availableY)
-        val cropped = Bitmap.createBitmap(adjusted, left, top, cropWidth, cropHeight)
-        if (cropped !== adjusted) adjusted.recycle()
+        val cropped = Bitmap.createBitmap(transformed, left, top, cropWidth, cropHeight)
+        if (cropped !== transformed) transformed.recycle()
         return cropped
+    }
+
+    /** Largest centered rectangle of the source aspect ratio whose corners remain opaque. */
+    private fun cropToOpaqueCenter(bitmap: Bitmap, aspect: Float, originalWidth: Int, originalHeight: Int): Bitmap {
+        if (bitmap.width < 2 || bitmap.height < 2 || aspect <= 0f) return bitmap
+        fun cornersOpaque(scale: Float): Boolean {
+            val w = (originalWidth * scale).toInt().coerceIn(1, bitmap.width)
+            val h = (originalHeight * scale).toInt().coerceIn(1, bitmap.height)
+            val left = (bitmap.width - w) / 2
+            val top = (bitmap.height - h) / 2
+            val right = (left + w - 1).coerceIn(0, bitmap.width - 1)
+            val bottom = (top + h - 1).coerceIn(0, bitmap.height - 1)
+            return listOf(
+                bitmap.getPixel(left, top), bitmap.getPixel(right, top),
+                bitmap.getPixel(right, bottom), bitmap.getPixel(left, bottom)
+            ).all { (it ushr 24) >= 245 }
+        }
+        var low = 0f
+        var high = minOf(bitmap.width.toFloat() / originalWidth.coerceAtLeast(1), bitmap.height.toFloat() / originalHeight.coerceAtLeast(1))
+        repeat(18) {
+            val mid = (low + high) / 2f
+            if (cornersOpaque(mid)) low = mid else high = mid
+        }
+        val cropWidth = (originalWidth * low * 0.995f).toInt().coerceIn(1, bitmap.width)
+        val cropHeight = (originalHeight * low * 0.995f).toInt().coerceIn(1, bitmap.height)
+        if (cropWidth >= bitmap.width && cropHeight >= bitmap.height) return bitmap
+        return Bitmap.createBitmap(bitmap, (bitmap.width - cropWidth) / 2, (bitmap.height - cropHeight) / 2, cropWidth, cropHeight)
     }
 
     /** Save a new JPEG in Pictures/FRAME AI using MediaStore. Returns the saved URI. */

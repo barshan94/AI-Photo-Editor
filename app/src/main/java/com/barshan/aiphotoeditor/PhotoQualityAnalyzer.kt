@@ -20,7 +20,9 @@ object PhotoQualityAnalyzer {
         val sharpness: Int,
         val exposure: Int,
         val contrast: Int,
-        val note: String
+        val note: String,
+        val width: Int = 0,
+        val height: Int = 0
     )
 
     fun analyze(resolver: ContentResolver, uri: Uri): Result {
@@ -37,7 +39,9 @@ object PhotoQualityAnalyzer {
                 sharpness = result.sharpness,
                 exposure = result.exposure,
                 contrast = result.contrast,
-                note = result.note
+                note = result.note,
+                width = width,
+                height = height
             )
         } finally {
             bitmap.recycle()

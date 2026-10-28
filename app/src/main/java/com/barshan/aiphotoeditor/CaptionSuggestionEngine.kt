@@ -63,12 +63,20 @@ object CaptionSuggestionEngine {
             )
         }
 
-        val english = listOf(
+        val english = if (isFestival) listOf(
+            "Shubho Bijoya ❤️",
+            "Bijoya Dashami — asche bochor abar hobe!",
+            "A little sindoor, a lot of emotion."
+        ) else listOf(
             scene.english,
             "Through my lens, one moment at a time.",
             "Not just a photo — a memory in the making."
         )
-        val bengali = listOf(
+        val bengali = if (isFestival) listOf(
+            "শুভ বিজয়া ❤️",
+            "বিজয়া দশমী — আসছে বছর আবার হবে!",
+            "একটু সিঁদুর, অনেকটা আবেগ।"
+        ) else listOf(
             scene.bengali,
             "আমার চোখে দেখা, আমার লেন্সে ধরা।",
             "শুধু ছবি নয়, তৈরি হচ্ছে এক টুকরো স্মৃতি।"

@@ -2018,12 +2018,19 @@ private fun PhotoEditorHome() {
                             modifier = Modifier.fillMaxWidth(), label = { Text("Search 1,000 offline captions") },
                             singleLine = true, shape = RoundedCornerShape(14.dp)
                         )
-                        Text("${CaptionLibrary.all.size} ready-to-search presets · no internet needed",
+                        val updatedCaptionEntries = CaptionUpdateStore.read(context).map { item ->
+                            CaptionLibrary.Entry(
+                                item.id, item.category, item.text,
+                                item.text.lowercase().split(Regex("[^\\p{L}\\p{N}]+")).filter { it.length > 1 }.toSet()
+                            )
+                        }
+                        val searchableCaptions = (CaptionLibrary.all + updatedCaptionEntries).distinctBy { it.text.lowercase() }
+                        Text("${searchableCaptions.size} captions available · ${updatedCaptionEntries.size} downloaded updates · offline search",
                             color = Mint, fontSize = 10.sp, fontWeight = FontWeight.SemiBold,
                             modifier = Modifier.padding(top = 4.dp, bottom = 2.dp))
                         Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                             horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                            CaptionLibrary.categories.forEach { category ->
+                            (CaptionLibrary.categories + updatedCaptionEntries.map { it.category }).distinct().forEach { category ->
                                 Button(
                                     onClick = { captionLibraryCategory = category },
                                     modifier = Modifier.heightIn(min = 44.dp), shape = RoundedCornerShape(18.dp),
@@ -2035,7 +2042,14 @@ private fun PhotoEditorHome() {
                                 ) { Text(category, fontSize = 10.sp, maxLines = 1) }
                             }
                         }
-                        val matchingPresets = CaptionLibrary.search(captionSearchQuery, captionLibraryCategory, 6)
+                        val normalizedCaptionQuery = captionSearchQuery.trim().lowercase()
+                        val matchingPresets = searchableCaptions.asSequence()
+                            .filter { captionLibraryCategory == "All" || it.category == captionLibraryCategory }
+                            .filter { normalizedCaptionQuery.isBlank() ||
+                                it.text.lowercase().contains(normalizedCaptionQuery) ||
+                                it.category.lowercase().contains(normalizedCaptionQuery) ||
+                                it.keywords.any { keyword -> keyword.contains(normalizedCaptionQuery) } }
+                            .take(6).toList()
                             if (matchingPresets.isEmpty()) {
                                 Text("No matches yet. Try a broader word or another category.", color = SoftText, fontSize = 11.sp)
                             } else {

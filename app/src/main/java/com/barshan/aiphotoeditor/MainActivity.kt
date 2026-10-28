@@ -1573,6 +1573,85 @@ private fun PhotoEditorHome() {
                             }
                         }
                         }
+
+                        if (activeEditorPanel == "Crop & Rotate") {
+                            Text("CROP & ROTATE", color = Mint, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            Text("All framing tools in one place. Edits preview live and remain undoable.", color = SoftText, fontSize = 10.sp, lineHeight = 14.sp)
+                            Text("ROTATE & MIRROR", color = BrightText, fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp))
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Button(onClick = { recordEditChange(); rotationDegrees = (rotationDegrees - 90f).mod(360f); selectedStyle = "Custom"; showEnhanced = true }, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 4.dp, vertical = 5.dp), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = BrightText)) { Text("↶ Rotate", fontSize = 10.sp) }
+                                Button(onClick = { recordEditChange(); rotationDegrees = (rotationDegrees + 90f).mod(360f); selectedStyle = "Custom"; showEnhanced = true }, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 4.dp, vertical = 5.dp), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = BrightText)) { Text("Rotate ↻", fontSize = 10.sp) }
+                                Button(onClick = { recordEditChange(); mirrorHorizontal = !mirrorHorizontal; selectedStyle = "Custom"; showEnhanced = true }, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 4.dp, vertical = 5.dp), colors = ButtonDefaults.buttonColors(containerColor = if (mirrorHorizontal) Mint else Color(0xFF293333), contentColor = if (mirrorHorizontal) Ink else BrightText)) { Text("Mirror H", fontSize = 10.sp) }
+                                Button(onClick = { recordEditChange(); mirrorVertical = !mirrorVertical; selectedStyle = "Custom"; showEnhanced = true }, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 4.dp, vertical = 5.dp), colors = ButtonDefaults.buttonColors(containerColor = if (mirrorVertical) Mint else Color(0xFF293333), contentColor = if (mirrorVertical) Ink else BrightText)) { Text("Mirror V", fontSize = 10.sp) }
+                            }
+                            Text("STRAIGHTEN  ${String.format(java.util.Locale.US, "%.1f", straightenDegrees)}°", color = SoftText, fontSize = 10.sp, modifier = Modifier.padding(top = 8.dp))
+                            Slider(value = straightenDegrees, onValueChange = { straightenDegrees = it; selectedStyle = "Custom"; showEnhanced = true }, onValueChangeFinished = { recordEditChange() }, valueRange = -15f..15f)
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Button(onClick = {
+                                    val bitmap = previewBitmap
+                                    if (bitmap == null || bitmap.isRecycled) statusMessage = "Open a photo preview before auto-leveling."
+                                    else scope.launch {
+                                        val correction = withContext(Dispatchers.Default) { AutoLeveler.estimateCorrectionDegrees(bitmap) }
+                                        if (correction == null) statusMessage = "No reliable horizon found. Adjust Straighten manually."
+                                        else {
+                                            recordEditChange()
+                                            straightenDegrees = (straightenDegrees + correction).coerceIn(-15f, 15f)
+                                            selectedStyle = "Custom"
+                                            showEnhanced = true
+                                            statusMessage = if (correction == 0f) "This photo already looks level." else "Level corrected by ${String.format(java.util.Locale.US, "%.1f", correction)}°. Fine-tune if needed."
+                                        }
+                                    }
+                                }, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 5.dp, vertical = 5.dp), colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Ink)) { Text("Auto-level", fontSize = 10.sp) }
+                                Button(onClick = {
+                                    recordEditChange()
+                                    cropLabel = "Original"; cropOffsetX = 0f; cropOffsetY = 0f
+                                    rotationDegrees = 0f; straightenDegrees = 0f
+                                    mirrorHorizontal = false; mirrorVertical = false
+                                    perspectiveTopLeftX = 0f; perspectiveTopLeftY = 0f
+                                    perspectiveTopRightX = 0f; perspectiveTopRightY = 0f
+                                    perspectiveBottomRightX = 0f; perspectiveBottomRightY = 0f
+                                    perspectiveBottomLeftX = 0f; perspectiveBottomLeftY = 0f
+                                    showPerspectiveControls = false; selectedStyle = "Custom"; showEnhanced = true
+                                }, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 5.dp, vertical = 5.dp), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = BrightText)) { Text("Reset framing", fontSize = 10.sp) }
+                            }
+                            Text("CROP RATIO", color = BrightText, fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp))
+                            Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                listOf("Original", "Square", "Portrait 4:5", "Story 9:16", "Landscape 16:9").forEach { crop ->
+                                    Button(onClick = { recordEditChange(); cropLabel = crop; cropOffsetX = 0f; cropOffsetY = 0f; selectedStyle = "Custom"; showEnhanced = true; compareBeforeAfter = false },
+                                        shape = RoundedCornerShape(10.dp),
+                                        colors = ButtonDefaults.buttonColors(containerColor = if (cropLabel == crop) Mint else Color(0xFF293333), contentColor = if (cropLabel == crop) Ink else BrightText),
+                                        contentPadding = PaddingValues(horizontal = 9.dp, vertical = 3.dp)) { Text(crop, fontSize = 10.sp) }
+                                }
+                            }
+                            Text("PERSPECTIVE CROP", color = BrightText, fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp))
+                            Text("Move each corner inward independently. The selected quadrilateral is corrected into a rectangle—useful for signs, buildings, screens, or angled shots.", color = SoftText, fontSize = 10.sp, lineHeight = 14.sp)
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Button(onClick = { showPerspectiveControls = !showPerspectiveControls }, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 5.dp, vertical = 5.dp), colors = ButtonDefaults.buttonColors(containerColor = if (showPerspectiveControls) Mint else Color(0xFF293333), contentColor = if (showPerspectiveControls) Ink else BrightText)) { Text(if (showPerspectiveControls) "Hide corner controls" else "Adjust four corners", fontSize = 10.sp) }
+                                Button(onClick = { recordEditChange(); perspectiveTopLeftX = 0f; perspectiveTopLeftY = 0f; perspectiveTopRightX = 0f; perspectiveTopRightY = 0f; perspectiveBottomRightX = 0f; perspectiveBottomRightY = 0f; perspectiveBottomLeftX = 0f; perspectiveBottomLeftY = 0f; selectedStyle = "Custom"; showEnhanced = true }, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 5.dp, vertical = 5.dp), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = BrightText)) { Text("Reset corners", fontSize = 10.sp) }
+                            }
+                            if (showPerspectiveControls) {
+                                Text("TOP-LEFT CORNER", color = Mint, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                Text("Horizontal inset  ${(perspectiveTopLeftX * 100).toInt()}%", color = SoftText, fontSize = 10.sp)
+                                Slider(value = perspectiveTopLeftX, onValueChange = { recordEditChange(); perspectiveTopLeftX = it; selectedStyle = "Custom"; showEnhanced = true }, valueRange = 0f..0.35f)
+                                Text("Vertical inset  ${(perspectiveTopLeftY * 100).toInt()}%", color = SoftText, fontSize = 10.sp)
+                                Slider(value = perspectiveTopLeftY, onValueChange = { recordEditChange(); perspectiveTopLeftY = it; selectedStyle = "Custom"; showEnhanced = true }, valueRange = 0f..0.35f)
+                                Text("TOP-RIGHT CORNER", color = Mint, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                Text("Horizontal inset  ${(perspectiveTopRightX * 100).toInt()}%", color = SoftText, fontSize = 10.sp)
+                                Slider(value = perspectiveTopRightX, onValueChange = { recordEditChange(); perspectiveTopRightX = it; selectedStyle = "Custom"; showEnhanced = true }, valueRange = 0f..0.35f)
+                                Text("Vertical inset  ${(perspectiveTopRightY * 100).toInt()}%", color = SoftText, fontSize = 10.sp)
+                                Slider(value = perspectiveTopRightY, onValueChange = { recordEditChange(); perspectiveTopRightY = it; selectedStyle = "Custom"; showEnhanced = true }, valueRange = 0f..0.35f)
+                                Text("BOTTOM-RIGHT CORNER", color = Mint, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                Text("Horizontal inset  ${(perspectiveBottomRightX * 100).toInt()}%", color = SoftText, fontSize = 10.sp)
+                                Slider(value = perspectiveBottomRightX, onValueChange = { recordEditChange(); perspectiveBottomRightX = it; selectedStyle = "Custom"; showEnhanced = true }, valueRange = 0f..0.35f)
+                                Text("Vertical inset  ${(perspectiveBottomRightY * 100).toInt()}%", color = SoftText, fontSize = 10.sp)
+                                Slider(value = perspectiveBottomRightY, onValueChange = { recordEditChange(); perspectiveBottomRightY = it; selectedStyle = "Custom"; showEnhanced = true }, valueRange = 0f..0.35f)
+                                Text("BOTTOM-LEFT CORNER", color = Mint, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                Text("Horizontal inset  ${(perspectiveBottomLeftX * 100).toInt()}%", color = SoftText, fontSize = 10.sp)
+                                Slider(value = perspectiveBottomLeftX, onValueChange = { recordEditChange(); perspectiveBottomLeftX = it; selectedStyle = "Custom"; showEnhanced = true }, valueRange = 0f..0.35f)
+                                Text("Vertical inset  ${(perspectiveBottomLeftY * 100).toInt()}%", color = SoftText, fontSize = 10.sp)
+                                Slider(value = perspectiveBottomLeftY, onValueChange = { recordEditChange(); perspectiveBottomLeftY = it; selectedStyle = "Custom"; showEnhanced = true }, valueRange = 0f..0.35f)
+                            }
+                        }
                         if (activeEditorPanel == "Presets") {
                             Text("QUICK EDIT", color = BrightText, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                             Row(

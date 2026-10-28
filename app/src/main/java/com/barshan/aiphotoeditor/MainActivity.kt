@@ -216,6 +216,7 @@ private fun PhotoEditorHome() {
     var captionEnglish by remember { mutableStateOf("") }
     var captionBengali by remember { mutableStateOf("") }
     var captionIndex by remember { mutableIntStateOf(0) }
+    var captionPhotoUri by remember { mutableStateOf<String?>(null) }
     var isGeneratingCaptions by remember { mutableStateOf(false) }
 
     fun applyCaptionSuggestions(labels: List<Pair<String, Float>>, ratio: Float) {
@@ -846,6 +847,10 @@ private fun PhotoEditorHome() {
                 previewBitmap?.let { if (!it.isRecycled) it.recycle() }
                 previewBitmap = adjusted
                 adjusted = null
+                if (captionPhotoUri != photo.uri.toString()) {
+                    captionPhotoUri = photo.uri.toString()
+                    suggestCaptions()
+                }
                 showEnhanced = true
                 statusMessage = if (selectedStyle == "Original") {
                     "Original preview. Choose a style or adjust the image to create an edit."
@@ -1092,8 +1097,13 @@ private fun PhotoEditorHome() {
                         }
 
                         Spacer(modifier = Modifier.height(8.dp))
+                        val previewAspectRatio = previewBitmap?.let {
+                            it.width.toFloat() / it.height.coerceAtLeast(1).toFloat()
+                        } ?: activePhoto?.let {
+                            if (it.width > 0 && it.height > 0) it.width.toFloat() / it.height.toFloat() else 1f
+                        } ?: 1f
                         Box(
-                            modifier = Modifier.fillMaxWidth().height(250.dp)
+                            modifier = Modifier.fillMaxWidth().aspectRatio(previewAspectRatio.coerceIn(0.25f, 4f))
                                 .clip(RoundedCornerShape(14.dp)).background(Ink)
                                 .onSizeChanged { size ->
                                     previewWidthPx = size.width
@@ -1232,6 +1242,39 @@ private fun PhotoEditorHome() {
                                 }
                             }
                             if (isPreparingPreview) CircularProgressIndicator(color = Mint)
+                            if (isExporting) {
+                                Box(
+                                    modifier = Modifier.fillMaxSize().background(Ink.copy(alpha = 0.76f)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Column(
+                                        modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp)
+                                            .clip(RoundedCornerShape(16.dp))
+                                            .background(Panel.copy(alpha = 0.98f)).padding(16.dp),
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        verticalArrangement = Arrangement.spacedBy(9.dp)
+                                    ) {
+                                        CircularProgressIndicator(
+                                            progress = { operationProgress.coerceIn(0, 100) / 100f },
+                                            color = Mint,
+                                            trackColor = SoftText.copy(alpha = 0.25f)
+                                        )
+                                        Text(
+                                            operationStage.ifBlank { "Exporting edited photo…" },
+                                            color = BrightText, fontSize = 12.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                        )
+                                        LinearProgressIndicator(
+                                            progress = { operationProgress.coerceIn(0, 100) / 100f },
+                                            modifier = Modifier.fillMaxWidth(), color = Mint
+                                        )
+                                        Text("${operationProgress.coerceIn(0, 100)}% · Original photo remains untouched",
+                                            color = SoftText, fontSize = 10.sp,
+                                            textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                                    }
+                                }
+                            }
                         }
                         if (compareBeforeAfter) {
                             Text("COMPARISON POSITION  " + (comparePosition * 100).toInt() + "%",

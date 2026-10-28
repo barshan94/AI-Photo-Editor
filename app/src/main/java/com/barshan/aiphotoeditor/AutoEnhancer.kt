@@ -147,15 +147,15 @@ object AutoEnhancer {
         val bottomInset = settings.perspectiveBottomInset.coerceIn(0f, 0.28f)
         val leftInset = settings.perspectiveLeftInset.coerceIn(0f, 0.28f)
         val rightInset = settings.perspectiveRightInset.coerceIn(0f, 0.28f)
-        if (top + bottom < 0.56f && left + right < 0.56f &&
-            (top + bottom + left + right) > 0.001f) {
-            val outWidth = (transformed.width * (1f - (top + bottom) / 2f)).toInt().coerceAtLeast(2)
-            val outHeight = (transformed.height * (1f - (left + right) / 2f)).toInt().coerceAtLeast(2)
+        if (topInset + bottomInset < 0.56f && leftInset + rightInset < 0.56f &&
+            (topInset + bottomInset + leftInset + rightInset) > 0.001f) {
+            val outWidth = (transformed.width * (1f - (topInset + bottomInset) / 2f)).toInt().coerceAtLeast(2)
+            val outHeight = (transformed.height * (1f - (leftInset + rightInset) / 2f)).toInt().coerceAtLeast(2)
             val sourceCorners = floatArrayOf(
-                transformed.width * top, transformed.height * left,
-                transformed.width * (1f - top), transformed.height * right,
-                transformed.width * (1f - bottom), transformed.height * (1f - right),
-                transformed.width * bottom, transformed.height * (1f - left)
+                transformed.width * topInset, transformed.height * leftInset,
+                transformed.width * (1f - topInset), transformed.height * rightInset,
+                transformed.width * (1f - bottomInset), transformed.height * (1f - rightInset),
+                transformed.width * bottomInset, transformed.height * (1f - leftInset)
             )
             val destinationCorners = floatArrayOf(
                 0f, 0f, outWidth.toFloat(), 0f,

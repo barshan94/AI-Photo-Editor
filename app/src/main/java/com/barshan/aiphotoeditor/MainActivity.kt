@@ -293,7 +293,7 @@ private fun PhotoEditorHome() {
     }
     var captionEnglish by remember { mutableStateOf(recoveryPrefs.getString("caption_english", "").orEmpty()) }
     var captionBengali by remember { mutableStateOf(recoveryPrefs.getString("caption_bengali", "").orEmpty()) }
-    var activeCaptionLanguage by remember { mutableStateOf("English") }
+    var activeCaptionLanguage by remember { mutableStateOf(recoveryPrefs.getString("active_caption_language", "English") ?: "English") }
     var captionToShare by remember { mutableStateOf(recoveryPrefs.getString("caption_to_share", "").orEmpty()) }
     var showStraightenControl by remember { mutableStateOf(false) }
     var captionIndex by remember { mutableIntStateOf(0) }
@@ -430,6 +430,7 @@ private fun PhotoEditorHome() {
             .putString("selected_style", selectedStyle)
             .putString("active_editor_panel", activeEditorPanel).putString("active_ai_subpanel", activeAiSubpanel)
             .putString("caption_english", captionEnglish).putString("caption_bengali", captionBengali)
+            .putString("caption_to_share", captionToShare).putString("active_caption_language", activeCaptionLanguage)
             .putString("caption_theme", captionTheme).putFloat("caption_aspect_ratio", captionAspectRatio)
             .putString("caption_photo_uri", captionPhotoUri)
             .putString("caption_search_query", captionSearchQuery)

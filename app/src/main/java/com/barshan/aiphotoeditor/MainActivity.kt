@@ -181,26 +181,53 @@ private fun PhotoEditorHome() {
     var previewWidthPx by remember { mutableIntStateOf(0) }
     var previewHeightPx by remember { mutableIntStateOf(0) }
     var isPreparingPreview by remember { mutableStateOf(false) }
-    var showEnhanced by remember { mutableStateOf(true) }
+    var showEnhanced by remember { mutableStateOf(recoveryPrefs.getBoolean("show_enhanced", true)) }
     var compareBeforeAfter by remember { mutableStateOf(false) }
     var comparePosition by remember { mutableFloatStateOf(0.5f) }
-    var showCropGuides by remember { mutableStateOf(true) }
+    var showCropGuides by remember { mutableStateOf(recoveryPrefs.getBoolean("show_crop_guides", true)) }
     val undoHistory = remember { mutableStateListOf<EditSettings>() }
     val redoHistory = remember { mutableStateListOf<EditSettings>() }
     var brightness by remember { mutableFloatStateOf(recoveryPrefs.getFloat("brightness", 0f)) }
     var contrast by remember { mutableFloatStateOf(recoveryPrefs.getFloat("contrast", 1.07f)) }
     var saturation by remember { mutableFloatStateOf(recoveryPrefs.getFloat("saturation", 1.06f)) }
     var warmth by remember { mutableFloatStateOf(recoveryPrefs.getFloat("warmth", 0f)) }
-    var backgroundBlur by remember { mutableFloatStateOf(0f) }
-    var backgroundEnhancement by remember { mutableFloatStateOf(0f) }
-    var subjectBrightness by remember { mutableFloatStateOf(0f) }
-    var darkerAreaLift by remember { mutableFloatStateOf(0f) }
-    var skinSmoothing by remember { mutableFloatStateOf(0f) }
-    var makeupIntensity by remember { mutableFloatStateOf(0f) }
-    var removalBrushMode by remember { mutableStateOf(false) }
-    var removalBrushSize by remember { mutableFloatStateOf(24f) }
-    val removalStrokes = remember { mutableStateListOf<List<Offset>>() }
-    var currentRemovalStroke by remember { mutableStateOf<List<Offset>>(emptyList()) }
+    var backgroundBlur by remember { mutableFloatStateOf(recoveryPrefs.getFloat("background_blur", 0f)) }
+    var backgroundEnhancement by remember { mutableFloatStateOf(recoveryPrefs.getFloat("background_enhancement", 0f)) }
+    var subjectBrightness by remember { mutableFloatStateOf(recoveryPrefs.getFloat("subject_brightness", 0f)) }
+    var darkerAreaLift by remember { mutableFloatStateOf(recoveryPrefs.getFloat("darker_area_lift", 0f)) }
+    var skinSmoothing by remember { mutableFloatStateOf(recoveryPrefs.getFloat("skin_smoothing", 0f)) }
+    var makeupIntensity by remember { mutableFloatStateOf(recoveryPrefs.getFloat("makeup_intensity", 0f)) }
+    var removalBrushMode by remember { mutableStateOf(recoveryPrefs.getBoolean("removal_brush_mode", false)) }
+    var removalBrushSize by remember { mutableFloatStateOf(recoveryPrefs.getFloat("removal_brush_size", 24f)) }
+    val removalStrokes = remember {
+        mutableStateListOf<List<Offset>>().apply {
+            val saved = recoveryPrefs.getString("removal_strokes", "").orEmpty()
+            saved.split("|").filter { it.isNotBlank() }.forEach { encodedStroke ->
+                val points = encodedStroke.split(";").mapNotNull { encodedPoint ->
+                    val parts = encodedPoint.split(",")
+                    if (parts.size != 2) null else {
+                        val x = parts[0].toFloatOrNull()
+                        val y = parts[1].toFloatOrNull()
+                        if (x == null || y == null) null else Offset(x, y)
+                    }
+                }
+                if (points.isNotEmpty()) add(points)
+            }
+        }
+    }
+    var currentRemovalStroke by remember {
+        mutableStateOf(
+            recoveryPrefs.getString("current_removal_stroke", "").orEmpty()
+                .split(";").mapNotNull { encodedPoint ->
+                    val parts = encodedPoint.split(",")
+                    if (parts.size != 2) null else {
+                        val x = parts[0].toFloatOrNull()
+                        val y = parts[1].toFloatOrNull()
+                        if (x == null || y == null) null else Offset(x, y)
+                    }
+                }
+        )
+    }
     var cropLabel by remember { mutableStateOf(recoveryPrefs.getString("crop_label", "Original") ?: "Original") }
     var cropOffsetX by remember { mutableFloatStateOf(recoveryPrefs.getFloat("crop_offset_x", 0f)) }
     var cropOffsetY by remember { mutableFloatStateOf(recoveryPrefs.getFloat("crop_offset_y", 0f)) }
@@ -216,10 +243,10 @@ private fun PhotoEditorHome() {
     var perspectiveBottomRightY by remember { mutableFloatStateOf(recoveryPrefs.getFloat("perspective_br_y", 0f)) }
     var perspectiveBottomLeftX by remember { mutableFloatStateOf(recoveryPrefs.getFloat("perspective_bl_x", 0f)) }
     var perspectiveBottomLeftY by remember { mutableFloatStateOf(recoveryPrefs.getFloat("perspective_bl_y", 0f)) }
-    var showPerspectiveControls by remember { mutableStateOf(false) }
+    var showPerspectiveControls by remember { mutableStateOf(recoveryPrefs.getBoolean("show_perspective_controls", false)) }
     var selectedStyle by remember { mutableStateOf(recoveryPrefs.getString("selected_style", "Auto") ?: "Auto") }
-    var activeEditorPanel by remember { mutableStateOf("Universal Edit") }
-    var activeAiSubpanel by remember { mutableStateOf("Subject") }
+    var activeEditorPanel by remember { mutableStateOf(recoveryPrefs.getString("active_editor_panel", "Universal Edit") ?: "Universal Edit") }
+    var activeAiSubpanel by remember { mutableStateOf(recoveryPrefs.getString("active_ai_subpanel", "Subject") ?: "Subject") }
     var editedScore by remember { mutableStateOf<PhotoQualityScoring.Score?>(null) }
     var originalPreviewScore by remember { mutableStateOf<PhotoQualityScoring.Score?>(null) }
     var isShowingOriginal by remember { mutableStateOf(false) }
@@ -227,18 +254,40 @@ private fun PhotoEditorHome() {
     var photoAnalysisResult by remember { mutableStateOf<PhotoAnalysisResult?>(null) }
     var isRunningPhotoAnalysis by remember { mutableStateOf(false) }
 
-    var captionSuggestions by remember { mutableStateOf<CaptionSuggestionEngine.Suggestions?>(null) }
-    var captionEnglish by remember { mutableStateOf("") }
-    var captionBengali by remember { mutableStateOf("") }
+    var captionSuggestions by remember {
+        mutableStateOf(
+            recoveryPrefs.getString("caption_english", "").orEmpty().takeIf { it.isNotBlank() }?.let { savedEnglish ->
+                CaptionSuggestionEngine.Suggestions(
+                    detectedLabels = emptyList(),
+                    english = listOf(savedEnglish),
+                    bengali = listOf(recoveryPrefs.getString("caption_bengali", "").orEmpty())
+                )
+            }
+        )
+    }
+    var captionEnglish by remember { mutableStateOf(recoveryPrefs.getString("caption_english", "").orEmpty()) }
+    var captionBengali by remember { mutableStateOf(recoveryPrefs.getString("caption_bengali", "").orEmpty()) }
     var captionIndex by remember { mutableIntStateOf(0) }
-    var captionPhotoUri by remember { mutableStateOf<String?>(null) }
+    var captionPhotoUri by remember { mutableStateOf<String?>(recoveryPrefs.getString("caption_photo_uri", null)) }
     var isGeneratingCaptions by remember { mutableStateOf(false) }
-    var captionTheme by remember { mutableStateOf("Auto") }
-    var captionAspectRatio by remember { mutableFloatStateOf(1f) }
+    var captionTheme by remember { mutableStateOf(recoveryPrefs.getString("caption_theme", "Auto") ?: "Auto") }
+    var captionAspectRatio by remember { mutableFloatStateOf(recoveryPrefs.getFloat("caption_aspect_ratio", 1f)) }
+    var captionSearchQuery by remember { mutableStateOf(recoveryPrefs.getString("caption_search_query", "").orEmpty()) }
+    var captionLibraryCategory by remember { mutableStateOf(recoveryPrefs.getString("caption_library_category", "All") ?: "All") }
 
     fun applyCaptionSuggestions(labels: List<Pair<String, Float>>, ratio: Float) {
         captionAspectRatio = ratio
-        val suggestions = CaptionSuggestionEngine.fromLabels(labels, ratio, captionTheme)
+        val generated = CaptionSuggestionEngine.fromLabels(labels, ratio, captionTheme)
+        val libraryMatches = CaptionLibrary.recommend(generated.detectedLabels, captionTheme, limit = 5)
+        val english = (generated.english + libraryMatches.map { it.text }).distinct()
+        val bengali = english.mapIndexed { index, _ ->
+            generated.bengali.getOrElse(index) { "এই মুহূর্তটা মনে রাখার মতো।" }
+        }
+        val suggestions = CaptionSuggestionEngine.Suggestions(
+            detectedLabels = generated.detectedLabels,
+            english = english,
+            bengali = bengali
+        )
         captionSuggestions = suggestions
         captionIndex = 0
         captionEnglish = suggestions.english.first()
@@ -311,17 +360,29 @@ private fun PhotoEditorHome() {
         if (photosNeedingScores.isNotEmpty()) statusMessage = "Recovered your previous photo selection and edit settings."
     }
 
+    // Durable session checkpoint: every editable value and caption is written whenever it changes.
+    // This intentionally stores settings/text/URI references only; original image bytes are never overwritten.
     LaunchedEffect(
         selectedPhotos.map { it.uri.toString() }, activePhoto?.uri?.toString(),
-        brightness, contrast, saturation, warmth, cropLabel, cropOffsetX, cropOffsetY, selectedStyle,
+        brightness, contrast, saturation, warmth, backgroundBlur, backgroundEnhancement,
+        subjectBrightness, darkerAreaLift, skinSmoothing, makeupIntensity,
+        cropLabel, cropOffsetX, cropOffsetY, rotationDegrees, straightenDegrees,
+        mirrorHorizontal, mirrorVertical, selectedStyle, showEnhanced, showCropGuides,
+        showPerspectiveControls, removalBrushMode, removalBrushSize,
         perspectiveTopLeftX, perspectiveTopLeftY, perspectiveTopRightX, perspectiveTopRightY,
-        perspectiveBottomRightX, perspectiveBottomRightY, perspectiveBottomLeftX, perspectiveBottomLeftY
+        perspectiveBottomRightX, perspectiveBottomRightY, perspectiveBottomLeftX, perspectiveBottomLeftY,
+        removalStrokes.toList(), currentRemovalStroke,
+        activeEditorPanel, activeAiSubpanel, captionEnglish, captionBengali, captionTheme,
+        captionAspectRatio, captionSearchQuery, captionLibraryCategory
     ) {
         recoveryPrefs.edit()
             .putString("selected_photo_uris", selectedPhotos.joinToString("\\n") { it.uri.toString() })
             .putString("active_photo_uri", activePhoto?.uri?.toString())
             .putFloat("brightness", brightness).putFloat("contrast", contrast)
             .putFloat("saturation", saturation).putFloat("warmth", warmth)
+            .putFloat("background_blur", backgroundBlur).putFloat("background_enhancement", backgroundEnhancement)
+            .putFloat("subject_brightness", subjectBrightness).putFloat("darker_area_lift", darkerAreaLift)
+            .putFloat("skin_smoothing", skinSmoothing).putFloat("makeup_intensity", makeupIntensity)
             .putString("crop_label", cropLabel).putFloat("crop_offset_x", cropOffsetX)
             .putFloat("crop_offset_y", cropOffsetY).putFloat("rotation_degrees", rotationDegrees)
             .putFloat("straighten_degrees", straightenDegrees).putBoolean("mirror_horizontal", mirrorHorizontal)
@@ -330,7 +391,20 @@ private fun PhotoEditorHome() {
             .putFloat("perspective_tr_x", perspectiveTopRightX).putFloat("perspective_tr_y", perspectiveTopRightY)
             .putFloat("perspective_br_x", perspectiveBottomRightX).putFloat("perspective_br_y", perspectiveBottomRightY)
             .putFloat("perspective_bl_x", perspectiveBottomLeftX).putFloat("perspective_bl_y", perspectiveBottomLeftY)
+            .putBoolean("show_enhanced", showEnhanced).putBoolean("show_crop_guides", showCropGuides)
+            .putBoolean("show_perspective_controls", showPerspectiveControls)
+            .putBoolean("removal_brush_mode", removalBrushMode).putFloat("removal_brush_size", removalBrushSize)
+            .putString("removal_strokes", (removalStrokes.toList() + listOf(currentRemovalStroke).filter { it.isNotEmpty() })
+                .joinToString("|") { stroke -> stroke.joinToString(";") { point -> "${point.x},${point.y}" } })
+            .putString("current_removal_stroke", "")
             .putString("selected_style", selectedStyle)
+            .putString("active_editor_panel", activeEditorPanel).putString("active_ai_subpanel", activeAiSubpanel)
+            .putString("caption_english", captionEnglish).putString("caption_bengali", captionBengali)
+            .putString("caption_theme", captionTheme).putFloat("caption_aspect_ratio", captionAspectRatio)
+            .putString("caption_photo_uri", captionPhotoUri)
+            .putString("caption_search_query", captionSearchQuery)
+            .putString("caption_library_category", captionLibraryCategory)
+            .putLong("last_session_checkpoint_ms", System.currentTimeMillis())
             .apply()
     }
 
@@ -894,8 +968,9 @@ private fun PhotoEditorHome() {
             var adjusted: Bitmap? = null
             var aiNotice: String? = null
             try {
+                // Keep the interactive preview deliberately smaller than export output to reduce peak RAM.
                 original = withContext(Dispatchers.IO) {
-                    AutoEnhancer.decodeForEditing(context.contentResolver, photo.uri, maxDimension = 1800)
+                    AutoEnhancer.decodeForEditing(context.contentResolver, photo.uri, maxDimension = 1440)
                 }
                 originalPreviewScore = scoreEditedBitmap(original!!)
                 if (selectedStyle == "Original") {
@@ -927,6 +1002,8 @@ private fun PhotoEditorHome() {
                 } else "Live preview updated. Export a copy when you're happy."
             } catch (error: CancellationException) {
                 throw error
+            } catch (error: OutOfMemoryError) {
+                statusMessage = "Preview needed more memory than Android could provide. Your last checkpointed edit settings are preserved; reopen the photo or try a smaller image."
             } catch (error: Exception) {
                 statusMessage = "Preview failed: " + (error.message ?: "unsupported image")
             } finally {
@@ -1357,19 +1434,19 @@ private fun PhotoEditorHome() {
                             Text("EDIT WORKSPACE", color = Mint, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                horizontalArrangement = Arrangement.spacedBy(5.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 listOf("Universal Edit", "AI Edit", "Presets", "Crop & Rotate").forEach { panel ->
                                     Button(
                                         onClick = { activeEditorPanel = panel; compareBeforeAfter = false },
-                                        modifier = Modifier.weight(1f).heightIn(min = 36.dp),
-                                        shape = RoundedCornerShape(9.dp),
+                                        modifier = Modifier.weight(1f).heightIn(min = 44.dp),
+                                        shape = RoundedCornerShape(11.dp),
                                         colors = ButtonDefaults.buttonColors(
                                             containerColor = if (activeEditorPanel == panel) Mint else Color(0xFF293333),
                                             contentColor = if (activeEditorPanel == panel) Ink else BrightText
                                         ),
-                                        contentPadding = PaddingValues(horizontal = 1.dp, vertical = 4.dp)
+                                        contentPadding = PaddingValues(horizontal = 2.dp, vertical = 7.dp)
                                     ) {
                                         Text(
                                             panel,
@@ -1833,11 +1910,56 @@ private fun PhotoEditorHome() {
                                     modifier = Modifier.clickable { showCropGuides = !showCropGuides }.padding(4.dp))
                             }
                         Spacer(modifier = Modifier.height(12.dp))
-                        Text("CAPTION IDEAS THAT SOUND LIKE YOU", color = BrightText, fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold)
-                        Text("Short, casual caption ideas based on visual clues. Pick a vibe or edit the wording so it sounds like you.",
-                            color = SoftText, fontSize = 10.sp, lineHeight = 14.sp,
-                            modifier = Modifier.padding(top = 3.dp, bottom = 6.dp))
+                        Text("CAPTION STUDIO", color = BrightText, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                        Text("On-device visual suggestions plus a searchable offline library. Edit before copying or sharing.",
+                            color = SoftText, fontSize = 11.sp, lineHeight = 16.sp,
+                            modifier = Modifier.padding(top = 3.dp, bottom = 8.dp))
+                        OutlinedTextField(
+                            value = captionSearchQuery, onValueChange = { captionSearchQuery = it },
+                            modifier = Modifier.fillMaxWidth(), label = { Text("Search 1,000 offline captions") },
+                            singleLine = true, shape = RoundedCornerShape(14.dp)
+                        )
+                        Text("${CaptionLibrary.all.size} ready-to-search presets · no internet needed",
+                            color = Mint, fontSize = 10.sp, fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.padding(top = 4.dp, bottom = 2.dp))
+                        Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                            CaptionLibrary.categories.forEach { category ->
+                                Button(
+                                    onClick = { captionLibraryCategory = category },
+                                    modifier = Modifier.heightIn(min = 36.dp), shape = RoundedCornerShape(18.dp),
+                                    contentPadding = PaddingValues(horizontal = 11.dp, vertical = 5.dp),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = if (captionLibraryCategory == category) Mint else Color(0xFF293333),
+                                        contentColor = if (captionLibraryCategory == category) Ink else BrightText
+                                    )
+                                ) { Text(category, fontSize = 10.sp, maxLines = 1) }
+                            }
+                        }
+                        CaptionLibrary.search(captionSearchQuery, captionLibraryCategory, 6).forEach { preset ->
+                            Button(
+                                onClick = {
+                                    captionEnglish = preset.text
+                                    captionBengali = "এই মুহূর্তটা মনে রাখার মতো।"
+                                    captionSuggestions = CaptionSuggestionEngine.Suggestions(
+                                        detectedLabels = captionSuggestions?.detectedLabels.orEmpty(),
+                                        english = listOf(preset.text), bengali = listOf(captionBengali)
+                                    )
+                                    captionIndex = 0
+                                    statusMessage = "Caption selected from the offline ${preset.category} library. You can edit it before copying."
+                                },
+                                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                                shape = RoundedCornerShape(12.dp),
+                                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 9.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF202929), contentColor = BrightText)
+                            ) {
+                                Column(modifier = Modifier.fillMaxWidth()) {
+                                    Text(preset.text, fontSize = 12.sp, lineHeight = 16.sp, maxLines = 3)
+                                    Text(preset.category.uppercase(), color = Mint, fontSize = 9.sp,
+                                        fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 3.dp))
+                                }
+                            }
+                        }
                         Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                             listOf("Auto", "Portrait", "Friends", "Festival", "Celebration", "Romantic", "Funny", "Devotional", "Travel", "Family", "Aesthetic").forEach { theme ->
                                 Button(onClick = {
@@ -1851,11 +1973,11 @@ private fun PhotoEditorHome() {
                             }
                         }
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Button(onClick = { suggestCaptions() }, modifier = Modifier.weight(1f), enabled = previewBitmap != null && !isGeneratingCaptions,
-                                shape = RoundedCornerShape(10.dp),
+                            Button(onClick = { suggestCaptions() }, modifier = Modifier.weight(1f).heightIn(min = 44.dp), enabled = previewBitmap != null && !isGeneratingCaptions,
+                                shape = RoundedCornerShape(12.dp),
                                 colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Ink),
-                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
-                            ) { Text(if (isGeneratingCaptions) "Analyzing…" else "Suggest captions", fontSize = 10.sp) }
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
+                            ) { Text(if (isGeneratingCaptions) "Analyzing…" else "Analyze photo", fontSize = 11.sp) }
                             Button(
                                 onClick = {
                                     val suggestions = captionSuggestions
@@ -1866,11 +1988,11 @@ private fun PhotoEditorHome() {
                                     } else suggestCaptions()
                                 },
                                 enabled = captionSuggestions != null && !isGeneratingCaptions,
-                                modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(10.dp),
+                                modifier = Modifier.weight(1f).heightIn(min = 44.dp),
+                                shape = RoundedCornerShape(12.dp),
                                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = BrightText),
-                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
-                            ) { Text("Regenerate", fontSize = 10.sp) }
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp)
+                            ) { Text("New suggestions", fontSize = 11.sp) }
                         }
                         if (captionSuggestions != null) {
                             val detected = captionSuggestions?.detectedLabels.orEmpty()

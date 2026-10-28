@@ -1,61 +1,83 @@
 package com.barshan.aiphotoeditor
 
 import android.graphics.Bitmap
-import kotlin.math.atan2
 import kotlin.math.abs
+import kotlin.math.atan2
 import kotlin.math.sqrt
 
 /**
- * Estimates a small camera roll from strong near-horizontal image edges.
- * This is a local, heuristic horizon/line estimator; it returns null when the
- * photo has too little reliable horizontal structure rather than guessing.
+ * Estimates camera roll from the dominant cluster of near-horizontal edges.
+ * A dominant-angle histogram is more robust than taking the median of every
+ * edge in a photo, where vertical objects and texture can overwhelm the horizon.
  */
 object AutoLeveler {
+    private const val MAX_CORRECTION = 12f
+    private const val BIN_STEP = 0.5f
+    private const val MIN_EDGE_MAGNITUDE = 55f
+
     fun estimateCorrectionDegrees(bitmap: Bitmap): Float? {
         if (bitmap.width < 32 || bitmap.height < 32) return null
-        val sampleScale = minOf(1f, 480f / maxOf(bitmap.width, bitmap.height).toFloat())
-        val width = (bitmap.width * sampleScale).toInt().coerceAtLeast(32)
-        val height = (bitmap.height * sampleScale).toInt().coerceAtLeast(32)
-        val sample = Bitmap.createScaledBitmap(bitmap, width, height, true)
+        val scale = minOf(1f, 640f / maxOf(bitmap.width, bitmap.height).toFloat())
+        val width = (bitmap.width * scale).toInt().coerceAtLeast(32)
+        val height = (bitmap.height * scale).toInt().coerceAtLeast(32)
+        val sample = if (width == bitmap.width && height == bitmap.height) bitmap
+            else Bitmap.createScaledBitmap(bitmap, width, height, true)
         try {
             val pixels = IntArray(width * height)
             sample.getPixels(pixels, 0, width, 0, 0, width, height)
-            val angles = ArrayList<Pair<Float, Float>>()
+            val binCount = (MAX_CORRECTION * 2 / BIN_STEP).toInt() + 1
+            val histogram = DoubleArray(binCount)
+            val angleSamples = ArrayList<Pair<Float, Float>>()
+            fun lum(i: Int): Float {
+                val p = pixels[i]
+                return 0.213f * (p shr 16 and 255) + 0.715f * (p shr 8 and 255) + 0.072f * (p and 255)
+            }
             var totalWeight = 0.0
-            val step = 2
-            for (y in 1 until height - 1 step step) {
-                for (x in 1 until width - 1 step step) {
-                    fun lum(i: Int): Float {
-                        val p = pixels[i]
-                        return (0.213f * (p shr 16 and 255) + 0.715f * (p shr 8 and 255) + 0.072f * (p and 255))
-                    }
-                    val gx = -lum((y - 1) * width + x - 1) + lum((y - 1) * width + x + 1) -
-                        2f * lum(y * width + x - 1) + 2f * lum(y * width + x + 1) -
-                        lum((y + 1) * width + x - 1) + lum((y + 1) * width + x + 1)
-                    val gy = -lum((y - 1) * width + x - 1) - 2f * lum((y - 1) * width + x) -
-                        lum((y - 1) * width + x + 1) + lum((y + 1) * width + x - 1) +
-                        2f * lum((y + 1) * width + x) + lum((y + 1) * width + x + 1)
+            for (y in 1 until height - 1 step 2) {
+                for (x in 1 until width - 1 step 2) {
+                    val tl = lum((y - 1) * width + x - 1)
+                    val tc = lum((y - 1) * width + x)
+                    val tr = lum((y - 1) * width + x + 1)
+                    val ml = lum(y * width + x - 1)
+                    val mr = lum(y * width + x + 1)
+                    val bl = lum((y + 1) * width + x - 1)
+                    val bc = lum((y + 1) * width + x)
+                    val br = lum((y + 1) * width + x + 1)
+                    val gx = -tl + tr - 2f * ml + 2f * mr - bl + br
+                    val gy = -tl - 2f * tc - tr + bl + 2f * bc + br
                     val magnitude = sqrt(gx * gx + gy * gy)
-                    if (magnitude < 70f) continue
-                    var edgeAngle = Math.toDegrees(atan2(gy.toDouble(), gx.toDouble())).toFloat() + 90f
-                    while (edgeAngle > 90f) edgeAngle -= 180f
-                    while (edgeAngle < -90f) edgeAngle += 180f
-                    if (abs(edgeAngle) <= 12f) {
-                        val weight = (magnitude - 70f).coerceAtMost(255f).toDouble()
-                        angles.add(edgeAngle to weight.toFloat())
-                        totalWeight += weight
-                    }
+                    if (magnitude < MIN_EDGE_MAGNITUDE) continue
+                    var angle = Math.toDegrees(atan2(gy.toDouble(), gx.toDouble())).toFloat() + 90f
+                    while (angle > 90f) angle -= 180f
+                    while (angle < -90f) angle += 180f
+                    if (abs(angle) > MAX_CORRECTION) continue
+                    val weight = (magnitude - MIN_EDGE_MAGNITUDE).coerceAtMost(255f)
+                    val bin = ((angle + MAX_CORRECTION) / BIN_STEP).toInt().coerceIn(0, binCount - 1)
+                    histogram[bin] += weight
+                    angleSamples.add(angle to weight)
+                    totalWeight += weight
                 }
             }
-            if (angles.size < 30 || totalWeight < 2500.0) return null
-            angles.sortBy { it.first }
+            if (angleSamples.size < 24 || totalWeight < 1800.0) return null
+
+            var peak = 0
+            var peakWeight = 0.0
+            for (i in histogram.indices) {
+                val score = histogram.getOrElse(i - 1) { 0.0 } +
+                    histogram[i] * 2.0 + histogram.getOrElse(i + 1) { 0.0 }
+                if (score > peakWeight) { peakWeight = score; peak = i }
+            }
+            val dominantAngle = peak * BIN_STEP - MAX_CORRECTION
+            val cluster = angleSamples.filter { abs(it.first - dominantAngle) <= 2.0f }
+            val clusterWeight = cluster.sumOf { it.second.toDouble() }
+            if (cluster.size < 18 || clusterWeight < totalWeight * 0.12) return null
+            val sorted = cluster.sortedBy { it.first }
             var running = 0.0
-            for ((angle, weight) in angles) {
+            for ((angle, weight) in sorted) {
                 running += weight
-                if (running >= totalWeight / 2.0) {
-                    // The detected edge leans by angle; rotate in the opposite direction.
+                if (running >= clusterWeight / 2.0) {
                     val correction = -angle
-                    return if (abs(correction) < 0.6f) 0f else correction.coerceIn(-12f, 12f)
+                    return if (abs(correction) < 0.35f) 0f else correction.coerceIn(-MAX_CORRECTION, MAX_CORRECTION)
                 }
             }
             return null

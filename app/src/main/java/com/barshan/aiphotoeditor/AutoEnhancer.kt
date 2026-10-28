@@ -119,13 +119,51 @@ object AutoEnhancer {
             adjusted.setPixels(row, 0, width, 0, y, width, 1)
         }
 
+        val angle = settings.rotationDegrees + settings.straightenDegrees
         val transform = Matrix().apply {
             postScale(if (settings.mirrorHorizontal) -1f else 1f, if (settings.mirrorVertical) -1f else 1f)
-            postRotate(settings.rotationDegrees + settings.straightenDegrees)
+            postRotate(angle)
         }
-        val transformed = if (settings.mirrorHorizontal || settings.mirrorVertical || settings.rotationDegrees % 360f != 0f || settings.straightenDegrees != 0f) {
-            Bitmap.createBitmap(adjusted, 0, 0, adjusted.width, adjusted.height, transform, true).also { if (it !== adjusted) adjusted.recycle() }
+        var transformed = if (settings.mirrorHorizontal || settings.mirrorVertical || angle % 360f != 0f) {
+            Bitmap.createBitmap(adjusted, 0, 0, adjusted.width, adjusted.height, transform, true)
+                .also { if (it !== adjusted) adjusted.recycle() }
         } else adjusted
+
+        // Remove transparent corner wedges introduced by small straighten rotations.
+        if (kotlin.math.abs(angle % 90f) > 0.05f) {
+            val croppedForRotation = cropToOpaqueCenter(transformed, width.toFloat() / height.coerceAtLeast(1), width, height)
+            if (croppedForRotation !== transformed) transformed.recycle()
+            transformed = croppedForRotation
+        }
+
+        // Perspective crop: map a user-defined four-sided crop quadrilateral to a rectangle.
+        val top = settings.perspectiveTopInset.coerceIn(0f, 0.28f)
+        val bottom = settings.perspectiveBottomInset.coerceIn(0f, 0.28f)
+        val left = settings.perspectiveLeftInset.coerceIn(0f, 0.28f)
+        val right = settings.perspectiveRightInset.coerceIn(0f, 0.28f)
+        if (top + bottom < 0.56f && left + right < 0.56f &&
+            (top + bottom + left + right) > 0.001f) {
+            val outWidth = (transformed.width * (1f - (top + bottom) / 2f)).toInt().coerceAtLeast(2)
+            val outHeight = (transformed.height * (1f - (left + right) / 2f)).toInt().coerceAtLeast(2)
+            val sourceCorners = floatArrayOf(
+                transformed.width * top, transformed.height * left,
+                transformed.width * (1f - top), transformed.height * right,
+                transformed.width * (1f - bottom), transformed.height * (1f - right),
+                transformed.width * bottom, transformed.height * (1f - left)
+            )
+            val destinationCorners = floatArrayOf(
+                0f, 0f, outWidth.toFloat(), 0f,
+                outWidth.toFloat(), outHeight.toFloat(), 0f, outHeight.toFloat()
+            )
+            val perspective = Matrix()
+            if (perspective.setPolyToPoly(sourceCorners, 0, destinationCorners, 0, 4)) {
+                val rectified = Bitmap.createBitmap(outWidth, outHeight, Bitmap.Config.ARGB_8888)
+                android.graphics.Canvas(rectified).drawBitmap(transformed, perspective, android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG))
+                transformed.recycle()
+                transformed = rectified
+            }
+        }
+
         val ratio = settings.cropRatio ?: return transformed
         if (ratio <= 0f) return transformed
         val sourceRatio = transformed.width.toFloat() / transformed.height.toFloat()
@@ -147,6 +185,33 @@ object AutoEnhancer {
         val cropped = Bitmap.createBitmap(transformed, left, top, cropWidth, cropHeight)
         if (cropped !== transformed) transformed.recycle()
         return cropped
+    }
+
+    /** Largest centered rectangle of the source aspect ratio whose corners remain opaque. */
+    private fun cropToOpaqueCenter(bitmap: Bitmap, aspect: Float, originalWidth: Int, originalHeight: Int): Bitmap {
+        if (bitmap.width < 2 || bitmap.height < 2 || aspect <= 0f) return bitmap
+        fun cornersOpaque(scale: Float): Boolean {
+            val w = (originalWidth * scale).toInt().coerceIn(1, bitmap.width)
+            val h = (originalHeight * scale).toInt().coerceIn(1, bitmap.height)
+            val left = (bitmap.width - w) / 2
+            val top = (bitmap.height - h) / 2
+            val right = (left + w - 1).coerceIn(0, bitmap.width - 1)
+            val bottom = (top + h - 1).coerceIn(0, bitmap.height - 1)
+            return listOf(
+                bitmap.getPixel(left, top), bitmap.getPixel(right, top),
+                bitmap.getPixel(right, bottom), bitmap.getPixel(left, bottom)
+            ).all { (it ushr 24) >= 245 }
+        }
+        var low = 0f
+        var high = minOf(bitmap.width.toFloat() / originalWidth.coerceAtLeast(1), bitmap.height.toFloat() / originalHeight.coerceAtLeast(1))
+        repeat(18) {
+            val mid = (low + high) / 2f
+            if (cornersOpaque(mid)) low = mid else high = mid
+        }
+        val cropWidth = (originalWidth * low * 0.995f).toInt().coerceIn(1, bitmap.width)
+        val cropHeight = (originalHeight * low * 0.995f).toInt().coerceIn(1, bitmap.height)
+        if (cropWidth >= bitmap.width && cropHeight >= bitmap.height) return bitmap
+        return Bitmap.createBitmap(bitmap, (bitmap.width - cropWidth) / 2, (bitmap.height - cropHeight) / 2, cropWidth, cropHeight)
     }
 
     /** Save a new JPEG in Pictures/FRAME AI using MediaStore. Returns the saved URI. */

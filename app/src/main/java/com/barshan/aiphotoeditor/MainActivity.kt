@@ -1137,7 +1137,9 @@ private fun PhotoEditorHome() {
                 }
                 Spacer(modifier = Modifier.height(3.dp))
                 Card(
-                    modifier = Modifier.fillMaxWidth(),
+                    // Reserve a bounded editor workspace so the preview cannot push
+                    // the tool tabs and adjustment controls below the visible screen.
+                    modifier = Modifier.fillMaxWidth().weight(1f),
                     shape = RoundedCornerShape(20.dp),
                     colors = CardDefaults.cardColors(containerColor = Panel)
                 ) {
@@ -1181,7 +1183,7 @@ private fun PhotoEditorHome() {
                         val screenHeight = LocalConfiguration.current.screenHeightDp.dp
                         Box(
                             modifier = Modifier.fillMaxWidth()
-                                .heightIn(max = screenHeight * 0.5f)
+                                .heightIn(max = screenHeight * 0.36f)
                                 .aspectRatio(previewAspectRatio.coerceIn(0.25f, 4f), matchHeightConstraintsFirst = true)
                                 .clip(RoundedCornerShape(14.dp)).background(Ink)
                                 .onSizeChanged { size ->

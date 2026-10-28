@@ -22,7 +22,9 @@ object CaptionSuggestionEngine {
         val food = has(words, "food", "dish", "cuisine", "dessert", "meal", "restaurant", "cake", "coffee")
         val pets = has(words, "dog", "cat", "bird", "animal", "pet", "puppy", "kitten")
         val nature = has(words, "flower", "plant", "garden", "tree", "forest", "lake", "river")
-        val people = has(words, "person", "people", "face", "portrait", "human", "man", "woman", "child", "group", "crowd", "family")
+        val family = has(words, "family", "parents", "siblings", "relatives")
+        val friends = has(words, "friends", "group", "crowd", "team", "classmates")
+        val portrait = has(words, "person", "people", "face", "portrait", "human", "man", "woman", "child")
         val scene = if (theme != "Auto") theme else when {
             festival -> "Festival"
             wedding -> "Romantic"
@@ -30,7 +32,9 @@ object CaptionSuggestionEngine {
             pets -> "Pets"
             travel -> "Travel"
             nature -> "Nature"
-            people -> "Family"
+            family -> "Family"
+            friends -> "Friends"
+            portrait -> "Portrait"
             else -> "Aesthetic"
         }
 
@@ -141,6 +145,46 @@ object CaptionSuggestionEngine {
                     "ইচ্ছে করছে সূর্য ডোবা পর্যন্ত এখানেই থাকি।",
                     "ছোট্ট একটা ঘোরা, ক্যামেরা রোল ভর্তি।",
                     "ফেরার পথটা একটু লম্বা হলেও আপত্তি নেই।"
+                )
+            }
+            "Portrait" -> {
+                en = listOf(
+                    "Felt cute. Keeping it here.",
+                    "A decent photo of me? We take those.",
+                    "This one made the camera roll cut.",
+                    "No occasion. Just liked how this turned out.",
+                    "Rare moment when I didn’t delete the photo.",
+                    "Leaving this here before I overthink it.",
+                    "Today’s face, today’s mood. That’s all."
+                )
+                bn = listOf(
+                    "ভালো লাগল, তাই রেখে দিলাম।",
+                    "নিজের একটা ছবি পছন্দ হয়েছে? আজকের জয় এটুকুই।",
+                    "ক্যামেরা রোলের বাছাই করা ছবিগুলোর একটা।",
+                    "কোনো উপলক্ষ নেই, ছবিটা ভালো লেগেছে।",
+                    "যে ছবি আবার ডিলিট করে দিইনি—এটাই বড় কথা।",
+                    "বেশি ভাবার আগেই পোস্ট করে দিলাম।",
+                    "আজকের মুখ, আজকের মুড—ব্যস।"
+                )
+            }
+            "Friends" -> {
+                en = listOf(
+                    "Same idiots, better memories. ❤️",
+                    "The plan was one photo. Obviously that didn’t happen.",
+                    "My kind of people.",
+                    "We should do this more often.",
+                    "One frame, too many inside jokes.",
+                    "Proof we managed to meet up.",
+                    "Wouldn’t trade this chaos for much."
+                )
+                bn = listOf(
+                    "একই পাগলগুলো, স্মৃতি একটু ভালো। ❤️",
+                    "প্ল্যান ছিল একটা ছবি, বাকিটা ইতিহাস।",
+                    "আমার পছন্দের মানুষজন।",
+                    "এমন দেখা-সাক্ষাৎ আরও হওয়া দরকার।",
+                    "এক ফ্রেমে অনেকগুলো গোপন জোকস।",
+                    "শেষমেশ দেখা হয়েছে—তার প্রমাণ।",
+                    "এই কোলাহলটার বদলে আর কিছু চাই না।"
                 )
             }
             "Family" -> {

@@ -2758,4 +2758,3 @@ private fun PhotoEditorHome() {
             )
         }
     }
-}

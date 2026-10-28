@@ -1940,29 +1940,33 @@ private fun PhotoEditorHome() {
                             val matchingPresets = CaptionLibrary.search(captionSearchQuery, captionLibraryCategory, 6)
                             if (matchingPresets.isEmpty()) {
                                 Text("No matches yet. Try a broader word or another category.", color = SoftText, fontSize = 11.sp)
-                            } else matchingPresets.forEach { preset ->
-                                onClick = {
-                                    captionEnglish = preset.text
-                                    captionBengali = "এই মুহূর্তটা মনে রাখার মতো।"
-                                    captionSuggestions = CaptionSuggestionEngine.Suggestions(
-                                        detectedLabels = captionSuggestions?.detectedLabels.orEmpty(),
-                                        english = listOf(preset.text), bengali = listOf(captionBengali)
-                                    )
-                                    captionIndex = 0
-                                    statusMessage = "Caption selected from the offline ${preset.category} library. You can edit it before copying."
-                                },
-                                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-                                shape = RoundedCornerShape(12.dp),
-                                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 9.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF202929), contentColor = BrightText)
-                            ) {
-                                Column(modifier = Modifier.fillMaxWidth()) {
-                                    Text(preset.text, fontSize = 12.sp, lineHeight = 16.sp, maxLines = 3)
-                                    Text(preset.category.uppercase(), color = Mint, fontSize = 9.sp,
-                                        fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 3.dp))
+                            } else {
+                                matchingPresets.forEach { preset ->
+                                    Button(
+                                        onClick = {
+                                            captionEnglish = preset.text
+                                            captionBengali = "এই মুহূর্তটা মনে রাখার মতো।"
+                                            captionSuggestions = CaptionSuggestionEngine.Suggestions(
+                                                detectedLabels = captionSuggestions?.detectedLabels.orEmpty(),
+                                                english = listOf(preset.text), bengali = listOf(captionBengali)
+                                            )
+                                            captionIndex = 0
+                                            statusMessage = "Caption selected from the offline ${preset.category} library. You can edit it before copying."
+                                        },
+                                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                                        shape = RoundedCornerShape(12.dp),
+                                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 9.dp),
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = Color(0xFF202929), contentColor = BrightText
+                                        )
+                                    ) {
+                                        Column(modifier = Modifier.fillMaxWidth()) {
+                                            Text(preset.text, fontSize = 12.sp, lineHeight = 16.sp, maxLines = 3)
+                                            Text(preset.category.uppercase(), color = Mint, fontSize = 9.sp,
+                                                fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 3.dp))
+                                        }
+                                    }
                                 }
-                            }
-
                             }
                         } else {
                             Text("Search by mood, subject, or moment — or choose a category to browse.",

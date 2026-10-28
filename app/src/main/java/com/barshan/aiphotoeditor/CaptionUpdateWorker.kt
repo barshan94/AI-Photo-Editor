@@ -42,8 +42,15 @@ class CaptionUpdateWorker(context: Context, params: WorkerParameters) : Coroutin
             }
             if (validated.length() < MIN_CAPTIONS) return Result.failure()
             val prefs = applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            if (version <= prefs.getInt("caption_pack_version", 0)) return Result.success()
+            val currentVersion = prefs.getInt("caption_pack_version", 0)
+            val contentHash = validated.toString().hashCode().toString()
+            // Ignore older packs and identical payloads, but accept a corrected pack
+            // even when its publisher forgot to increment the version number.
+            if (version < currentVersion || contentHash == prefs.getString("caption_pack_hash", null)) {
+                return Result.success()
+            }
             val saved = prefs.edit().putInt("caption_pack_version", version)
+                .putString("caption_pack_hash", contentHash)
                 .putString("caption_pack_json", validated.toString())
                 .putLong("caption_pack_updated_at", System.currentTimeMillis()).commit()
             if (saved) Result.success() else Result.retry()

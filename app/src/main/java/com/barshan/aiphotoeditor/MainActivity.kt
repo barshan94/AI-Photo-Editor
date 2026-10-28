@@ -133,6 +133,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        CaptionCatalogUpdateWorker.schedule(this)
         setContent {
             MaterialTheme(colorScheme = darkColorScheme(
                 primary = Mint, onPrimary = Ink, background = Ink,
@@ -159,6 +160,7 @@ private fun PhotoEditorHome() {
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
     val scope = rememberCoroutineScope()
+    var remoteCaptionEntries by remember { mutableStateOf(CaptionCatalogUpdateWorker.readCachedEntries(context)) }
     val recoveryPrefs = remember {
         context.getSharedPreferences("frame_ai_recovery", android.content.Context.MODE_PRIVATE)
     }
@@ -1938,7 +1940,7 @@ private fun PhotoEditorHome() {
                             modifier = Modifier.fillMaxWidth(), label = { Text("Search 1,000 offline captions") },
                             singleLine = true, shape = RoundedCornerShape(14.dp)
                         )
-                        Text("${CaptionLibrary.all.size} ready-to-search presets · no internet needed",
+                        Text("${CaptionLibrary.all.size + remoteCaptionEntries.size} captions ready · ${remoteCaptionEntries.size} online additions cached · Wi-Fi updates enabled",
                             color = Mint, fontSize = 10.sp, fontWeight = FontWeight.SemiBold,
                             modifier = Modifier.padding(top = 4.dp, bottom = 2.dp))
                         Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
@@ -1955,7 +1957,16 @@ private fun PhotoEditorHome() {
                                 ) { Text(category, fontSize = 10.sp, maxLines = 1) }
                             }
                         }
-                        val matchingPresets = CaptionLibrary.search(captionSearchQuery, captionLibraryCategory, 6)
+                        val normalizedCaptionQuery = captionSearchQuery.trim()
+                        val remoteMatches = remoteCaptionEntries.filter { preset ->
+                            (captionLibraryCategory == "All" || preset.category == captionLibraryCategory) &&
+                                (normalizedCaptionQuery.isBlank() ||
+                                    preset.text.contains(normalizedCaptionQuery, ignoreCase = true) ||
+                                    preset.category.contains(normalizedCaptionQuery, ignoreCase = true) ||
+                                    preset.keywords.any { it.contains(normalizedCaptionQuery, ignoreCase = true) })
+                        }
+                        val matchingPresets = (remoteMatches + CaptionLibrary.search(captionSearchQuery, captionLibraryCategory, 6))
+                            .distinctBy { it.text }.take(6)
                             if (matchingPresets.isEmpty()) {
                                 Text("No matches yet. Try a broader word or another category.", color = SoftText, fontSize = 11.sp)
                             } else {

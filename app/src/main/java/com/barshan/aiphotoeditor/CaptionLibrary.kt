@@ -60,5 +60,31 @@ object CaptionLibrary {
             .toList()
     }
 
+    /** Rank local presets against visual labels and the user's selected caption style. */
+    fun recommend(labels: List<String>, theme: String = "Auto", limit: Int = 5): List<Entry> {
+        val labelText = labels.joinToString(" ").lowercase()
+        val category = when {
+            theme in topics.keys -> theme
+            labelText.contains("durga") || labelText.contains("puja") || labelText.contains("festival") -> "Festival"
+            labelText.contains("wedding") || labelText.contains("bride") || labelText.contains("groom") -> "Wedding"
+            labelText.contains("dog") || labelText.contains("cat") || labelText.contains("pet") -> "Pets"
+            labelText.contains("food") || labelText.contains("cake") || labelText.contains("meal") -> "Food"
+            labelText.contains("mountain") || labelText.contains("beach") || labelText.contains("travel") -> "Travel"
+            labelText.contains("tree") || labelText.contains("flower") || labelText.contains("forest") -> "Nature"
+            labelText.contains("family") || labelText.contains("parent") -> "Family"
+            labelText.contains("friend") || labelText.contains("group") || labelText.contains("crowd") -> "Friends"
+            labelText.contains("person") || labelText.contains("portrait") || labelText.contains("face") -> "Portrait"
+            else -> "Aesthetic"
+        }
+        val tokens = Regex("[^\\p{L}\\p{N}]+").split(labelText).filter { it.length > 2 }.toSet()
+        return all.asSequence()
+            .filter { it.category == category }
+            .sortedByDescending { entry ->
+                entry.keywords.count { keyword -> tokens.any { token -> keyword.contains(token) || token.contains(keyword) } }
+            }
+            .take(limit.coerceAtLeast(1))
+            .toList()
+    }
+
     val categories: List<String> get() = listOf("All") + topics.keys.toList()
 }

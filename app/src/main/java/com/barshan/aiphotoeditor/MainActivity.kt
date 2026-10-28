@@ -250,7 +250,17 @@ private fun PhotoEditorHome() {
 
     fun applyCaptionSuggestions(labels: List<Pair<String, Float>>, ratio: Float) {
         captionAspectRatio = ratio
-        val suggestions = CaptionSuggestionEngine.fromLabels(labels, ratio, captionTheme)
+        val generated = CaptionSuggestionEngine.fromLabels(labels, ratio, captionTheme)
+        val libraryMatches = CaptionLibrary.recommend(generated.detectedLabels, captionTheme, limit = 5)
+        val english = (generated.english + libraryMatches.map { it.text }).distinct()
+        val bengali = english.mapIndexed { index, _ ->
+            generated.bengali.getOrElse(index) { "এই মুহূর্তটা মনে রাখার মতো।" }
+        }
+        val suggestions = CaptionSuggestionEngine.Suggestions(
+            detectedLabels = generated.detectedLabels,
+            english = english,
+            bengali = bengali
+        )
         captionSuggestions = suggestions
         captionIndex = 0
         captionEnglish = suggestions.english.first()
@@ -1899,6 +1909,7 @@ private fun PhotoEditorHome() {
                             Button(
                                 onClick = {
                                     captionEnglish = preset.text
+                                    captionBengali = "এই মুহূর্তটা মনে রাখার মতো।"
                                     captionSuggestions = CaptionSuggestionEngine.Suggestions(
                                         detectedLabels = captionSuggestions?.detectedLabels.orEmpty(),
                                         english = listOf(preset.text), bengali = listOf(captionBengali)

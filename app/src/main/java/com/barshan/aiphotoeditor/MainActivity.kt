@@ -2185,17 +2185,17 @@ private fun PhotoEditorHome() {
                         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 3.dp)
                     ) { Text("✦ AI Edit all", fontSize = 11.sp, fontWeight = FontWeight.Bold) }
                 }
-                Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
                     BatchExportPolicy.presetNames.forEach { preset ->
-                        Button(onClick = { previewBatchPreset(preset) },
-                            enabled = !isExporting && !isAnalyzing && !isPreparingBatchPreview && selectedPhotos.any { it.decision != "Reject" },
-                            shape = RoundedCornerShape(10.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = if (batchPreset == preset) Mint else Color(0xFF293333),
-                                contentColor = if (batchPreset == preset) Ink else BrightText
-                            ), contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp)
-                        ) { Text(preset, fontSize = 10.sp) }
+                        EditorChip(
+                            label = preset,
+                            selected = batchPreset == preset,
+                            compact = true,
+                            onClick = { if (!isExporting && !isAnalyzing && !isPreparingBatchPreview && selectedPhotos.any { it.decision != "Reject" }) previewBatchPreset(preset) }
+                        )
                     }
                 }
                 Column(modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
@@ -2491,18 +2491,17 @@ private fun PhotoEditorHome() {
             if (selectedPhotos.isNotEmpty()) {
                 Text("Keep " + keptCount + "  ·  Review " + reviewCount + "  ·  Reject " + rejectedCount,
                     color = SoftText, fontSize = 10.sp, modifier = Modifier.padding(top = 4.dp))
-                Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
                     listOf("All", "Keep", "Review", "Reject", "Similar", "Burst").forEach { filter ->
-                        Button(
-                            onClick = { gridFilter = filter },
-                            shape = RoundedCornerShape(10.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = if (gridFilter == filter) Mint else Color(0xFF293333),
-                                contentColor = if (gridFilter == filter) Ink else BrightText
-                            ),
-                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp)
-                        ) { Text(filter, fontSize = 10.sp) }
+                        EditorChip(
+                            label = filter,
+                            selected = gridFilter == filter,
+                            compact = true,
+                            onClick = { gridFilter = filter }
+                        )
                     }
                 }
             }

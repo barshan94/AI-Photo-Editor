@@ -131,7 +131,13 @@ object AutoEnhancer {
 
         // Remove transparent corner wedges introduced by small straighten rotations.
         if (kotlin.math.abs(angle % 90f) > 0.05f) {
-            val croppedForRotation = cropToOpaqueCenter(transformed, width.toFloat() / height.coerceAtLeast(1), width, height)
+            val quarterTurn = (kotlin.math.round(angle / 90f).toInt() % 2) != 0
+            val cropBaseWidth = if (quarterTurn) height else width
+            val cropBaseHeight = if (quarterTurn) width else height
+            val croppedForRotation = cropToOpaqueCenter(
+                transformed, cropBaseWidth.toFloat() / cropBaseHeight.coerceAtLeast(1),
+                cropBaseWidth, cropBaseHeight
+            )
             if (croppedForRotation !== transformed) transformed.recycle()
             transformed = croppedForRotation
         }

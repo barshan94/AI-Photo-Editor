@@ -42,6 +42,7 @@ import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.ImageSearch
 import androidx.compose.material.icons.rounded.Tune
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -336,6 +337,9 @@ private fun PhotoEditorHome() {
     var isGeneratingBatchCaptions by remember { mutableStateOf(false) }
     var batchCaptionProgress by remember { mutableIntStateOf(0) }
     var isGeneratingCaptions by remember { mutableStateOf(false) }
+    var showBatchCaptionChoice by remember { mutableStateOf(false) }
+    var showIndividualBatchCaptionPicker by remember { mutableStateOf(false) }
+    var batchCaptionResults by remember { mutableStateOf<Map<Uri, Pair<String, String>>>(emptyMap()) }
     var captionTheme by remember { mutableStateOf(recoveryPrefs.getString("caption_theme", "Auto") ?: "Auto") }
     var captionAspectRatio by remember { mutableFloatStateOf(recoveryPrefs.getFloat("caption_aspect_ratio", 1f)) }
     var captionSearchQuery by remember { mutableStateOf(recoveryPrefs.getString("caption_search_query", "").orEmpty()) }
@@ -2439,6 +2443,65 @@ private fun PhotoEditorHome() {
                         colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Ink),
                         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 3.dp)
                     ) { Text("✦ AI Edit all", fontSize = 11.sp, fontWeight = FontWeight.Bold) }
+                }
+                Button(
+                    onClick = { showBatchCaptionChoice = true },
+                    enabled = !isExporting && !isAnalyzing,
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).heightIn(min = 40.dp),
+                    shape = RoundedCornerShape(10.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = Mint)
+                ) { Text("✎ Caption · English + বাংলা", fontSize = 11.sp, fontWeight = FontWeight.SemiBold) }
+                batchCaptionResults.forEach { (uri, pair) ->
+                    Column(modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
+                        Text("Photo " + (selectedPhotos.indexOfFirst { it.uri == uri } + 1), color = Mint, fontSize = 10.sp)
+                        Text(pair.first, color = BrightText, fontSize = 11.sp)
+                        Text(pair.second, color = SoftText, fontSize = 11.sp)
+                    }
+                }
+                if (showBatchCaptionChoice) {
+                    AlertDialog(
+                        onDismissRequest = { showBatchCaptionChoice = false },
+                        title = { Text("Generate captions") },
+                        text = { Text("Choose one photo or generate English and Bengali captions for all selected photos.") },
+                        confirmButton = { Button(onClick = { showBatchCaptionChoice = false; showIndividualBatchCaptionPicker = true }) { Text("Individual photo") } },
+                        dismissButton = {
+                            Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                                Button(onClick = {
+                                    showBatchCaptionChoice = false
+                                    batchCaptionResults = emptyMap()
+                                    selectedPhotos.filter { it.decision != "Reject" }.forEachIndexed { index, photo ->
+                                        val ratio = if (photo.width > 0 && photo.height > 0) photo.width.toFloat() / photo.height.toFloat() else 1f
+                                        val ideas = CaptionSuggestionEngine.fromLabels(emptyList(), ratio, "Auto")
+                                        val count = minOf(ideas.english.size, ideas.bengali.size).coerceAtLeast(1)
+                                        val choice = index % count
+                                        batchCaptionResults = batchCaptionResults + (photo.uri to (ideas.english.getOrNull(choice).orEmpty().ifBlank { "A moment worth keeping." } to ideas.bengali.getOrNull(choice).orEmpty().ifBlank { "মনে রাখার মতো একটি মুহূর্ত।" }))
+                                    }
+                                    statusMessage = "Bilingual caption suggestions prepared for selected photos. Review each caption before sharing."
+                                }) { Text("All selected") }
+                                Button(onClick = { showBatchCaptionChoice = false }) { Text("Cancel") }
+                            }
+                        }
+                    )
+                }
+                if (showIndividualBatchCaptionPicker) {
+                    AlertDialog(
+                        onDismissRequest = { showIndividualBatchCaptionPicker = false },
+                        title = { Text("Choose a photo") },
+                        text = {
+                            Column(modifier = Modifier.heightIn(max = 300.dp).verticalScroll(rememberScrollState())) {
+                                selectedPhotos.filter { it.decision != "Reject" }.forEach { photo ->
+                                    Button(onClick = {
+                                        val ratio = if (photo.width > 0 && photo.height > 0) photo.width.toFloat() / photo.height.toFloat() else 1f
+                                        val ideas = CaptionSuggestionEngine.fromLabels(emptyList(), ratio, "Auto")
+                                        batchCaptionResults = batchCaptionResults + (photo.uri to (ideas.english.firstOrNull().orEmpty().ifBlank { "A moment worth keeping." } to ideas.bengali.firstOrNull().orEmpty().ifBlank { "মনে রাখার মতো একটি মুহূর্ত।" }))
+                                        showIndividualBatchCaptionPicker = false
+                                        statusMessage = "Bilingual caption suggestions ready for one photo."
+                                    }, modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)) { Text("Photo " + (selectedPhotos.indexOf(photo) + 1)) }
+                                }
+                            }
+                        },
+                        confirmButton = { Button(onClick = { showIndividualBatchCaptionPicker = false }) { Text("Close") } }
+                    )
                 }
                 Row(modifier = Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 4.dp),
                     horizontalArrangement = Arrangement.spacedBy(5.dp)) {

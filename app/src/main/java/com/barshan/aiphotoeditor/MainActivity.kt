@@ -1050,7 +1050,7 @@ private fun PhotoEditorHome() {
         }
     }
 
-    fun exportOne(photo: PhotoItem, settings: EditSettings, useAiPortrait: Boolean = false, useAiUpscale: Boolean = false) {
+    fun exportOne(photo: PhotoItem, settings: EditSettings, useAiPortrait: Boolean = false, useAiUpscale: Boolean = false, shareAfterExport: Boolean = false) {
         if (isExporting) return
         isExporting = true
         operationProgress = 2
@@ -1113,10 +1113,18 @@ private fun PhotoEditorHome() {
                 operationStage = "Saving edited copy to Pictures/FRAME AI"
                 val width = enhanced!!.width
                 val height = enhanced!!.height
-                withContext(Dispatchers.IO) {
+                val savedUri = withContext(Dispatchers.IO) {
                     AutoEnhancer.saveJpeg(context.contentResolver, enhanced!!)
                 }
                 learnedProfile = PersonalEditLearning.recordAccepted(context, settings)
+                if (shareAfterExport) {
+                    val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                        type = "image/jpeg"
+                        putExtra(Intent.EXTRA_STREAM, savedUri)
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }
+                    context.startActivity(Intent.createChooser(shareIntent, "Share edited photo"))
+                }
                 operationProgress = 100
                 operationStage = "Finished · original photo preserved"
                 statusMessage = (aiNotice?.let { "$it " } ?: if (useAiPortrait) {
@@ -1439,6 +1447,68 @@ private fun PhotoEditorHome() {
                                         Text("${operationProgress.coerceIn(0, 100)}% · Original photo remains untouched",
                                             color = SoftText, fontSize = 10.sp,
                                             textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                                    }
+                                }
+                            }
+                            if (!isExporting && !isShowingOriginal && !compareBeforeAfter) {
+                                Row(
+                                    modifier = Modifier.align(Alignment.TopEnd).padding(6.dp)
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(Ink.copy(alpha = 0.88f))
+                                        .padding(horizontal = 3.dp, vertical = 2.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(2.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    androidx.compose.material3.IconButton(
+                                        onClick = { undoEdit() },
+                                        enabled = undoHistory.isNotEmpty(),
+                                        modifier = Modifier.size(38.dp)
+                                    ) {
+                                        Text("↶", color = if (undoHistory.isNotEmpty()) BrightText else SoftText.copy(alpha = 0.4f),
+                                            fontSize = 25.sp, fontWeight = FontWeight.Medium)
+                                    }
+                                    androidx.compose.material3.IconButton(
+                                        onClick = { redoEdit() },
+                                        enabled = redoHistory.isNotEmpty(),
+                                        modifier = Modifier.size(38.dp)
+                                    ) {
+                                        Text("↷", color = if (redoHistory.isNotEmpty()) BrightText else SoftText.copy(alpha = 0.4f),
+                                            fontSize = 25.sp, fontWeight = FontWeight.Medium)
+                                    }
+                                    androidx.compose.material3.IconButton(
+                                        onClick = {
+                                            val photo = activePhoto
+                                            if (photo != null) exportOne(
+                                                photo, currentSettings(),
+                                                selectedStyle == "AI Portrait" || backgroundBlur > 0f ||
+                                                    backgroundEnhancement > 0f || subjectBrightness > 0f ||
+                                                    darkerAreaLift > 0f || skinSmoothing > 0f || makeupIntensity > 0f
+                                            )
+                                        },
+                                        enabled = activePhoto != null && previewBitmap != null && !isExporting && selectedStyle != "Original",
+                                        modifier = Modifier.size(38.dp)
+                                    ) {
+                                        Text("↓",
+                                            color = if (previewBitmap != null && selectedStyle != "Original") Mint else SoftText.copy(alpha = 0.4f),
+                                            fontSize = 25.sp, fontWeight = FontWeight.Medium)
+                                    }
+                                    androidx.compose.material3.IconButton(
+                                        onClick = {
+                                            val photo = activePhoto
+                                            if (photo != null) exportOne(
+                                                photo, currentSettings(),
+                                                selectedStyle == "AI Portrait" || backgroundBlur > 0f ||
+                                                    backgroundEnhancement > 0f || subjectBrightness > 0f ||
+                                                    darkerAreaLift > 0f || skinSmoothing > 0f || makeupIntensity > 0f,
+                                                shareAfterExport = true
+                                            )
+                                        },
+                                        enabled = activePhoto != null && previewBitmap != null && !isExporting && selectedStyle != "Original",
+                                        modifier = Modifier.size(38.dp)
+                                    ) {
+                                        Text("↗",
+                                            color = if (previewBitmap != null && selectedStyle != "Original") Mint else SoftText.copy(alpha = 0.4f),
+                                            fontSize = 23.sp, fontWeight = FontWeight.Medium)
                                     }
                                 }
                             }
@@ -1832,52 +1902,6 @@ private fun PhotoEditorHome() {
                                 ),
                                 contentPadding = PaddingValues(horizontal = 5.dp)
                             ) { Text("Next →", fontSize = 11.sp) }
-                        }
-                        Spacer(modifier = Modifier.height(9.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                            Button(onClick = { undoEdit() }, enabled = undoHistory.isNotEmpty() && !isExporting,
-                                modifier = Modifier.weight(0.65f), shape = RoundedCornerShape(10.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = BrightText),
-                                contentPadding = PaddingValues(horizontal = 3.dp, vertical = 2.dp)
-                            ) { Text("Undo", fontSize = 10.sp) }
-                            Button(onClick = { redoEdit() }, enabled = redoHistory.isNotEmpty() && !isExporting,
-                                modifier = Modifier.weight(0.65f), shape = RoundedCornerShape(10.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = BrightText),
-                                contentPadding = PaddingValues(horizontal = 3.dp, vertical = 2.dp)
-                            ) { Text("Redo", fontSize = 10.sp) }
-                            Button(onClick = { compareBeforeAfter = !compareBeforeAfter; showEnhanced = true },
-                                enabled = previewBitmap != null && selectedStyle != "Original", modifier = Modifier.weight(0.85f),
-                                shape = RoundedCornerShape(10.dp),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = if (compareBeforeAfter) Mint else Color(0xFF293333),
-                                    contentColor = if (compareBeforeAfter) Ink else BrightText),
-                                contentPadding = PaddingValues(horizontal = 3.dp, vertical = 2.dp)
-                            ) { Text(if (compareBeforeAfter) "Close compare" else "Compare", fontSize = 10.sp) }
-                            Button(
-                                onClick = { showEnhanced = !showEnhanced; compareBeforeAfter = false },
-                                enabled = previewBitmap != null && selectedStyle != "Original",
-                                modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(12.dp),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = Color(0xFF293333), contentColor = BrightText
-                                ),
-                                contentPadding = PaddingValues(horizontal = 6.dp)
-                            ) {
-                                Text(if (showEnhanced) "Show original" else "Show enhanced", fontSize = 12.sp)
-                            }
-                            Button(
-                                onClick = {
-                                    val photo = activePhoto
-                                    if (photo != null) exportOne(photo, currentSettings(), selectedStyle == "AI Portrait" || backgroundBlur > 0f || backgroundEnhancement > 0f || subjectBrightness > 0f || darkerAreaLift > 0f || skinSmoothing > 0f || makeupIntensity > 0f)
-                                },
-                                enabled = previewBitmap != null && !isExporting && selectedStyle != "Original",
-                                modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(12.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Ink),
-                                contentPadding = PaddingValues(horizontal = 6.dp)
-                            ) {
-                                Text("Export copy", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                            }
                         }
                         Spacer(modifier = Modifier.height(12.dp))
                         if (activeEditorPanel == "AI Edit" && activeAiSubpanel == "Enhance") {

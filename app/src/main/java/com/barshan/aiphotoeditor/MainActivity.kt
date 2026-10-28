@@ -1065,23 +1065,6 @@ private fun PhotoEditorHome() {
                     colors = CardDefaults.cardColors(containerColor = Panel)
                 ) {
                     Column(modifier = Modifier.fillMaxSize().padding(12.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("EDIT PREVIEW", color = BrightText, fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp)
-                            Spacer(modifier = Modifier.weight(1f))
-                            Text(if (selectedStyle == "Original" || !showEnhanced) "ORIGINAL" else "ENHANCED",
-                                color = Mint, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                            Button(
-                                onClick = {
-                                    activePhoto = null
-                                    previewBitmap?.let { if (!it.isRecycled) it.recycle() }
-                                    previewBitmap = null
-                                },
-                                shape = RoundedCornerShape(10.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = BrightText),
-                                contentPadding = PaddingValues(horizontal = 9.dp, vertical = 1.dp)
-                            ) { Text("All photos", fontSize = 10.sp) }
-                        }
                         val scorePhoto = activePhoto
                         if (scorePhoto != null) {
                             val live = editedScore
@@ -1120,8 +1103,9 @@ private fun PhotoEditorHome() {
                         } ?: 1f
                         val screenHeight = LocalConfiguration.current.screenHeightDp.dp
                         Box(
-                            modifier = Modifier.fillMaxWidth().heightIn(max = screenHeight * 0.42f)
-                                .aspectRatio(previewAspectRatio.coerceIn(0.25f, 4f))
+                            modifier = Modifier.fillMaxWidth()
+                                .heightIn(max = screenHeight * 0.5f)
+                                .aspectRatio(previewAspectRatio.coerceIn(0.25f, 4f), matchHeightConstraintsFirst = true)
                                 .clip(RoundedCornerShape(14.dp)).background(Ink)
                                 .onSizeChanged { size ->
                                     previewWidthPx = size.width
@@ -1557,23 +1541,23 @@ private fun PhotoEditorHome() {
                             }
                             Text("CROP & TRANSFORM", color = BrightText, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                                Button(onClick = { recordEditChange(); rotationDegrees = (rotationDegrees - 90f).mod(360f); showEnhanced = true }, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 3.dp, vertical = 4.dp), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = BrightText)) { Text("↶ Rotate", fontSize = 10.sp) }
-                                Button(onClick = { recordEditChange(); rotationDegrees = (rotationDegrees + 90f).mod(360f); showEnhanced = true }, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 3.dp, vertical = 4.dp), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = BrightText)) { Text("Rotate ↻", fontSize = 10.sp) }
-                                Button(onClick = { recordEditChange(); mirrorHorizontal = !mirrorHorizontal; showEnhanced = true }, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 3.dp, vertical = 4.dp), colors = ButtonDefaults.buttonColors(containerColor = if (mirrorHorizontal) Mint else Color(0xFF293333), contentColor = if (mirrorHorizontal) Ink else BrightText)) { Text("Mirror H", fontSize = 10.sp) }
-                                Button(onClick = { recordEditChange(); mirrorVertical = !mirrorVertical; showEnhanced = true }, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 3.dp, vertical = 4.dp), colors = ButtonDefaults.buttonColors(containerColor = if (mirrorVertical) Mint else Color(0xFF293333), contentColor = if (mirrorVertical) Ink else BrightText)) { Text("Mirror V", fontSize = 10.sp) }
+                                Button(onClick = { recordEditChange(); rotationDegrees = (rotationDegrees - 90f).mod(360f); selectedStyle = "Custom"; showEnhanced = true }, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 3.dp, vertical = 4.dp), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = BrightText)) { Text("↶ Rotate", fontSize = 10.sp) }
+                                Button(onClick = { recordEditChange(); rotationDegrees = (rotationDegrees + 90f).mod(360f); selectedStyle = "Custom"; showEnhanced = true }, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 3.dp, vertical = 4.dp), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = BrightText)) { Text("Rotate ↻", fontSize = 10.sp) }
+                                Button(onClick = { recordEditChange(); mirrorHorizontal = !mirrorHorizontal; selectedStyle = "Custom"; showEnhanced = true }, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 3.dp, vertical = 4.dp), colors = ButtonDefaults.buttonColors(containerColor = if (mirrorHorizontal) Mint else Color(0xFF293333), contentColor = if (mirrorHorizontal) Ink else BrightText)) { Text("Mirror H", fontSize = 10.sp) }
+                                Button(onClick = { recordEditChange(); mirrorVertical = !mirrorVertical; selectedStyle = "Custom"; showEnhanced = true }, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 3.dp, vertical = 4.dp), colors = ButtonDefaults.buttonColors(containerColor = if (mirrorVertical) Mint else Color(0xFF293333), contentColor = if (mirrorVertical) Ink else BrightText)) { Text("Mirror V", fontSize = 10.sp) }
                             }
                             Text("STRAIGHTEN", color = BrightText, fontSize = 10.sp, modifier = Modifier.padding(top = 5.dp))
-                            Slider(value = straightenDegrees, onValueChange = { straightenDegrees = it; showEnhanced = true }, onValueChangeFinished = { recordEditChange() }, valueRange = -15f..15f)
+                            Slider(value = straightenDegrees, onValueChange = { straightenDegrees = it; selectedStyle = "Custom"; showEnhanced = true }, onValueChangeFinished = { recordEditChange() }, valueRange = -15f..15f)
                             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                 Button(onClick = {
                                     recordEditChange()
                                     val photo = activePhoto
                                     val w = photo?.width ?: 0; val h = photo?.height ?: 0
                                     cropLabel = when { w <= 0 || h <= 0 -> "Original"; w.toFloat() / h < 0.85f -> "Portrait 4:5"; w.toFloat() / h > 1.15f -> "Landscape 16:9"; else -> "Square" }
-                                    cropOffsetX = 0f; cropOffsetY = 0f; showEnhanced = true
-                                    statusMessage = "Auto frame selected a crop based on the photo orientation. Drag the preview to refine."
+                                    cropOffsetX = 0f; cropOffsetY = 0f; selectedStyle = "Custom"; showEnhanced = true
+                                    statusMessage = "Auto frame applied a crop based on the photo orientation. Drag the preview to refine."
                                 }, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 4.dp, vertical = 5.dp), colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Ink)) { Text("Auto frame", fontSize = 10.sp) }
-                                Button(onClick = { recordEditChange(); cropLabel = "Original"; cropOffsetX = 0f; cropOffsetY = 0f; rotationDegrees = 0f; straightenDegrees = 0f; mirrorHorizontal = false; mirrorVertical = false; showEnhanced = true }, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 4.dp, vertical = 5.dp), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = BrightText)) { Text("Reset framing", fontSize = 10.sp) }
+                                Button(onClick = { recordEditChange(); cropLabel = "Original"; cropOffsetX = 0f; cropOffsetY = 0f; rotationDegrees = 0f; straightenDegrees = 0f; mirrorHorizontal = false; mirrorVertical = false; selectedStyle = "Custom"; showEnhanced = true }, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 4.dp, vertical = 5.dp), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = BrightText)) { Text("Reset framing", fontSize = 10.sp) }
                             }
                             Text("CROP RATIO", color = BrightText, fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 7.dp))
                             Row(
@@ -1755,8 +1739,8 @@ private fun PhotoEditorHome() {
                         Text("Uses on-device image labels for ideas. Review every suggestion; it may misread a scene.",
                             color = SoftText, fontSize = 10.sp, lineHeight = 14.sp,
                             modifier = Modifier.padding(top = 3.dp, bottom = 6.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Button(onClick = { suggestCaptions() }, enabled = previewBitmap != null && !isGeneratingCaptions,
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Button(onClick = { suggestCaptions() }, modifier = Modifier.weight(1f), enabled = previewBitmap != null && !isGeneratingCaptions,
                                 shape = RoundedCornerShape(10.dp),
                                 colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Ink),
                                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
@@ -1771,9 +1755,10 @@ private fun PhotoEditorHome() {
                                     } else suggestCaptions()
                                 },
                                 enabled = captionSuggestions != null && !isGeneratingCaptions,
+                                modifier = Modifier.weight(1f),
                                 shape = RoundedCornerShape(10.dp),
                                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = BrightText),
-                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
                             ) { Text("Regenerate", fontSize = 10.sp) }
                         }
                         if (captionSuggestions != null) {

@@ -2599,6 +2599,17 @@ private fun PhotoEditorHome() {
                             fontWeight = FontWeight.SemiBold)
                         Text("Choose a batch. FRAME / AI will score sharpness, exposure and contrast, then let you preview and export enhanced copies.",
                             color = SoftText, fontSize = 12.sp, lineHeight = 18.sp)
+                        Button(
+                            onClick = { photoPicker.launch(arrayOf("image/*")) },
+                            modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
+                            shape = RoundedCornerShape(14.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Ink),
+                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp)
+                        ) {
+                            androidx.compose.material3.Icon(Icons.Rounded.AddPhotoAlternate, contentDescription = null)
+                            Spacer(modifier = Modifier.size(8.dp))
+                            Text("Choose photos", fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                        }
                     }
                 }
             } else if (activePhoto == null && !showBurstComparison && !showBurstGroupPicker) {

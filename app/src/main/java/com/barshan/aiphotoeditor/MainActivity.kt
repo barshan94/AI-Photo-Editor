@@ -4,6 +4,11 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Bundle
+import androidx.work.Constraints
+import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.NetworkType
+import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.WorkManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -133,6 +138,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        CaptionUpdateScheduler.schedule(this)
         setContent {
             MaterialTheme(colorScheme = darkColorScheme(
                 primary = Mint, onPrimary = Ink, background = Ink,
@@ -297,7 +303,8 @@ private fun PhotoEditorHome() {
     fun applyCaptionSuggestions(labels: List<Pair<String, Float>>, ratio: Float) {
         captionAspectRatio = ratio
         val generated = CaptionSuggestionEngine.fromLabels(labels, ratio, captionTheme)
-        val libraryMatches = CaptionLibrary.recommend(generated.detectedLabels, captionTheme, limit = 5)
+        val downloadedCaptions = CaptionUpdateStore.read(context).map { item -> CaptionLibrary.Entry(item.id, item.category, item.text, item.text.lowercase().split(Regex("[^\\p{L}\\p{N}]+")).filter { token -> token.length > 1 }.toSet()) }
+        val libraryMatches = CaptionLibrary.recommend(generated.detectedLabels, captionTheme, limit = 5, updatedEntries = downloadedCaptions)
         val english = (generated.english + libraryMatches.map { it.text }).distinct()
         val bengali = english.mapIndexed { index, _ ->
             generated.bengali.getOrElse(index) { "এই মুহূর্তটা মনে রাখার মতো।" }

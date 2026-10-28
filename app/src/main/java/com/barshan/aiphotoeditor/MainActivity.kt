@@ -181,6 +181,7 @@ private fun PhotoEditorHome() {
     var isAnalyzing by remember { mutableStateOf(false) }
     var analysisProgress by remember { mutableIntStateOf(0) }
     var isExporting by remember { mutableStateOf(false) }
+    var lastExportUri by remember { mutableStateOf<Uri?>(null) }
     var exportProgress by remember { mutableIntStateOf(0) }
     var operationProgress by remember { mutableIntStateOf(0) }
     var operationStage by remember { mutableStateOf("Ready") }
@@ -1103,9 +1104,10 @@ private fun PhotoEditorHome() {
                 operationStage = "Saving edited copy to Pictures/FRAME AI"
                 val width = enhanced!!.width
                 val height = enhanced!!.height
-                withContext(Dispatchers.IO) {
+                val savedUri = withContext(Dispatchers.IO) {
                     AutoEnhancer.saveJpeg(context.contentResolver, enhanced!!)
                 }
+                lastExportUri = savedUri
                 learnedProfile = PersonalEditLearning.recordAccepted(context, settings)
                 operationProgress = 100
                 operationStage = "Finished · original photo preserved"
@@ -1867,6 +1869,34 @@ private fun PhotoEditorHome() {
                                 contentPadding = PaddingValues(horizontal = 6.dp)
                             ) {
                                 Text("Export copy", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            }
+                            Button(
+                                onClick = {
+                                    val uri = lastExportUri
+                                    if (uri == null) {
+                                        statusMessage = "Export an edited copy first, then share it to a social app."
+                                    } else {
+                                        try {
+                                            val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                                                type = "image/jpeg"
+                                                putExtra(Intent.EXTRA_STREAM, uri)
+                                                if (captionEnglish.isNotBlank()) putExtra(Intent.EXTRA_TEXT, captionEnglish)
+                                                clipData = android.content.ClipData.newUri(context.contentResolver, "Edited photo", uri)
+                                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                            }
+                                            context.startActivity(Intent.createChooser(shareIntent, "Share edited photo"))
+                                        } catch (error: Exception) {
+                                            statusMessage = "Could not open the Android sharing menu: " + (error.message ?: "unknown error")
+                                        }
+                                    }
+                                },
+                                enabled = lastExportUri != null && !isExporting,
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = BrightText),
+                                contentPadding = PaddingValues(horizontal = 5.dp)
+                            ) {
+                                Text("Share", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                             }
                         }
                         Spacer(modifier = Modifier.height(12.dp))

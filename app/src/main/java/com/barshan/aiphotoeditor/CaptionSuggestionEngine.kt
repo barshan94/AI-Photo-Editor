@@ -21,13 +21,14 @@ object CaptionSuggestionEngine {
         val bijoyaFestival = has(words, "durga puja", "durga", "bijoya", "bijoya dashami", "dashami", "sindoor", "sindur", "sindoor khela", "vermilion", "puja pandal")
         val generalCelebration = has(words, "religious festival", "festival", "celebration", "party", "fireworks", "parade", "confetti")
         val wedding = has(words, "wedding", "bride", "groom", "marriage", "engagement", "wedding ceremony")
-        val travel = has(words, "beach", "ocean", "sea", "waterfall", "mountain", "landscape", "sunset", "sunrise", "forest", "travel", "tourist", "cityscape", "street", "bridge")
+        val travel = has(words, "beach", "ocean", "sea", "waterfall", "mountain", "travel", "tourist", "cityscape", "street", "bridge")
         val food = has(words, "food", "dish", "cuisine", "dessert", "meal", "restaurant", "cake", "coffee")
         val pets = has(words, "dog", "cat", "bird", "animal", "pet", "puppy", "kitten")
-        val nature = has(words, "flower", "plant", "garden", "tree", "forest", "lake", "river")
+        val nature = has(words, "flower", "plant", "garden", "tree", "forest", "lake", "river", "sunset", "sunrise", "sky", "cloud")
         val family = has(words, "family", "parents", "siblings", "relatives")
         val friends = has(words, "friends", "friendship", "classmates", "best friend", "best friends")
-        val portrait = has(words, "person", "people", "face", "portrait", "human", "man", "woman", "child")
+        val groupPhoto = has(words, "group", "crowd", "team", "people")
+        val portrait = has(words, "person", "face", "portrait", "human", "man", "woman", "child")
         val scene = if (theme != "Auto") {
             if (theme == "Festival" && !bijoyaFestival) "General Festival" else theme
         } else when {
@@ -40,6 +41,7 @@ object CaptionSuggestionEngine {
             nature -> "Nature"
             family -> "Family"
             friends -> "Friends"
+            groupPhoto -> "Group"
             portrait -> "Portrait"
             else -> "Aesthetic"
         }
@@ -253,6 +255,26 @@ object CaptionSuggestionEngine {
                     "এই কোলাহলটার বদলে আর কিছু চাই না।"
                 )
             }
+            "Group" -> {
+                en = listOf(
+                    "Everyone made it into the same frame. That’s a win.",
+                    "Too many stories for one photo.",
+                    "The photo that’s going straight to the group chat.",
+                    "One frame, a whole lot of memories.",
+                    "Getting everyone together is half the story.",
+                    "Not everyone was ready. We kept it anyway.",
+                    "This one will make sense to us later. ❤️"
+                )
+                bn = listOf(
+                    "সবাইকে এক ফ্রেমে পাওয়াটাই একটা জয়।",
+                    "একটা ছবিতে অনেকগুলো গল্প।",
+                    "এই ছবিটা সোজা গ্রুপে যাবে।",
+                    "এক ফ্রেমে অনেক স্মৃতি।",
+                    "সবাইকে একসঙ্গে করাটাই অর্ধেক গল্প।",
+                    "সবাই রেডি ছিল না, তবু ছবিটা রেখে দিলাম।",
+                    "এই ছবির গল্পটা পরে আরও ভালো লাগবে। ❤️"
+                )
+            }
             "Family" -> {
                 en = listOf(
                     "My people. My favourite kind of noise. ❤️",
@@ -363,6 +385,13 @@ object CaptionSuggestionEngine {
         return Suggestions(trusted, en, bn)
     }
 
-    private fun has(text: String, vararg keywords: String): Boolean =
-        keywords.any { it in text }
+    private fun has(text: String, vararg keywords: String): Boolean {
+        fun normalize(value: String): String =
+            value.lowercase().replace(Regex("[^\\p{L}\\p{N}]+"), " ").trim()
+        val normalizedText = " ${normalize(text)} "
+        return keywords.any { keyword ->
+            val phrase = normalize(keyword)
+            phrase.isNotEmpty() && " $phrase " in normalizedText
+        }
+    }
 }

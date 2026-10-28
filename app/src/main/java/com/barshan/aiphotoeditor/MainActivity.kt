@@ -1368,12 +1368,13 @@ private fun PhotoEditorHome() {
                                 modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                                 horizontalArrangement = Arrangement.spacedBy(7.dp)
                             ) {
-                                listOf("Universal Edit", "AI Edit", "Presets", "Crop & Rotate").forEach { panel ->
+                                listOf("Universal Edit", "AI Edit", "Presets", "Captions", "Crop & Rotate").forEach { panel ->
                                     EditorChip(
                                         label = when (panel) {
                                             "Universal Edit" -> "Adjust"
                                             "AI Edit" -> "AI tools"
                                             "Presets" -> "Looks"
+                                            "Captions" -> "Captions"
                                             else -> "Crop & rotate"
                                         },
                                         selected = activeEditorPanel == panel,
@@ -1386,6 +1387,7 @@ private fun PhotoEditorHome() {
                                     "Universal Edit" -> "Fine-tune light and colour without losing the original."
                                     "AI Edit" -> "Choose a subject, background, removal, or enhancement tool."
                                     "Presets" -> "Try a look, then fine-tune it to your taste."
+                                    "Captions" -> "Find a line that fits the photo, then make it yours."
                                     else -> "Straighten, frame, rotate, mirror, and correct perspective."
                                 },
                                 color = SoftText, fontSize = 10.sp, lineHeight = 14.sp,
@@ -1883,7 +1885,9 @@ private fun PhotoEditorHome() {
                                     modifier = Modifier.clickable { showCropGuides = !showCropGuides }.padding(4.dp))
                             }
                         Spacer(modifier = Modifier.height(12.dp))
-                        Text("CAPTION IDEAS THAT SOUND LIKE YOU", color = BrightText, fontSize = 11.sp,
+                        }
+                        if (activeEditorPanel == "Captions") {
+                        Text("CAPTIONS THAT SOUND LIKE YOU", color = BrightText, fontSize = 12.sp,
                             fontWeight = FontWeight.Bold)
                         Text("Short, casual caption ideas based on visual clues. Pick a vibe or edit the wording so it sounds like you.",
                             color = SoftText, fontSize = 10.sp, lineHeight = 14.sp,
@@ -1925,7 +1929,7 @@ private fun PhotoEditorHome() {
                                 shape = RoundedCornerShape(10.dp),
                                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = BrightText),
                                 contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
-                            ) { Text("Regenerate", fontSize = 10.sp) }
+                            ) { Text("Next idea  ↻", fontSize = 10.sp) }
                         }
                         if (captionSuggestions != null) {
                             val detected = captionSuggestions?.detectedLabels.orEmpty()
@@ -1971,6 +1975,8 @@ private fun PhotoEditorHome() {
                                 ) { Text("Copy বাংলা", fontSize = 10.sp) }
                             }
                         }
+                        }
+                        if (activeEditorPanel == "Universal Edit") {
                         Spacer(modifier = Modifier.height(10.dp))
                         Text("BRIGHTNESS  " + brightness.toInt(), color = SoftText, fontSize = 11.sp)
                         Slider(value = brightness, onValueChange = {

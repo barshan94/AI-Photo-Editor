@@ -40,4 +40,19 @@ class CaptionSuggestionEngineTest {
         )
         assertTrue(result.english.any { it.contains("Same idiots") })
     }
+
+    @Test
+    fun offlineCaptionLibraryContainsOneThousandBilingualEntries() {
+        assertTrue(CaptionLibrary.all.size == 1000)
+        assertTrue(CaptionLibrary.all.all { it.text.isNotBlank() && it.bengali.isNotBlank() })
+        assertTrue(CaptionLibrary.all.map { it.text }.distinct().size == 1000)
+    }
+
+    @Test
+    fun captionLibraryCanSearchBengaliText() {
+        val results = CaptionLibrary.search("বন্ধুত্ব", "Friends", 20)
+        assertTrue(results.isNotEmpty())
+        assertTrue(results.all { it.category == "Friends" })
+        assertTrue(results.any { it.bengali.contains("বন্ধুত্ব") })
+    }
 }

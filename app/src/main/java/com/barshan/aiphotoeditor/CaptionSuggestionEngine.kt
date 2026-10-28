@@ -30,7 +30,14 @@ object CaptionSuggestionEngine {
         val groupPhoto = has(words, "group", "crowd", "team", "people")
         val portrait = has(words, "person", "face", "portrait", "human", "man", "woman", "child")
         val scene = if (theme != "Auto") {
-            if (theme == "Festival" && !bijoyaFestival) "General Festival" else theme
+            when (theme) {
+                // Explicit user selection is stronger than uncertain image labels.
+                // This lets a Dashami photo receive Bijoya captions even when ML Kit
+                // only labels clothing, faces, or a crowd.
+                "Durga Puja" -> "Festival"
+                "Festival" -> "General Festival"
+                else -> theme
+            }
         } else when {
             bijoyaFestival -> "Festival"
             wedding -> "Romantic"
@@ -93,13 +100,16 @@ object CaptionSuggestionEngine {
             }
             "Banglish" -> {
                 en = listOf(
-                    "Plan chilo ekta chhobi, holo puro album. 😅",
-                    "Shobai mile thaklei din ta bhalo hoye jay. ❤️",
-                    "Ektu ghora, onek golpo, ar onek chhobi.",
-                    "Caption mathay ashchhe na, chhobi ta bhalo lagchhe.",
+                    "Plan chhilo ekta chhobi, hoye gelo puro album. 😅",
+                    "Caption mathay ashe nai. Chhobi ta bhalo lagse, tai post.",
+                    "Ektu ghora, onek golpo. Din ta bhalo chhilo.",
+                    "Aajker vibe ta camera roll-e rekhe dilam. ❤️",
+                    "Shobai mile thaklei scene jome jay.",
                     "Ei moment ta abar repeat kora jabe?",
-                    "Camera roll er jonno ajke bhalo din chhilo.",
-                    "Beshi kichhu na, just bhalo laglo tai post."
+                    "Beshi kichhu na—bhalo lagse, tai dilam.",
+                    "Pose kom, golpo beshi.",
+                    "Chhobi ekta, memory onek.",
+                    "Aajke ar kichhu na, ei moment tai enough."
                 )
                 bn = listOf(
                     "একটা ছবি তোলার কথা ছিল, অ্যালবাম হয়ে গেল। 😅",

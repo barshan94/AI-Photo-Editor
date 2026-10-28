@@ -927,8 +927,9 @@ private fun PhotoEditorHome() {
             var adjusted: Bitmap? = null
             var aiNotice: String? = null
             try {
+                // Keep the interactive preview deliberately smaller than export output to reduce peak RAM.
                 original = withContext(Dispatchers.IO) {
-                    AutoEnhancer.decodeForEditing(context.contentResolver, photo.uri, maxDimension = 1800)
+                    AutoEnhancer.decodeForEditing(context.contentResolver, photo.uri, maxDimension = 1440)
                 }
                 originalPreviewScore = scoreEditedBitmap(original!!)
                 if (selectedStyle == "Original") {
@@ -960,6 +961,8 @@ private fun PhotoEditorHome() {
                 } else "Live preview updated. Export a copy when you're happy."
             } catch (error: CancellationException) {
                 throw error
+            } catch (error: OutOfMemoryError) {
+                statusMessage = "Preview needed more memory than Android could provide. Your last checkpointed edit settings are preserved; reopen the photo or try a smaller image."
             } catch (error: Exception) {
                 statusMessage = "Preview failed: " + (error.message ?: "unsupported image")
             } finally {

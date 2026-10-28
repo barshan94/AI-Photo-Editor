@@ -389,6 +389,14 @@ private fun PhotoEditorHome() {
         isGeneratingCaptions = false
     }
 
+    fun captionEditSignature(): String = listOf(
+        brightness, contrast, saturation, warmth, cropLabel, cropOffsetX, cropOffsetY,
+        rotationDegrees, straightenDegrees, mirrorHorizontal, mirrorVertical,
+        perspectiveTopLeftX, perspectiveTopLeftY, perspectiveTopRightX, perspectiveTopRightY,
+        perspectiveBottomRightX, perspectiveBottomRightY, perspectiveBottomLeftX, perspectiveBottomLeftY,
+        backgroundBlur, backgroundEnhancement, subjectBrightness, darkerAreaLift, skinSmoothing, makeupIntensity
+    ).joinToString("|")
+
     suspend fun createBatchCaption(photo: PhotoItem, theme: String, round: Int): List<Pair<String, String>> {
         var bitmap: Bitmap? = null
         try {
@@ -402,7 +410,7 @@ private fun PhotoEditorHome() {
             val ideas = CaptionSuggestionEngine.fromLabels(labels, ratio, theme)
             val count = minOf(ideas.english.size, ideas.bengali.size)
             if (count <= 0) return listOf("A moment worth keeping." to "মনে রাখার মতো একটি মুহূর্ত।")
-            (0 until minOf(3, count)).map { offset ->
+            return (0 until minOf(3, count)).map { offset ->
                 val index = (round + offset).mod(count)
                 ideas.english[index] to ideas.bengali[index]
             }.distinctBy { it.first }
@@ -442,7 +450,7 @@ private fun PhotoEditorHome() {
             return
         }
         captionPhotoUri = activePhoto?.uri?.toString()
-        captionSourceSignature = currentSettings().toString()
+        captionSourceSignature = captionEditSignature()
         isGeneratingCaptions = true
         statusMessage = "Looking for visual clues on this device…"
         val bitmapForLabels = try { bitmap.copy(Bitmap.Config.ARGB_8888, false) } catch (_: Exception) { null }
@@ -1714,7 +1722,7 @@ private fun PhotoEditorHome() {
                                                 val photo = activePhoto
                                                 val bitmap = previewBitmap
                                                 if (photo != null && bitmap != null && !bitmap.isRecycled &&
-                                                    (captionPhotoUri != photo.uri.toString() || captionSuggestions?.english.isNullOrEmpty() || captionSourceSignature != currentSettings().toString())) {
+                                                    (captionPhotoUri != photo.uri.toString() || captionSuggestions?.english.isNullOrEmpty() || captionSourceSignature != captionEditSignature())) {
                                                     captionPhotoUri = photo.uri.toString()
                                                     suggestCaptions(bitmap)
                                                 }

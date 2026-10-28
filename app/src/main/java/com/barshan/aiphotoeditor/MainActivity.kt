@@ -1488,12 +1488,9 @@ private fun PhotoEditorHome() {
                                         enabled = activePhoto != null && previewBitmap != null && !isExporting && selectedStyle != "Original",
                                         modifier = Modifier.size(38.dp)
                                     ) {
-                                        androidx.compose.material3.Icon(
-                                            imageVector = Icons.Rounded.CheckCircle,
-                                            contentDescription = "Export edited photo",
-                                            tint = if (previewBitmap != null && selectedStyle != "Original") Mint else SoftText.copy(alpha = 0.4f),
-                                            modifier = Modifier.size(20.dp)
-                                        )
+                                        Text("↓",
+                                            color = if (previewBitmap != null && selectedStyle != "Original") Mint else SoftText.copy(alpha = 0.4f),
+                                            fontSize = 25.sp, fontWeight = FontWeight.Medium)
                                     }
                                     androidx.compose.material3.IconButton(
                                         onClick = {
@@ -1509,12 +1506,9 @@ private fun PhotoEditorHome() {
                                         enabled = activePhoto != null && previewBitmap != null && !isExporting && selectedStyle != "Original",
                                         modifier = Modifier.size(38.dp)
                                     ) {
-                                        androidx.compose.material3.Icon(
-                                            imageVector = Icons.Rounded.AutoAwesome,
-                                            contentDescription = "Share edited photo",
-                                            tint = if (previewBitmap != null && selectedStyle != "Original") Mint else SoftText.copy(alpha = 0.4f),
-                                            modifier = Modifier.size(20.dp)
-                                        )
+                                        Text("↗",
+                                            color = if (previewBitmap != null && selectedStyle != "Original") Mint else SoftText.copy(alpha = 0.4f),
+                                            fontSize = 23.sp, fontWeight = FontWeight.Medium)
                                     }
                                 }
                             }

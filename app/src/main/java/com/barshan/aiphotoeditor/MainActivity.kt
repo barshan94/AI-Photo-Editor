@@ -100,17 +100,15 @@ import java.io.ByteArrayOutputStream
 @Composable
 private fun EditorImageAction(symbol: String, label: String, enabled: Boolean, onClick: () -> Unit) {
     Column(
-        modifier = Modifier.clip(RoundedCornerShape(9.dp))
+        modifier = Modifier.size(34.dp).clip(RoundedCornerShape(9.dp))
             .background(if (enabled) Color(0xFF293333) else Color(0xFF202626))
             .clickable(enabled = enabled, onClick = onClick)
-            .padding(horizontal = 8.dp, vertical = 5.dp),
+            .padding(3.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(1.dp)
+        verticalArrangement = Arrangement.Center
     ) {
         Text(symbol, color = if (enabled) Mint else SoftText.copy(alpha = 0.45f),
-            fontSize = 20.sp, fontWeight = FontWeight.Bold, lineHeight = 21.sp)
-        Text(label, color = if (enabled) BrightText else SoftText.copy(alpha = 0.45f),
-            fontSize = 8.sp, fontWeight = FontWeight.Medium, lineHeight = 10.sp)
+            fontSize = 19.sp, fontWeight = FontWeight.Bold, lineHeight = 22.sp)
     }
 }
 
@@ -1256,66 +1254,63 @@ private fun PhotoEditorHome() {
                             val baseline = originalPreviewScore
                             val displayed = if (isShowingOriginal) baseline else live
                             val delta = if (live != null && baseline != null) live.score - baseline.score else null
-                            Column(
-                                modifier = Modifier.fillMaxWidth().padding(top = 7.dp, bottom = 2.dp)
-                                    .clip(RoundedCornerShape(10.dp)).background(Color(0xFF111818)).padding(9.dp)
-                            ) {
-                                Text(
-                                    if (displayed == null || baseline == null) "TECHNICAL SCORE · CALCULATING…" else if (isShowingOriginal)
-                                        "ORIGINAL SCORE  ${displayed.score}/100" else
-                                        "EDITED SCORE  ${displayed.score}/100  (Δ ${if (delta!! > 0) "+" else ""}$delta · original ${baseline.score})",
-                                    color = when { !isShowingOriginal && delta != null && delta > 0 -> Mint; !isShowingOriginal && delta != null && delta < 0 -> Color(0xFFFF8B8B); else -> BrightText },
-                                    fontSize = 11.sp, fontWeight = FontWeight.Bold
-                                )
-                                Text(
-                                    if (displayed == null) "Measuring the current preview…" else
-                                        "Sharpness ${displayed.sharpness} · Exposure ${displayed.exposure} · Contrast ${displayed.contrast}",
-                                    color = SoftText, fontSize = 10.sp, modifier = Modifier.padding(top = 3.dp)
-                                )
-                                Text(
-                                    if (displayed == null) scorePhoto.note else "Reason: ${displayed.note}",
-                                    color = SoftText, fontSize = 9.sp, lineHeight = 12.sp,
-                                    modifier = Modifier.padding(top = 2.dp)
-                                )
-                            }
-                        }
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth().padding(bottom = 7.dp),
-                            horizontalArrangement = Arrangement.End,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
                             Row(
-                                modifier = Modifier.clip(RoundedCornerShape(14.dp))
-                                    .background(Ink.copy(alpha = 0.86f))
-                                    .padding(horizontal = 5.dp, vertical = 4.dp),
-                                horizontalArrangement = Arrangement.spacedBy(3.dp),
-                                verticalAlignment = Alignment.CenterVertically
+                                modifier = Modifier.fillMaxWidth().padding(top = 7.dp, bottom = 2.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
-                                EditorImageAction("↶", "Undo", undoHistory.isNotEmpty() && !isExporting) { undoEdit() }
-                                EditorImageAction("↷", "Redo", redoHistory.isNotEmpty() && !isExporting) { redoEdit() }
-                                EditorImageAction("⇩", "Export", previewBitmap != null && !isExporting && selectedStyle != "Original") {
-                                    val photo = activePhoto
-                                    if (photo != null) exportOne(photo, currentSettings(),
-                                        selectedStyle == "AI Portrait" || backgroundBlur > 0f ||
-                                            backgroundEnhancement > 0f || subjectBrightness > 0f ||
-                                            darkerAreaLift > 0f || skinSmoothing > 0f || makeupIntensity > 0f)
+                                Column(
+                                    modifier = Modifier.weight(1f).clip(RoundedCornerShape(10.dp))
+                                        .background(Color(0xFF111818)).padding(9.dp)
+                                ) {
+                                    Text(
+                                        if (displayed == null || baseline == null) "TECHNICAL SCORE · CALCULATING…" else if (isShowingOriginal)
+                                            "ORIGINAL SCORE  ${displayed.score}/100" else
+                                            "EDITED SCORE  ${displayed.score}/100  (Δ ${if (delta!! > 0) "+" else ""}$delta · original ${baseline.score})",
+                                        color = when { !isShowingOriginal && delta != null && delta > 0 -> Mint; !isShowingOriginal && delta != null && delta < 0 -> Color(0xFFFF8B8B); else -> BrightText },
+                                        fontSize = 10.sp, fontWeight = FontWeight.Bold, lineHeight = 13.sp
+                                    )
+                                    Text(
+                                        if (displayed == null) "Measuring preview…" else
+                                            "Sharpness ${displayed.sharpness} · Exposure ${displayed.exposure} · Contrast ${displayed.contrast}",
+                                        color = SoftText, fontSize = 9.sp, modifier = Modifier.padding(top = 3.dp), lineHeight = 12.sp
+                                    )
+                                    Text(
+                                        if (displayed == null) scorePhoto.note else "Reason: ${displayed.note}",
+                                        color = SoftText, fontSize = 9.sp, lineHeight = 12.sp,
+                                        modifier = Modifier.padding(top = 2.dp)
+                                    )
                                 }
-                                EditorImageAction("↗", "Share", lastExportedUri != null && !isExporting) {
-                                    val uri = lastExportedUri
-                                    if (uri != null) {
-                                        val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                                            type = "image/jpeg"
-                                            putExtra(Intent.EXTRA_STREAM, uri)
-                                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(3.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    EditorImageAction("↶", "Undo", undoHistory.isNotEmpty() && !isExporting) { undoEdit() }
+                                    EditorImageAction("↷", "Redo", redoHistory.isNotEmpty() && !isExporting) { redoEdit() }
+                                    EditorImageAction("⇩", "Export", previewBitmap != null && !isExporting && selectedStyle != "Original") {
+                                        val photo = activePhoto
+                                        if (photo != null) exportOne(photo, currentSettings(),
+                                            selectedStyle == "AI Portrait" || backgroundBlur > 0f ||
+                                                backgroundEnhancement > 0f || subjectBrightness > 0f ||
+                                                darkerAreaLift > 0f || skinSmoothing > 0f || makeupIntensity > 0f)
+                                    }
+                                    EditorImageAction("↗", "Share", lastExportedUri != null && !isExporting) {
+                                        val uri = lastExportedUri
+                                        if (uri != null) {
+                                            val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                                                type = "image/jpeg"
+                                                putExtra(Intent.EXTRA_STREAM, uri)
+                                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                            }
+                                            context.startActivity(Intent.createChooser(shareIntent, "Share edited photo"))
+                                        } else {
+                                            statusMessage = "Export an edited copy first, then tap Share."
                                         }
-                                        context.startActivity(Intent.createChooser(shareIntent, "Share edited photo"))
-                                    } else {
-                                        statusMessage = "Export an edited copy first, then tap Share."
                                     }
                                 }
                             }
                         }
+
                         Spacer(modifier = Modifier.height(8.dp))
                         val previewAspectRatio = previewBitmap?.let {
                             it.width.toFloat() / it.height.coerceAtLeast(1).toFloat()

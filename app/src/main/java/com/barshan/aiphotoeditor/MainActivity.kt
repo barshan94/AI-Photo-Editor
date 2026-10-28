@@ -122,6 +122,15 @@ private data class PhotoItem(
 )
 
 class MainActivity : ComponentActivity() {
+    private fun flushEditorCheckpoint() {
+        // Compose writes checkpoints with apply() as controls change. commit() here blocks
+        // until pending SharedPreferences writes reach disk when Android backgrounds the app.
+        getSharedPreferences("frame_ai_recovery", android.content.Context.MODE_PRIVATE)
+            .edit()
+            .putLong("last_lifecycle_flush_ms", System.currentTimeMillis())
+            .commit()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
@@ -132,6 +141,16 @@ class MainActivity : ComponentActivity() {
                 PhotoEditorHome()
             }
         }
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        flushEditorCheckpoint()
+        super.onSaveInstanceState(outState)
+    }
+
+    override fun onStop() {
+        flushEditorCheckpoint()
+        super.onStop()
     }
 }
 
@@ -1927,7 +1946,7 @@ private fun PhotoEditorHome() {
                             CaptionLibrary.categories.forEach { category ->
                                 Button(
                                     onClick = { captionLibraryCategory = category },
-                                    modifier = Modifier.heightIn(min = 36.dp), shape = RoundedCornerShape(18.dp),
+                                    modifier = Modifier.heightIn(min = 44.dp), shape = RoundedCornerShape(18.dp),
                                     contentPadding = PaddingValues(horizontal = 11.dp, vertical = 5.dp),
                                     colors = ButtonDefaults.buttonColors(
                                         containerColor = if (captionLibraryCategory == category) Mint else Color(0xFF293333),
@@ -1936,8 +1955,7 @@ private fun PhotoEditorHome() {
                                 ) { Text(category, fontSize = 10.sp, maxLines = 1) }
                             }
                         }
-                        if (captionSearchQuery.isNotBlank() || captionLibraryCategory != "All") {
-                            val matchingPresets = CaptionLibrary.search(captionSearchQuery, captionLibraryCategory, 6)
+                        val matchingPresets = CaptionLibrary.search(captionSearchQuery, captionLibraryCategory, 6)
                             if (matchingPresets.isEmpty()) {
                                 Text("No matches yet. Try a broader word or another category.", color = SoftText, fontSize = 11.sp)
                             } else {
@@ -1968,10 +1986,6 @@ private fun PhotoEditorHome() {
                                     }
                                 }
                             }
-                        } else {
-                            Text("Search by mood, subject, or moment — or choose a category to browse.",
-                                color = SoftText, fontSize = 10.sp, lineHeight = 14.sp)
-                        }
                         Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                             listOf("Auto", "Portrait", "Friends", "Festival", "Celebration", "Romantic", "Funny", "Devotional", "Travel", "Family", "Aesthetic").forEach { theme ->
                                 Button(onClick = {

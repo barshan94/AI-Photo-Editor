@@ -180,9 +180,15 @@ private fun PhotoEditorHome() {
     var remoteCaptionEntries by remember {
         mutableStateOf(CaptionCatalogRepository.readCachedEntries(context))
     }
+    var aiEditRules by remember {
+        mutableStateOf(AiEditRulesRepository.readCachedRules(context))
+    }
     LaunchedEffect(Unit) {
-        // Network work stays off the main thread and is optional; offline editing never waits for it.
+        // Refresh both rule sets on launch. Cached/local behavior remains available offline.
         remoteCaptionEntries = CaptionCatalogRepository.refresh(context)
+    }
+    LaunchedEffect(Unit) {
+        aiEditRules = AiEditRulesRepository.refresh(context)
     }
     val recoveryPrefs = remember {
         context.getSharedPreferences("frame_ai_recovery", android.content.Context.MODE_PRIVATE)
@@ -205,6 +211,7 @@ private fun PhotoEditorHome() {
     var operationProgress by remember { mutableIntStateOf(0) }
     var operationStage by remember { mutableStateOf("Ready") }
     var batchPreset by remember { mutableStateOf("Current edits") }
+    var batchAiLook by remember { mutableStateOf("Balanced") }
     var batchSummary by remember { mutableStateOf<String?>(null) }
     var batchPreviewImages by remember { mutableStateOf<Map<Uri, ByteArray>>(emptyMap()) }
     var batchPreviewScores by remember { mutableStateOf<Map<Uri, PhotoQualityScoring.Score>>(emptyMap()) }
@@ -315,8 +322,12 @@ private fun PhotoEditorHome() {
             }
         )
     }
-    var captionEnglish by remember { mutableStateOf(recoveryPrefs.getString("caption_english", "").orEmpty()) }
-    var captionBengali by remember { mutableStateOf(recoveryPrefs.getString("caption_bengali", "").orEmpty()) }
+    var captionEnglish by remember {
+        mutableStateOf(recoveryPrefs.getString("caption_english", "").orEmpty().ifBlank { "A moment worth keeping." })
+    }
+    var captionBengali by remember {
+        mutableStateOf(recoveryPrefs.getString("caption_bengali", "").orEmpty().ifBlank { "মনে রাখার মতো একটি মুহূর্ত।" })
+    }
     var captionIndex by remember { mutableIntStateOf(0) }
     var captionPhotoUri by remember { mutableStateOf<String?>(recoveryPrefs.getString("caption_photo_uri", null)) }
     var isGeneratingCaptions by remember { mutableStateOf(false) }
@@ -329,8 +340,20 @@ private fun PhotoEditorHome() {
         captionAspectRatio = ratio
         val generated = CaptionSuggestionEngine.fromLabels(labels, ratio, captionTheme)
         val libraryMatches = CaptionLibrary.recommend(generated.detectedLabels, captionTheme, limit = 5)
+        val detected = generated.detectedLabels.joinToString(" ").lowercase()
+        val remoteMatches = remoteCaptionEntries.filter { entry ->
+            entry.category.equals(captionTheme, ignoreCase = true) ||
+                (captionTheme == "Auto" && entry.category.equals("Aesthetic", ignoreCase = true)) ||
+                entry.keywords.any { keyword ->
+                    keyword.length > 2 && detected.isNotBlank() && detected.contains(keyword, ignoreCase = true)
+                }
+        }.take(5)
         val captionPairs = (generated.english.zip(generated.bengali) +
-            libraryMatches.map { it.text to it.bengali }).distinctBy { it.first }
+            libraryMatches.map { it.text to it.bengali } +
+            remoteMatches.mapIndexed { index, entry ->
+                entry.text to (libraryMatches.getOrNull(index)?.bengali
+                    ?: generated.bengali.getOrElse(index % generated.bengali.size) { "মনে রাখার মতো একটি মুহূর্ত।" })
+            }).distinctBy { it.first }
         val english = captionPairs.map { it.first }
         val bengali = captionPairs.map { it.second }
         val suggestions = CaptionSuggestionEngine.Suggestions(
@@ -361,6 +384,12 @@ private fun PhotoEditorHome() {
         }
         val labeler = ImageLabeling.getClient(ImageLabelerOptions.DEFAULT_OPTIONS)
         val ratio = bitmapForLabels.width.toFloat() / bitmapForLabels.height.coerceAtLeast(1).toFloat()
+        // Put real text in both fields immediately; ML Kit replaces these starters when analysis finishes.
+        val fallback = CaptionSuggestionEngine.fromLabels(emptyList(), ratio, captionTheme)
+        captionSuggestions = fallback
+        captionIndex = 0
+        captionEnglish = fallback.english.firstOrNull() ?: "A moment worth keeping."
+        captionBengali = fallback.bengali.firstOrNull() ?: "মনে রাখার মতো একটি মুহূর্ত।"
         try {
             labeler.process(InputImage.fromBitmap(bitmapForLabels, 0))
                 .addOnSuccessListener { labels ->
@@ -863,6 +892,21 @@ private fun PhotoEditorHome() {
         )
     }
 
+    fun applyAiLook(settings: EditSettings, look: String): EditSettings = when (look) {
+        "Saturated" -> settings.copy(
+            saturation = (settings.saturation * aiEditRules.saturatedSaturationMultiplier).coerceIn(0.85f, 1.55f),
+            contrast = (settings.contrast + aiEditRules.saturatedContrastAdd).coerceIn(0.85f, 1.25f)
+        )
+        "Cool" -> settings.copy(
+            warmth = (settings.warmth + aiEditRules.coolWarmthDelta).coerceIn(-20f, 20f),
+            saturation = (settings.saturation * aiEditRules.coolSaturationMultiplier).coerceIn(0.85f, 1.45f)
+        )
+        else -> settings.copy(
+            saturation = (settings.saturation * aiEditRules.balancedSaturationMultiplier).coerceIn(0.85f, 1.45f),
+            contrast = (settings.contrast + aiEditRules.balancedContrastAdd).coerceIn(0.85f, 1.25f)
+        )
+    }
+
     fun recommendedFormats(width: Int, height: Int): List<String> {
         val ratio = width.toFloat() / height.coerceAtLeast(1).toFloat()
         return when {
@@ -875,7 +919,7 @@ private fun PhotoEditorHome() {
     }
 
     /** Build a small, visible preview for every eligible grid photo without opening a single-photo editor. */
-    fun previewBatchPreset(preset: String) {
+    fun previewBatchPreset(preset: String, aiLook: String = batchAiLook) {
         if (isPreparingBatchPreview || isExporting || isAnalyzing) return
         batchPreset = preset
         batchSummary = null
@@ -905,7 +949,7 @@ private fun PhotoEditorHome() {
                         val originalScore = scoreEditedBitmap(original!!)
                         batchOriginalScores = batchOriginalScores + (photo.uri to originalScore)
                         val settings = if (preset == "AI Edit") {
-                            aiSettingsFor(PhotoAnalysisEngine.analyze(original!!))
+                            applyAiLook(aiSettingsFor(PhotoAnalysisEngine.analyze(original!!)), aiLook)
                         } else if (preset == "Current edits") {
                             currentSettings()
                         } else {
@@ -989,16 +1033,13 @@ private fun PhotoEditorHome() {
             makeupIntensity = 0f
         }
         // Preserve scene-adaptive analysis; apply only the selected overall color preference.
-        when (aiEditLook) {
-            "Saturated" -> {
-                saturation = (saturation * 1.18f).coerceIn(0.85f, 1.55f)
-                contrast = (contrast + 0.025f).coerceAtMost(1.16f)
-            }
-            "Cool" -> {
-                warmth = (warmth - 5f).coerceIn(-12f, 10f)
-                saturation = (saturation * 1.02f).coerceIn(0.85f, 1.45f)
-            }
-        }
+        val lookSettings = applyAiLook(
+            EditSettings(contrast = contrast, saturation = saturation, warmth = warmth),
+            aiEditLook
+        )
+        contrast = lookSettings.contrast
+        saturation = lookSettings.saturation
+        warmth = lookSettings.warmth
         selectedStyle = sceneStyle
         showEnhanced = true
         compareBeforeAfter = false
@@ -2149,7 +2190,34 @@ private fun PhotoEditorHome() {
             }
 
             if (activePhoto != null && activeEditorPanel == "Caption") {
-                Column(modifier = Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                Column(modifier = Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                    Text("CAPTION IDEAS", color = Mint, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    val visibleCaptionIdeas = captionSuggestions?.english?.take(3).orEmpty()
+                    if (visibleCaptionIdeas.isNotEmpty()) {
+                        Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                            visibleCaptionIdeas.forEachIndexed { index, idea ->
+                                Button(
+                                    onClick = {
+                                        captionIndex = index
+                                        captionEnglish = idea
+                                        captionBengali = captionSuggestions?.bengali?.getOrNull(index).orEmpty()
+                                    },
+                                    modifier = Modifier.fillMaxWidth().heightIn(min = 44.dp),
+                                    shape = RoundedCornerShape(10.dp),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = if (captionEnglish == idea) Color(0xFF263B38) else Color(0xFF202626),
+                                        contentColor = BrightText
+                                    ),
+                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 7.dp)
+                                ) {
+                                    Text(idea, fontSize = 11.sp, lineHeight = 15.sp, maxLines = 3,
+                                        modifier = Modifier.fillMaxWidth())
+                                }
+                            }
+                        }
+                    } else {
+                        Text("A moment worth keeping.", color = BrightText, fontSize = 12.sp)
+                    }
                     OutlinedTextField(
                         value = captionEnglish, onValueChange = { captionEnglish = it },
                         modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp, max = 88.dp),
@@ -2252,7 +2320,7 @@ private fun PhotoEditorHome() {
                                                 )
                                             }
                                             val photoSettings = if (batchPreset == "AI Edit") {
-                                                aiSettingsFor(PhotoAnalysisEngine.analyze(original!!))
+                                                applyAiLook(aiSettingsFor(PhotoAnalysisEngine.analyze(original!!)), batchAiLook)
                                             } else {
                                                 settingsForBatch
                                             }
@@ -2316,13 +2384,34 @@ private fun PhotoEditorHome() {
                     Spacer(modifier = Modifier.weight(1f))
                     Button(
                         onClick = {
-                            previewBatchPreset("AI Edit")
+                            batchAiLook = "Balanced"
+                            previewBatchPreset("AI Edit", "Balanced")
                         },
                         enabled = !isExporting && !isAnalyzing && selectedPhotos.any { it.decision != "Reject" },
                         shape = RoundedCornerShape(10.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Ink),
                         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 3.dp)
                     ) { Text("✦ AI Edit all", fontSize = 11.sp, fontWeight = FontWeight.Bold) }
+                }
+                Row(modifier = Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                    listOf("Balanced", "Saturated", "Cool").forEach { look ->
+                        Button(
+                            onClick = {
+                                batchAiLook = look
+                                previewBatchPreset("AI Edit", look)
+                            },
+                            enabled = !isExporting && !isAnalyzing && !isPreparingBatchPreview &&
+                                selectedPhotos.any { it.decision != "Reject" },
+                            modifier = Modifier.weight(1f).heightIn(min = 38.dp),
+                            shape = RoundedCornerShape(10.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (batchAiLook == look && batchPreset == "AI Edit") Mint else Color(0xFF293333),
+                                contentColor = if (batchAiLook == look && batchPreset == "AI Edit") Ink else BrightText
+                            ),
+                            contentPadding = PaddingValues(horizontal = 3.dp, vertical = 3.dp)
+                        ) { Text(look, fontSize = 10.sp, maxLines = 1) }
+                    }
                 }
                 Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -2342,9 +2431,12 @@ private fun PhotoEditorHome() {
                     Text(selectedPhotos.count { it.decision != "Reject" }.toString() + " photos to export · " +
                         selectedPhotos.count { it.decision == "Reject" } + " rejected will be skipped",
                         color = SoftText, fontSize = 10.sp)
-                    Text(if (batchPreset == "Current edits") "Uses the settings currently open in the editor." else
-                        "Applies " + batchPreset + " consistently to every eligible photo.",
-                        color = SoftText, fontSize = 10.sp)
+                    Text(
+                        if (batchPreset == "Current edits") "Uses the settings currently open in the editor."
+                        else if (batchPreset == "AI Edit") "AI Edit · $batchAiLook · adapts to each photo."
+                        else "Applies " + batchPreset + " consistently to every eligible photo.",
+                        color = SoftText, fontSize = 10.sp
+                    )
                 }
                 if (isPreparingBatchPreview) {
                     LinearProgressIndicator(

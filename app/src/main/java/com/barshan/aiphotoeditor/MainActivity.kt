@@ -1119,6 +1119,22 @@ private fun PhotoEditorHome() {
             }
 
             if (activePhoto != null) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(top = 1.dp, bottom = 5.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("EDIT PHOTO", color = Mint, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
+                    Spacer(modifier = Modifier.weight(1f))
+                    Surface(
+                        onClick = { activePhoto = null; previewScale = 1f; previewOffsetX = 0f; previewOffsetY = 0f },
+                        shape = RoundedCornerShape(12.dp),
+                        color = Color(0xFF202828),
+                        contentColor = BrightText,
+                        border = BorderStroke(1.dp, Color(0xFF34403E))
+                    ) {
+                        Text("← All photos", modifier = Modifier.padding(horizontal = 13.dp, vertical = 8.dp), fontSize = 11.sp, fontWeight = FontWeight.Medium)
+                    }
+                }
                 Spacer(modifier = Modifier.height(3.dp))
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -1376,14 +1392,14 @@ private fun PhotoEditorHome() {
                                 modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                                 horizontalArrangement = Arrangement.spacedBy(7.dp)
                             ) {
-                                listOf("Universal Edit", "AI Edit", "Presets", "Captions", "Crop & Rotate").forEach { panel ->
+                                listOf("Universal Edit", "Crop & Rotate", "AI Edit", "Presets", "Captions").forEach { panel ->
                                     EditorChip(
                                         label = when (panel) {
                                             "Universal Edit" -> "Adjust"
+                                            "Crop & Rotate" -> "Crop"
                                             "AI Edit" -> "AI tools"
                                             "Presets" -> "Looks"
-                                            "Captions" -> "Captions"
-                                            else -> "Crop & rotate"
+                                            else -> "Captions"
                                         },
                                         selected = activeEditorPanel == panel,
                                         onClick = { activeEditorPanel = panel; compareBeforeAfter = false }
@@ -1897,14 +1913,14 @@ private fun PhotoEditorHome() {
                         if (activeEditorPanel == "Captions") {
                         Text("CAPTIONS THAT SOUND LIKE YOU", color = BrightText, fontSize = 12.sp,
                             fontWeight = FontWeight.Bold)
-                        Text("Short, casual caption ideas based on visual clues. Pick a vibe or edit the wording so it sounds like you.",
+                        Text("Suggestions use on-device visual labels, not a cloud caption bot. Choose Durga Puja when you want Bijoya/Dashami wording, or edit either caption freely.",
                             color = SoftText, fontSize = 10.sp, lineHeight = 14.sp,
                             modifier = Modifier.padding(top = 3.dp, bottom = 6.dp))
                         Row(
                             modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
-                            listOf("Auto", "Portrait", "Friends", "Festival", "Celebration", "Romantic", "Funny", "Devotional", "Travel", "Family", "Banglish", "Aesthetic").forEach { theme ->
+                            listOf("Auto", "Portrait", "Friends", "Durga Puja", "Festival", "Celebration", "Romantic", "Funny", "Devotional", "Travel", "Family", "Banglish", "Aesthetic").forEach { theme ->
                                 EditorChip(
                                     label = theme,
                                     selected = captionTheme == theme,
@@ -2670,20 +2686,20 @@ private fun EditorChip(
 ) {
     Surface(
         onClick = onClick,
-        shape = RoundedCornerShape(if (compact) 11.dp else 14.dp),
-        color = if (selected) Mint else Color(0xFF202727),
+        shape = RoundedCornerShape(if (compact) 12.dp else 15.dp),
+        color = if (selected) Mint else Color(0xFF1C2322),
         contentColor = if (selected) Ink else BrightText,
         border = BorderStroke(
             1.dp,
-            if (selected) Mint else Color(0xFF34403E)
+            if (selected) Mint.copy(alpha = 0.95f) else Color(0xFF303B39)
         ),
         tonalElevation = 0.dp,
         shadowElevation = 0.dp
     ) {
         Box(
-            modifier = Modifier.heightIn(min = if (compact) 44.dp else 48.dp).padding(
-                horizontal = if (compact) 11.dp else 15.dp,
-                vertical = if (compact) 8.dp else 11.dp
+            modifier = Modifier.heightIn(min = if (compact) 40.dp else 46.dp).padding(
+                horizontal = if (compact) 12.dp else 16.dp,
+                vertical = if (compact) 7.dp else 10.dp
             ),
             contentAlignment = Alignment.Center
         ) {

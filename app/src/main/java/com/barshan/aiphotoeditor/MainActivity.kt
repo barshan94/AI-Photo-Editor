@@ -329,7 +329,12 @@ private fun PhotoEditorHome() {
         mutableStateOf(recoveryPrefs.getString("caption_bengali", "").orEmpty().ifBlank { "মনে রাখার মতো একটি মুহূর্ত।" })
     }
     var captionIndex by remember { mutableIntStateOf(0) }
+    var captionGenerationRound by remember { mutableIntStateOf(0) }
     var captionPhotoUri by remember { mutableStateOf<String?>(recoveryPrefs.getString("caption_photo_uri", null)) }
+    var showBatchCaptionChoice by remember { mutableStateOf(false) }
+    var batchCaptionResults by remember { mutableStateOf<Map<Uri, Pair<String, String>>>(emptyMap()) }
+    var isGeneratingBatchCaptions by remember { mutableStateOf(false) }
+    var batchCaptionProgress by remember { mutableIntStateOf(0) }
     var isGeneratingCaptions by remember { mutableStateOf(false) }
     var captionTheme by remember { mutableStateOf(recoveryPrefs.getString("caption_theme", "Auto") ?: "Auto") }
     var captionAspectRatio by remember { mutableFloatStateOf(recoveryPrefs.getFloat("caption_aspect_ratio", 1f)) }
@@ -360,8 +365,12 @@ private fun PhotoEditorHome() {
             "Little moments, lasting memories." to "ছোট ছোট মুহূর্ত, চিরদিনের স্মৃতি।",
             "Just living this moment." to "এই মুহূর্তটুকু উপভোগ করছি।"
         )).distinctBy { it.first }.filter { it.first.isNotBlank() }
-        val english = safePairs.map { it.first }
-        val bengali = safePairs.map { it.second }
+        // Rotate the suggestion order on each regeneration so the selected result changes,
+        // while preserving each English/Bengali pair.
+        val rotation = if (safePairs.isEmpty()) 0 else captionGenerationRound.mod(safePairs.size)
+        val rotatedPairs = if (safePairs.isEmpty()) safePairs else safePairs.drop(rotation) + safePairs.take(rotation)
+        val english = rotatedPairs.map { it.first }
+        val bengali = rotatedPairs.map { it.second }
         val suggestions = CaptionSuggestionEngine.Suggestions(
             detectedLabels = generated.detectedLabels,
             english = english,
@@ -375,6 +384,7 @@ private fun PhotoEditorHome() {
     }
 
     fun suggestCaptions(bitmapOverride: Bitmap? = null) {
+        captionGenerationRound += 1
         val bitmap = bitmapOverride ?: previewBitmap
         if (bitmap == null || bitmap.isRecycled) {
             statusMessage = "Prepare a photo preview before suggesting captions."
@@ -1381,6 +1391,9 @@ private fun PhotoEditorHome() {
                                             val shareIntent = Intent(Intent.ACTION_SEND).apply {
                                                 type = "image/jpeg"
                                                 putExtra(Intent.EXTRA_STREAM, uri)
+                                                val sharedCaption = listOf(captionEnglish.trim(), captionBengali.trim())
+                                                    .filter { it.isNotBlank() }.joinToString("\n\n")
+                                                if (sharedCaption.isNotBlank()) putExtra(Intent.EXTRA_TEXT, sharedCaption)
                                                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                                             }
                                             context.startActivity(Intent.createChooser(shareIntent, "Share edited photo"))
@@ -1941,8 +1954,25 @@ private fun PhotoEditorHome() {
 
                         if (activeEditorPanel == "Crop & Rotate") {
                             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                listOf("Crop", "Rotate", "Straighten", "Perspective").forEach { tool ->
-                                    Button(onClick = { activeCropSubpanel = tool }, modifier = Modifier.weight(1f).heightIn(min = 36.dp),
+                                listOf("Auto Level", "Crop", "Rotate", "Straighten", "Perspective").forEach { tool ->
+                                    Button(onClick = {
+                                        activeCropSubpanel = tool
+                                        if (tool == "Auto Level") {
+                                            val bitmap = previewBitmap
+                                            if (bitmap == null || bitmap.isRecycled) statusMessage = "Open a photo preview before auto-leveling."
+                                            else scope.launch {
+                                                val correction = withContext(Dispatchers.Default) { AutoLeveler.estimateCorrectionDegrees(bitmap) }
+                                                if (correction == null) statusMessage = "No reliable horizon found. Adjust Straighten manually."
+                                                else {
+                                                    recordEditChange()
+                                                    straightenDegrees = (straightenDegrees + correction).coerceIn(-15f, 15f)
+                                                    selectedStyle = "Custom"
+                                                    showEnhanced = true
+                                                    statusMessage = if (correction == 0f) "This photo already looks level." else "Level corrected by ${String.format(java.util.Locale.US, "%.1f", correction)}°."
+                                                }
+                                            }
+                                        }
+                                    }, modifier = Modifier.weight(1f).heightIn(min = 36.dp),
                                         shape = RoundedCornerShape(9.dp),
                                         colors = ButtonDefaults.buttonColors(containerColor = if (activeCropSubpanel == tool) Mint else Color(0xFF293333), contentColor = if (activeCropSubpanel == tool) Ink else BrightText),
                                         contentPadding = PaddingValues(horizontal = 2.dp, vertical = 4.dp)) {

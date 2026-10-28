@@ -336,6 +336,11 @@ private fun PhotoEditorHome() {
     var showBatchCaptionChoice by remember { mutableStateOf(false) }
     var showIndividualBatchCaptionPicker by remember { mutableStateOf(false) }
     var batchCaptionResults by remember { mutableStateOf<Map<Uri, Pair<String, String>>>(emptyMap()) }
+    var batchCaptionTheme by remember { mutableStateOf("Auto") }
+    var batchCaptionRound by remember { mutableIntStateOf(0) }
+    var isGeneratingBatchCaptions by remember { mutableStateOf(false) }
+    var captionShareLanguage by remember { mutableStateOf("Both") }
+    var originalHoldPhoto by remember { mutableStateOf<PhotoItem?>(null) }
     var captionTheme by remember { mutableStateOf(recoveryPrefs.getString("caption_theme", "Auto") ?: "Auto") }
     var captionAspectRatio by remember { mutableFloatStateOf(recoveryPrefs.getFloat("caption_aspect_ratio", 1f)) }
     var captionSearchQuery by remember { mutableStateOf(recoveryPrefs.getString("caption_search_query", "").orEmpty()) }
@@ -381,6 +386,49 @@ private fun PhotoEditorHome() {
         captionEnglish = suggestions.english.firstOrNull() ?: "A moment worth keeping."
         captionBengali = suggestions.bengali.firstOrNull() ?: "মনে রাখার মতো একটি মুহূর্ত।"
         isGeneratingCaptions = false
+    }
+
+    suspend fun createBatchCaption(photo: PhotoItem, theme: String, round: Int): Pair<String, String> {
+        var bitmap: Bitmap? = null
+        try {
+            bitmap = withContext(Dispatchers.IO) {
+                AutoEnhancer.decodeForEditing(context.contentResolver, photo.uri, maxDimension = 640)
+            }
+            val workingBitmap = bitmap
+            val ratio = workingBitmap.width.toFloat() / workingBitmap.height.coerceAtLeast(1).toFloat()
+            val analysis = PhotoAnalysisEngine.analyze(workingBitmap)
+            val labels = analysis.labels.map { label -> label.substringBefore(" (") to 0.9f }
+            val ideas = CaptionSuggestionEngine.fromLabels(labels, ratio, theme)
+            val count = minOf(ideas.english.size, ideas.bengali.size)
+            if (count <= 0) return "A moment worth keeping." to "মনে রাখার মতো একটি মুহূর্ত।"
+            val index = round.mod(count)
+            return ideas.english[index] to ideas.bengali[index]
+        } finally {
+            bitmap?.let { if (!it.isRecycled) it.recycle() }
+        }
+    }
+
+    fun generateBatchCaptions(photos: List<PhotoItem>, theme: String = batchCaptionTheme, round: Int = batchCaptionRound) {
+        val eligible = photos.filter { it.decision != "Reject" }
+        if (eligible.isEmpty() || isGeneratingBatchCaptions) return
+        isGeneratingBatchCaptions = true
+        statusMessage = "Preparing photo-specific captions…"
+        scope.launch {
+            try {
+                for ((index, photo) in eligible.withIndex()) {
+                    try {
+                        val pair = createBatchCaption(photo, theme, round + index)
+                        batchCaptionResults = batchCaptionResults + (photo.uri to pair)
+                    } catch (_: Exception) {
+                        batchCaptionResults = batchCaptionResults + (photo.uri to
+                            ("A moment worth keeping." to "মনে রাখার মতো একটি মুহূর্ত।"))
+                    }
+                }
+                statusMessage = "Photo-specific $theme captions are ready. Generate more to see alternatives."
+            } finally {
+                isGeneratingBatchCaptions = false
+            }
+        }
     }
 
     fun suggestCaptions(bitmapOverride: Bitmap? = null) {
@@ -1393,8 +1441,12 @@ private fun PhotoEditorHome() {
                                             val shareIntent = Intent(Intent.ACTION_SEND).apply {
                                                 type = "image/jpeg"
                                                 putExtra(Intent.EXTRA_STREAM, uri)
-                                                val sharedCaption = listOf(captionEnglish.trim(), captionBengali.trim())
-                                                    .filter { it.isNotBlank() }.joinToString("\n\n")
+                                                val sharedCaption = when (captionShareLanguage) {
+                                                    "English" -> captionEnglish.trim()
+                                                    "বাংলা" -> captionBengali.trim()
+                                                    else -> listOf(captionEnglish.trim(), captionBengali.trim())
+                                                        .filter { it.isNotBlank() }.joinToString("\n\n")
+                                                }
                                                 if (sharedCaption.isNotBlank()) putExtra(Intent.EXTRA_TEXT, sharedCaption)
                                                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                                             }
@@ -1709,6 +1761,20 @@ private fun PhotoEditorHome() {
                     } else {
                         Text("A moment worth keeping.", color = BrightText, fontSize = 12.sp)
                     }
+                    Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        listOf("English", "বাংলা", "Both").forEach { language ->
+                            Button(
+                                onClick = { captionShareLanguage = language },
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = if (captionShareLanguage == language) Mint else Color(0xFF293333),
+                                    contentColor = if (captionShareLanguage == language) Ink else BrightText
+                                )
+                            ) { Text(language, fontSize = 11.sp) }
+                        }
+                    }
+                    if (captionShareLanguage == "English" || captionShareLanguage == "Both") {
                     OutlinedTextField(
                         value = captionEnglish, onValueChange = { captionEnglish = it },
                         modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp, max = 88.dp),
@@ -1721,6 +1787,8 @@ private fun PhotoEditorHome() {
                             focusedLabelColor = Mint, unfocusedLabelColor = SoftText, cursorColor = Mint
                         )
                     )
+                    }
+                    if (captionShareLanguage == "বাংলা" || captionShareLanguage == "Both") {
                     OutlinedTextField(
                         value = captionBengali, onValueChange = { captionBengali = it },
                         modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp, max = 88.dp),
@@ -1733,6 +1801,7 @@ private fun PhotoEditorHome() {
                             focusedLabelColor = Mint, unfocusedLabelColor = SoftText, cursorColor = Mint
                         )
                     )
+                    }
                     Button(onClick = { suggestCaptions() },
                         modifier = Modifier.fillMaxWidth().heightIn(min = 38.dp),
                         enabled = previewBitmap != null && !isGeneratingCaptions,
@@ -2444,18 +2513,63 @@ private fun PhotoEditorHome() {
                         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 3.dp)
                     ) { Text("✦ AI Edit all", fontSize = 11.sp, fontWeight = FontWeight.Bold) }
                 }
-                Button(
-                    onClick = { showBatchCaptionChoice = true },
-                    enabled = !isExporting && !isAnalyzing,
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).heightIn(min = 40.dp),
-                    shape = RoundedCornerShape(10.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = Mint)
-                ) { Text("✎ Caption · English + বাংলা", fontSize = 11.sp, fontWeight = FontWeight.SemiBold) }
+                Text("CAPTION CATEGORY", color = BrightText, fontSize = 10.sp, fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(top = 6.dp, bottom = 3.dp))
+                Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                    listOf("Auto", "Portrait", "Friends", "Festival", "Celebration", "Romantic", "Funny", "Devotional", "Travel", "Family", "Aesthetic", "Nature", "Food").forEach { theme ->
+                        Button(
+                            onClick = {
+                                batchCaptionTheme = theme
+                                if (batchCaptionResults.isNotEmpty()) {
+                                    batchCaptionRound += 1
+                                    generateBatchCaptions(selectedPhotos.toList(), theme, batchCaptionRound)
+                                }
+                            },
+                            enabled = !isGeneratingBatchCaptions,
+                            contentPadding = PaddingValues(horizontal = 9.dp, vertical = 3.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (batchCaptionTheme == theme) Mint else Color(0xFF293333),
+                                contentColor = if (batchCaptionTheme == theme) Ink else BrightText
+                            )
+                        ) { Text(theme, fontSize = 10.sp, maxLines = 1) }
+                    }
+                }
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Button(
+                        onClick = { showBatchCaptionChoice = true },
+                        enabled = !isExporting && !isAnalyzing && !isGeneratingBatchCaptions,
+                        modifier = Modifier.weight(1f).padding(vertical = 4.dp).heightIn(min = 40.dp),
+                        shape = RoundedCornerShape(10.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = Mint)
+                    ) { Text("✎ Caption", fontSize = 11.sp, fontWeight = FontWeight.SemiBold) }
+                    Button(
+                        onClick = {
+                            batchCaptionRound += 1
+                            generateBatchCaptions(selectedPhotos.toList(), batchCaptionTheme, batchCaptionRound)
+                        },
+                        enabled = selectedPhotos.any { it.decision != "Reject" } && !isGeneratingBatchCaptions,
+                        modifier = Modifier.weight(1f).padding(vertical = 4.dp).heightIn(min = 40.dp),
+                        shape = RoundedCornerShape(10.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Ink)
+                    ) { Text(if (isGeneratingBatchCaptions) "Generating…" else "Generate more", fontSize = 11.sp, fontWeight = FontWeight.SemiBold) }
+                }
+                if (isGeneratingBatchCaptions) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+                        CircularProgressIndicator(modifier = Modifier.size(16.dp), color = Mint, strokeWidth = 2.dp)
+                        Text("Analysing each photo for its own captions…", color = SoftText, fontSize = 10.sp)
+                    }
+                }
                 batchCaptionResults.forEach { (uri, pair) ->
-                    Column(modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
+                    Column(modifier = Modifier.fillMaxWidth().padding(vertical = 5.dp)) {
                         Text("Photo " + (selectedPhotos.indexOfFirst { it.uri == uri } + 1), color = Mint, fontSize = 10.sp)
-                        Text(pair.first, color = BrightText, fontSize = 11.sp)
-                        Text(pair.second, color = SoftText, fontSize = 11.sp)
+                        if (captionShareLanguage == "English" || captionShareLanguage == "Both") {
+                            Text(pair.first, color = BrightText, fontSize = 11.sp)
+                        }
+                        if (captionShareLanguage == "বাংলা" || captionShareLanguage == "Both") {
+                            Text(pair.second, color = SoftText, fontSize = 11.sp)
+                        }
                     }
                 }
                 if (showBatchCaptionChoice) {
@@ -2468,16 +2582,10 @@ private fun PhotoEditorHome() {
                             Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                                 Button(onClick = {
                                     showBatchCaptionChoice = false
+                                    batchCaptionRound = 0
                                     batchCaptionResults = emptyMap()
-                                    selectedPhotos.filter { it.decision != "Reject" }.forEachIndexed { index, photo ->
-                                        val ratio = if (photo.width > 0 && photo.height > 0) photo.width.toFloat() / photo.height.toFloat() else 1f
-                                        val ideas = CaptionSuggestionEngine.fromLabels(emptyList(), ratio, "Auto")
-                                        val count = minOf(ideas.english.size, ideas.bengali.size).coerceAtLeast(1)
-                                        val choice = index % count
-                                        batchCaptionResults = batchCaptionResults + (photo.uri to (ideas.english.getOrNull(choice).orEmpty().ifBlank { "A moment worth keeping." } to ideas.bengali.getOrNull(choice).orEmpty().ifBlank { "মনে রাখার মতো একটি মুহূর্ত।" }))
-                                    }
-                                    statusMessage = "Bilingual caption suggestions prepared for selected photos. Review each caption before sharing."
-                                }) { Text("All selected") }
+                                    generateBatchCaptions(selectedPhotos.toList(), batchCaptionTheme, 0)
+                                }, enabled = !isGeneratingBatchCaptions) { Text("All selected") }
                                 Button(onClick = { showBatchCaptionChoice = false }) { Text("Cancel") }
                             }
                         }
@@ -2491,12 +2599,14 @@ private fun PhotoEditorHome() {
                             Column(modifier = Modifier.heightIn(max = 300.dp).verticalScroll(rememberScrollState())) {
                                 selectedPhotos.filter { it.decision != "Reject" }.forEach { photo ->
                                     Button(onClick = {
-                                        val ratio = if (photo.width > 0 && photo.height > 0) photo.width.toFloat() / photo.height.toFloat() else 1f
-                                        val ideas = CaptionSuggestionEngine.fromLabels(emptyList(), ratio, "Auto")
-                                        batchCaptionResults = batchCaptionResults + (photo.uri to (ideas.english.firstOrNull().orEmpty().ifBlank { "A moment worth keeping." } to ideas.bengali.firstOrNull().orEmpty().ifBlank { "মনে রাখার মতো একটি মুহূর্ত।" }))
+                                        batchCaptionRound = 0
+                                        batchCaptionResults = batchCaptionResults - photo.uri
+                                        generateBatchCaptions(listOf(photo), batchCaptionTheme, 0)
                                         showIndividualBatchCaptionPicker = false
-                                        statusMessage = "Bilingual caption suggestions ready for one photo."
-                                    }, modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)) { Text("Photo " + (selectedPhotos.indexOf(photo) + 1)) }
+                                    }, enabled = !isGeneratingBatchCaptions,
+                                        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
+                                        Text("Photo " + (selectedPhotos.indexOf(photo) + 1))
+                                    }
                                 }
                             }
                         },
@@ -2906,7 +3016,12 @@ private fun PhotoEditorHome() {
                         Column(
                             modifier = Modifier.clip(RoundedCornerShape(13.dp))
                                 .background(if (activePhoto?.uri == photo.uri) Color(0xFF263B38) else Panel)
-                                .clickable { openEditor(photo) }
+                                .pointerInput(photo.uri) {
+                                    detectTapGestures(
+                                        onTap = { openEditor(photo) },
+                                        onLongPress = { originalHoldPhoto = photo }
+                                    )
+                                }
                                 .padding(5.dp)
                         ) {
                             Box {
@@ -3003,6 +3118,22 @@ private fun PhotoEditorHome() {
                 }) {
                 Text("No photos in the " + gridFilter + " filter yet.", color = SoftText,
                     fontSize = 11.sp, modifier = Modifier.padding(top = 8.dp))
+            }
+
+            if (originalHoldPhoto != null) {
+                AlertDialog(
+                    onDismissRequest = { originalHoldPhoto = null },
+                    title = { Text("Original photo · hold preview") },
+                    text = {
+                        AsyncImage(
+                            model = originalHoldPhoto!!.uri,
+                            contentDescription = "Untouched original photo",
+                            modifier = Modifier.fillMaxWidth().heightIn(min = 220.dp, max = 420.dp),
+                            contentScale = ContentScale.Fit
+                        )
+                    },
+                    confirmButton = { Button(onClick = { originalHoldPhoto = null }) { Text("Close") } }
+                )
             }
 
             Text(

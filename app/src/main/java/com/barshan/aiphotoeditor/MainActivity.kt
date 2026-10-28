@@ -1955,8 +1955,7 @@ private fun PhotoEditorHome() {
                                 ) { Text(category, fontSize = 10.sp, maxLines = 1) }
                             }
                         }
-                        {
-                            val matchingPresets = CaptionLibrary.search(captionSearchQuery, captionLibraryCategory, 6)
+                        val matchingPresets = CaptionLibrary.search(captionSearchQuery, captionLibraryCategory, 6)
                             if (matchingPresets.isEmpty()) {
                                 Text("No matches yet. Try a broader word or another category.", color = SoftText, fontSize = 11.sp)
                             } else {
@@ -1987,10 +1986,6 @@ private fun PhotoEditorHome() {
                                     }
                                 }
                             }
-                        } else {
-                            Text("Search by mood, subject, or moment — or choose a category to browse.",
-                                color = SoftText, fontSize = 10.sp, lineHeight = 14.sp)
-                        }
                         Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                             listOf("Auto", "Portrait", "Friends", "Festival", "Celebration", "Romantic", "Funny", "Devotional", "Travel", "Family", "Aesthetic").forEach { theme ->
                                 Button(onClick = {

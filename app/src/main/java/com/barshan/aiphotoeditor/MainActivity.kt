@@ -234,8 +234,8 @@ private fun PhotoEditorHome() {
         isGeneratingCaptions = false
     }
 
-    fun suggestCaptions() {
-        val bitmap = previewBitmap
+    fun suggestCaptions(bitmapOverride: Bitmap? = null) {
+        val bitmap = bitmapOverride ?: previewBitmap
         if (bitmap == null || bitmap.isRecycled) {
             statusMessage = "Prepare a photo preview before suggesting captions."
             return

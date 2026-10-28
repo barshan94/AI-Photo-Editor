@@ -2076,28 +2076,21 @@ private fun PhotoEditorHome() {
                                 }
                             }
                         }
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Button(onClick = { suggestCaptions() }, modifier = Modifier.weight(1f).heightIn(min = 44.dp), enabled = previewBitmap != null && !isGeneratingCaptions,
-                                shape = RoundedCornerShape(12.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Ink),
-                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
-                            ) { Text(if (isGeneratingCaptions) "Analyzing…" else "Analyze photo", fontSize = 11.sp) }
-                            Button(
-                                onClick = {
-                                    val suggestions = captionSuggestions
-                                    if (suggestions != null) {
-                                        captionIndex = (captionIndex + 1) % suggestions.english.size
-                                        captionEnglish = suggestions.english[captionIndex]
-                                        captionBengali = suggestions.bengali[captionIndex]
-                                    } else suggestCaptions()
-                                },
-                                enabled = captionSuggestions != null && !isGeneratingCaptions,
-                                modifier = Modifier.weight(1f).heightIn(min = 44.dp),
-                                shape = RoundedCornerShape(12.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = BrightText),
-                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp)
-                            ) { Text("New suggestions", fontSize = 11.sp) }
-                        }
+                        Button(
+                            onClick = {
+                                val suggestions = captionSuggestions
+                                if (suggestions != null) {
+                                    captionIndex = (captionIndex + 1) % suggestions.english.size
+                                    captionEnglish = suggestions.english[captionIndex]
+                                    captionBengali = suggestions.bengali[captionIndex]
+                                } else suggestCaptions()
+                            },
+                            enabled = previewBitmap != null && captionSuggestions != null && !isGeneratingCaptions,
+                            modifier = Modifier.fillMaxWidth().heightIn(min = 44.dp),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = BrightText),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
+                        ) { Text(if (isGeneratingCaptions) "Finding captions…" else "New suggestions", fontSize = 11.sp) }
                         if (captionSuggestions != null) {
                             val detected = captionSuggestions?.detectedLabels.orEmpty()
                             if (detected.isNotEmpty()) {
@@ -2111,17 +2104,40 @@ private fun PhotoEditorHome() {
                             OutlinedTextField(value = captionBengali, onValueChange = { captionBengali = it },
                                 modifier = Modifier.fillMaxWidth().padding(top = 5.dp),
                                 label = { Text("বাংলা ক্যাপশন") }, minLines = 2, maxLines = 4)
-                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                Button(onClick = { clipboardManager.setText(AnnotatedString(captionEnglish)) },
-                                    shape = RoundedCornerShape(10.dp),
+                            Column(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Button(
+                                    onClick = { shareCaptionOnly(captionEnglish) },
+                                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                                    shape = RoundedCornerShape(13.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Ink),
+                                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp)
+                                ) { Text("Share English caption only", fontSize = 12.sp, fontWeight = FontWeight.Bold) }
+                                Button(
+                                    onClick = { shareCaptionOnly(captionBengali) },
+                                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                                    shape = RoundedCornerShape(13.dp),
                                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = BrightText),
-                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
-                                ) { Text("Copy English", fontSize = 10.sp) }
-                                Button(onClick = { clipboardManager.setText(AnnotatedString(captionBengali)) },
-                                    shape = RoundedCornerShape(10.dp),
-                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = BrightText),
-                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
-                                ) { Text("Copy বাংলা", fontSize = 10.sp) }
+                                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp)
+                                ) { Text("Share বাংলা caption only", fontSize = 12.sp, fontWeight = FontWeight.Bold) }
+                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    Button(
+                                        onClick = { clipboardManager.setText(AnnotatedString(captionEnglish)); statusMessage = "English caption copied." },
+                                        modifier = Modifier.weight(1f).heightIn(min = 40.dp),
+                                        shape = RoundedCornerShape(11.dp),
+                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF202929), contentColor = SoftText),
+                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp)
+                                    ) { Text("Copy English", fontSize = 10.sp) }
+                                    Button(
+                                        onClick = { clipboardManager.setText(AnnotatedString(captionBengali)); statusMessage = "বাংলা caption copied." },
+                                        modifier = Modifier.weight(1f).heightIn(min = 40.dp),
+                                        shape = RoundedCornerShape(11.dp),
+                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF202929), contentColor = SoftText),
+                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp)
+                                    ) { Text("Copy বাংলা", fontSize = 10.sp) }
+                                }
                             }
                         }
                         Spacer(modifier = Modifier.height(10.dp))

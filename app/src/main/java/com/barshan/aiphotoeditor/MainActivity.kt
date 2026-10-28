@@ -337,6 +337,7 @@ private fun PhotoEditorHome() {
     var showBatchCaptionChoice by remember { mutableStateOf(false) }
     var showIndividualBatchCaptionPicker by remember { mutableStateOf(false) }
     var batchCaptionResults by remember { mutableStateOf<Map<Uri, List<Pair<String, String>>>>(emptyMap()) }
+    var expandedBatchCaptionOptions by remember { mutableStateOf<Set<Uri>>(emptySet()) }
     var batchCaptionTheme by remember { mutableStateOf("Auto") }
     var batchCaptionRound by remember { mutableIntStateOf(0) }
     var isGeneratingBatchCaptions by remember { mutableStateOf(false) }
@@ -491,6 +492,21 @@ private fun PhotoEditorHome() {
             labeler.close()
             if (!bitmapForLabels.isRecycled) bitmapForLabels.recycle()
         }
+    }
+
+    fun suggestMoreCaptions() {
+        val existing = captionSuggestions
+        val count = minOf(existing?.english?.size ?: 0, existing?.bengali?.size ?: 0)
+        if (existing == null || count < 2) {
+            suggestCaptions()
+            return
+        }
+        val nextIndex = (captionIndex + 1).mod(count)
+        captionIndex = nextIndex
+        captionEnglish = existing.english[nextIndex]
+        captionBengali = existing.bengali[nextIndex]
+        statusMessage = "Showing caption suggestion " + (nextIndex + 1) + " of " + count +
+            ". Tap Suggest more again to cycle through alternatives."
     }
 
     // Restore technical scores for photos recovered after process death.
@@ -1815,7 +1831,7 @@ private fun PhotoEditorHome() {
                         )
                     )
                     }
-                    Button(onClick = { suggestCaptions() },
+                    Button(onClick = { suggestMoreCaptions() },
                         modifier = Modifier.fillMaxWidth().heightIn(min = 38.dp),
                         enabled = previewBitmap != null && !isGeneratingCaptions,
                         shape = RoundedCornerShape(10.dp),
@@ -2574,37 +2590,77 @@ private fun PhotoEditorHome() {
                         Text("Analysing each photo for its own captions…", color = SoftText, fontSize = 10.sp)
                     }
                 }
-                Column(modifier = Modifier.fillMaxWidth().heightIn(max = 220.dp).verticalScroll(rememberScrollState())) {
-                batchCaptionResults.forEach { (uri, options) ->
-                    Column(modifier = Modifier.fillMaxWidth().padding(vertical = 5.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text("Photo " + (selectedPhotos.indexOfFirst { it.uri == uri } + 1) + " · choose a caption",
-                            color = Mint, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                        options.forEachIndexed { optionIndex, pair ->
-                            Button(
-                                onClick = {
-                                    captionEnglish = pair.first
-                                    captionBengali = pair.second
-                                    statusMessage = "Caption option " + (optionIndex + 1) + " selected for Photo " +
-                                        (selectedPhotos.indexOfFirst { it.uri == uri } + 1) + "."
-                                },
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(9.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF202626), contentColor = BrightText),
-                                contentPadding = PaddingValues(horizontal = 9.dp, vertical = 7.dp)
-                            ) {
-                                Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                                    if (captionShareLanguage == "English" || captionShareLanguage == "Both") {
-                                        Text(pair.first, fontSize = 11.sp, lineHeight = 14.sp)
+                Column(modifier = Modifier.fillMaxWidth().heightIn(max = 260.dp).verticalScroll(rememberScrollState())) {
+                    batchCaptionResults.forEach { (uri, options) ->
+                        val photoNumber = selectedPhotos.indexOfFirst { it.uri == uri } + 1
+                        val primary = options.firstOrNull()
+                        Column(modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text("Photo " + photoNumber, color = Mint, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            if (primary != null) {
+                                Button(
+                                    onClick = {
+                                        captionEnglish = primary.first
+                                        captionBengali = primary.second
+                                        statusMessage = "Caption selected for Photo " + photoNumber + "."
+                                    },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(9.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF202626), contentColor = BrightText),
+                                    contentPadding = PaddingValues(horizontal = 9.dp, vertical = 7.dp)
+                                ) {
+                                    Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                                        if (captionShareLanguage == "English" || captionShareLanguage == "Both") {
+                                            Text(primary.first, fontSize = 11.sp, lineHeight = 14.sp)
+                                        }
+                                        if (captionShareLanguage == "বাংলা" || captionShareLanguage == "Both") {
+                                            Text(primary.second, color = SoftText, fontSize = 11.sp, lineHeight = 14.sp)
+                                        }
                                     }
-                                    if (captionShareLanguage == "বাংলা" || captionShareLanguage == "Both") {
-                                        Text(pair.second, color = SoftText, fontSize = 11.sp, lineHeight = 14.sp)
+                                }
+                            }
+                            if (options.size > 1) {
+                                TextButton(onClick = {
+                                    expandedBatchCaptionOptions = if (uri in expandedBatchCaptionOptions) {
+                                        expandedBatchCaptionOptions - uri
+                                    } else {
+                                        expandedBatchCaptionOptions + uri
+                                    }
+                                }, contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)) {
+                                    Text(
+                                        if (uri in expandedBatchCaptionOptions) "Hide alternatives"
+                                        else "More options (" + (options.size - 1) + ")",
+                                        color = SoftText, fontSize = 10.sp
+                                    )
+                                }
+                                if (uri in expandedBatchCaptionOptions) {
+                                    options.drop(1).forEachIndexed { optionIndex, pair ->
+                                        Button(
+                                            onClick = {
+                                                captionEnglish = pair.first
+                                                captionBengali = pair.second
+                                                statusMessage = "Caption option " + (optionIndex + 2) +
+                                                    " selected for Photo " + photoNumber + "."
+                                            },
+                                            modifier = Modifier.fillMaxWidth(),
+                                            shape = RoundedCornerShape(9.dp),
+                                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF202626), contentColor = BrightText),
+                                            contentPadding = PaddingValues(horizontal = 9.dp, vertical = 7.dp)
+                                        ) {
+                                            Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                                                if (captionShareLanguage == "English" || captionShareLanguage == "Both") {
+                                                    Text(pair.first, fontSize = 11.sp, lineHeight = 14.sp)
+                                                }
+                                                if (captionShareLanguage == "বাংলা" || captionShareLanguage == "Both") {
+                                                    Text(pair.second, color = SoftText, fontSize = 11.sp, lineHeight = 14.sp)
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                             }
                         }
                     }
-                }
                 }
                 if (showBatchCaptionChoice) {
                     AlertDialog(

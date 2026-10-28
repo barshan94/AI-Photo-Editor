@@ -352,10 +352,16 @@ private fun PhotoEditorHome() {
             libraryMatches.map { it.text to it.bengali } +
             remoteMatches.mapIndexed { index, entry ->
                 entry.text to (libraryMatches.getOrNull(index)?.bengali
-                    ?: generated.bengali.getOrElse(index % generated.bengali.size) { "মনে রাখার মতো একটি মুহূর্ত।" })
+                    ?: generated.bengali.getOrNull(index % generated.bengali.size)
+                    ?: "মনে রাখার মতো একটি মুহূর্ত।")
             }).distinctBy { it.first }
-        val english = captionPairs.map { it.first }
-        val bengali = captionPairs.map { it.second }
+        val safePairs = (captionPairs + listOf(
+            "A moment worth keeping." to "মনে রাখার মতো একটি মুহূর্ত।",
+            "Little moments, lasting memories." to "ছোট ছোট মুহূর্ত, চিরদিনের স্মৃতি।",
+            "Just living this moment." to "এই মুহূর্তটুকু উপভোগ করছি।"
+        )).distinctBy { it.first }.filter { it.first.isNotBlank() }
+        val english = safePairs.map { it.first }
+        val bengali = safePairs.map { it.second }
         val suggestions = CaptionSuggestionEngine.Suggestions(
             detectedLabels = generated.detectedLabels,
             english = english,
@@ -363,8 +369,8 @@ private fun PhotoEditorHome() {
         )
         captionSuggestions = suggestions
         captionIndex = 0
-        captionEnglish = suggestions.english.first()
-        captionBengali = suggestions.bengali.first()
+        captionEnglish = suggestions.english.firstOrNull() ?: "A moment worth keeping."
+        captionBengali = suggestions.bengali.firstOrNull() ?: "মনে রাখার মতো একটি মুহূর্ত।"
         isGeneratingCaptions = false
     }
 
@@ -1647,7 +1653,84 @@ private fun PhotoEditorHome() {
                                     }
                                 }
                             }
-                            if (activeEditorPanel == "AI Edit") {
+            if (activeEditorPanel == "Caption") {
+                Column(modifier = Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                    Text("CAPTION IDEAS", color = Mint, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    val visibleCaptionIdeas = captionSuggestions?.english?.take(3).orEmpty()
+                    if (visibleCaptionIdeas.isNotEmpty()) {
+                        Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                            visibleCaptionIdeas.forEachIndexed { index, idea ->
+                                Button(
+                                    onClick = {
+                                        captionIndex = index
+                                        captionEnglish = idea
+                                        captionBengali = captionSuggestions?.bengali?.getOrNull(index).orEmpty()
+                                    },
+                                    modifier = Modifier.fillMaxWidth().heightIn(min = 44.dp),
+                                    shape = RoundedCornerShape(10.dp),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = if (captionEnglish == idea) Color(0xFF263B38) else Color(0xFF202626),
+                                        contentColor = BrightText
+                                    ),
+                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 7.dp)
+                                ) {
+                                    Text(idea, fontSize = 11.sp, lineHeight = 15.sp, maxLines = 3,
+                                        modifier = Modifier.fillMaxWidth())
+                                }
+                            }
+                        }
+                    } else {
+                        Text("A moment worth keeping.", color = BrightText, fontSize = 12.sp)
+                    }
+                    OutlinedTextField(
+                        value = captionEnglish, onValueChange = { captionEnglish = it },
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp, max = 88.dp),
+                        label = { Text("English caption", color = SoftText) },
+                        textStyle = androidx.compose.ui.text.TextStyle(color = BrightText, fontSize = 14.sp),
+                        minLines = 1, maxLines = 2,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = BrightText, unfocusedTextColor = BrightText,
+                            focusedBorderColor = Mint, unfocusedBorderColor = SoftText,
+                            focusedLabelColor = Mint, unfocusedLabelColor = SoftText, cursorColor = Mint
+                        )
+                    )
+                    OutlinedTextField(
+                        value = captionBengali, onValueChange = { captionBengali = it },
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp, max = 88.dp),
+                        label = { Text("বাংলা ক্যাপশন", color = SoftText) },
+                        textStyle = androidx.compose.ui.text.TextStyle(color = BrightText, fontSize = 14.sp),
+                        minLines = 1, maxLines = 2,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = BrightText, unfocusedTextColor = BrightText,
+                            focusedBorderColor = Mint, unfocusedBorderColor = SoftText,
+                            focusedLabelColor = Mint, unfocusedLabelColor = SoftText, cursorColor = Mint
+                        )
+                    )
+                    Button(onClick = { suggestCaptions() },
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 38.dp),
+                        enabled = previewBitmap != null && !isGeneratingCaptions,
+                        shape = RoundedCornerShape(10.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Ink),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                    ) { Text(if (isGeneratingCaptions) "Suggesting…" else "Suggest more", fontSize = 11.sp) }
+                    Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                        listOf("Auto", "Portrait", "Friends", "Festival", "Celebration", "Romantic", "Funny", "Devotional", "Travel", "Family", "Aesthetic").forEach { theme ->
+                            Button(onClick = {
+                                captionTheme = theme
+                                val existing = captionSuggestions
+                                if (existing != null) applyCaptionSuggestions(existing.detectedLabels.map { it to 0.9f }, captionAspectRatio)
+                                else suggestCaptions()
+                            }, contentPadding = PaddingValues(horizontal = 9.dp, vertical = 3.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = if (captionTheme == theme) Mint else Color(0xFF293333),
+                                    contentColor = if (captionTheme == theme) Ink else BrightText
+                                )) { Text(theme, fontSize = 10.sp, maxLines = 1) }
+                        }
+                    }
+                }
+            }
+                                                        if (activeEditorPanel == "AI Edit") {
                                 Row(
                                     modifier = Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 8.dp),
                                     horizontalArrangement = Arrangement.spacedBy(4.dp)
@@ -2184,84 +2267,6 @@ private fun PhotoEditorHome() {
                         }
                         Spacer(modifier = Modifier.height(8.dp))
                         }
-                        }
-                    }
-                }
-            }
-
-            if (activePhoto != null && activeEditorPanel == "Caption") {
-                Column(modifier = Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
-                    Text("CAPTION IDEAS", color = Mint, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                    val visibleCaptionIdeas = captionSuggestions?.english?.take(3).orEmpty()
-                    if (visibleCaptionIdeas.isNotEmpty()) {
-                        Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                            visibleCaptionIdeas.forEachIndexed { index, idea ->
-                                Button(
-                                    onClick = {
-                                        captionIndex = index
-                                        captionEnglish = idea
-                                        captionBengali = captionSuggestions?.bengali?.getOrNull(index).orEmpty()
-                                    },
-                                    modifier = Modifier.fillMaxWidth().heightIn(min = 44.dp),
-                                    shape = RoundedCornerShape(10.dp),
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = if (captionEnglish == idea) Color(0xFF263B38) else Color(0xFF202626),
-                                        contentColor = BrightText
-                                    ),
-                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 7.dp)
-                                ) {
-                                    Text(idea, fontSize = 11.sp, lineHeight = 15.sp, maxLines = 3,
-                                        modifier = Modifier.fillMaxWidth())
-                                }
-                            }
-                        }
-                    } else {
-                        Text("A moment worth keeping.", color = BrightText, fontSize = 12.sp)
-                    }
-                    OutlinedTextField(
-                        value = captionEnglish, onValueChange = { captionEnglish = it },
-                        modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp, max = 88.dp),
-                        label = { Text("English caption", color = SoftText) },
-                        textStyle = androidx.compose.ui.text.TextStyle(color = BrightText, fontSize = 14.sp),
-                        minLines = 1, maxLines = 2,
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedTextColor = BrightText, unfocusedTextColor = BrightText,
-                            focusedBorderColor = Mint, unfocusedBorderColor = SoftText,
-                            focusedLabelColor = Mint, unfocusedLabelColor = SoftText, cursorColor = Mint
-                        )
-                    )
-                    OutlinedTextField(
-                        value = captionBengali, onValueChange = { captionBengali = it },
-                        modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp, max = 88.dp),
-                        label = { Text("বাংলা ক্যাপশন", color = SoftText) },
-                        textStyle = androidx.compose.ui.text.TextStyle(color = BrightText, fontSize = 14.sp),
-                        minLines = 1, maxLines = 2,
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedTextColor = BrightText, unfocusedTextColor = BrightText,
-                            focusedBorderColor = Mint, unfocusedBorderColor = SoftText,
-                            focusedLabelColor = Mint, unfocusedLabelColor = SoftText, cursorColor = Mint
-                        )
-                    )
-                    Button(onClick = { suggestCaptions() },
-                        modifier = Modifier.fillMaxWidth().heightIn(min = 38.dp),
-                        enabled = previewBitmap != null && !isGeneratingCaptions,
-                        shape = RoundedCornerShape(10.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Ink),
-                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
-                    ) { Text(if (isGeneratingCaptions) "Suggesting…" else "Suggest more", fontSize = 11.sp) }
-                    Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                        listOf("Auto", "Portrait", "Friends", "Festival", "Celebration", "Romantic", "Funny", "Devotional", "Travel", "Family", "Aesthetic").forEach { theme ->
-                            Button(onClick = {
-                                captionTheme = theme
-                                val existing = captionSuggestions
-                                if (existing != null) applyCaptionSuggestions(existing.detectedLabels.map { it to 0.9f }, captionAspectRatio)
-                                else suggestCaptions()
-                            }, contentPadding = PaddingValues(horizontal = 9.dp, vertical = 3.dp),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = if (captionTheme == theme) Mint else Color(0xFF293333),
-                                    contentColor = if (captionTheme == theme) Ink else BrightText
-                                )) { Text(theme, fontSize = 10.sp, maxLines = 1) }
                         }
                     }
                 }

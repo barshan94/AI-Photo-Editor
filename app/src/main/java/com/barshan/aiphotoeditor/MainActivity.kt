@@ -332,10 +332,6 @@ private fun PhotoEditorHome() {
     var captionIndex by remember { mutableIntStateOf(0) }
     var captionGenerationRound by remember { mutableIntStateOf(0) }
     var captionPhotoUri by remember { mutableStateOf<String?>(recoveryPrefs.getString("caption_photo_uri", null)) }
-    var showBatchCaptionChoice by remember { mutableStateOf(false) }
-    var batchCaptionResults by remember { mutableStateOf<Map<Uri, Pair<String, String>>>(emptyMap()) }
-    var isGeneratingBatchCaptions by remember { mutableStateOf(false) }
-    var batchCaptionProgress by remember { mutableIntStateOf(0) }
     var isGeneratingCaptions by remember { mutableStateOf(false) }
     var showBatchCaptionChoice by remember { mutableStateOf(false) }
     var showIndividualBatchCaptionPicker by remember { mutableStateOf(false) }

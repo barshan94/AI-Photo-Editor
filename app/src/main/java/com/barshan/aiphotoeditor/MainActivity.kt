@@ -444,6 +444,16 @@ private fun PhotoEditorHome() {
             .putString("caption_library_category", captionLibraryCategory)
             .putLong("last_session_checkpoint_ms", System.currentTimeMillis())
             .apply()
+
+        // apply() updates memory immediately; this debounced commit flushes the complete
+        // checkpoint to disk off the UI thread after the user pauses dragging/editing.
+        // LaunchedEffect cancellation naturally debounces rapid slider updates.
+        delay(350)
+        withContext(Dispatchers.IO) {
+            recoveryPrefs.edit()
+                .putLong("last_durable_checkpoint_ms", System.currentTimeMillis())
+                .commit()
+        }
     }
 
     val previewTransformState = rememberTransformableState { zoomChange, panChange, _ ->

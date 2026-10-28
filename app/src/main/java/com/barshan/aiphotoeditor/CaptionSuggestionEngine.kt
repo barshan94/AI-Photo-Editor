@@ -16,7 +16,9 @@ object CaptionSuggestionEngine {
             .distinct()
             .take(10)
         val words = trusted.joinToString(" ")
-        val bijoyaFestival = has(words, "durga puja", "durga", "bijoya", "bijoya dashami", "dashami", "sindoor", "sindur", "vermilion", "puja pandal", "goddess", "idol")
+        // Do not infer Durga Puja from clothing, a generic idol, or a generic festival label.
+        // Require a reasonably specific cultural cue before offering Bijoya captions.
+        val bijoyaFestival = has(words, "durga puja", "durga", "bijoya", "bijoya dashami", "dashami", "sindoor", "sindur", "sindoor khela", "vermilion", "puja pandal")
         val generalCelebration = has(words, "religious festival", "festival", "celebration", "party", "fireworks", "parade", "confetti")
         val wedding = has(words, "wedding", "bride", "groom", "marriage", "engagement", "wedding ceremony")
         val travel = has(words, "beach", "ocean", "sea", "waterfall", "mountain", "landscape", "sunset", "sunrise", "forest", "travel", "tourist", "cityscape", "street", "bridge")
@@ -24,9 +26,11 @@ object CaptionSuggestionEngine {
         val pets = has(words, "dog", "cat", "bird", "animal", "pet", "puppy", "kitten")
         val nature = has(words, "flower", "plant", "garden", "tree", "forest", "lake", "river")
         val family = has(words, "family", "parents", "siblings", "relatives")
-        val friends = has(words, "friends", "group", "crowd", "team", "classmates")
+        val friends = has(words, "friends", "friendship", "classmates", "best friend", "best friends")
         val portrait = has(words, "person", "people", "face", "portrait", "human", "man", "woman", "child")
-        val scene = if (theme != "Auto") theme else when {
+        val scene = if (theme != "Auto") {
+            if (theme == "Festival" && !bijoyaFestival) "General Festival" else theme
+        } else when {
             bijoyaFestival -> "Festival"
             wedding -> "Romantic"
             generalCelebration -> "Celebration"
@@ -46,23 +50,63 @@ object CaptionSuggestionEngine {
             "Festival" -> {
                 en = listOf(
                     "Shubho Bijoya ❤️ Asche bochor abar hobe.",
-                    "Bijoya Dashami feels. ❤️",
-                    "Puja’s over already? Can we do one more day?",
-                    "Sindoor, smiles, and a little bit of goodbye.",
-                    "Same people, same puja madness, new memories.",
-                    "Ma, see you again next year. 🥹❤️",
-                    "The part where nobody’s ready to go home.",
-                    "Aaj mon ta ektu beshi kharap… abar dekha hobe, Ma."
+                    "Shesh hoyeo pujo ta moner moddhe theke jay. ❤️",
+                    "Asche bochor abar hobe—ei kothatai shobcheye boro comfort.",
+                    "Sindoor khela, chena mukh, ar bari ferar age ektu mon kharap.",
+                    "Pujor koyekta din, sara bochhorer moto smriti.",
+                    "Ma, abar esho. Amra opekkhay thakbo. 🥹❤️",
+                    "Bari firchi, kintu mon ta ekhono mondope.",
+                    "Aaj biday, kintu dekha abar hobei, Ma."
                 )
                 bn = listOf(
                     "শুভ বিজয়া ❤️ আসছে বছর আবার হবে।",
-                    "বিজয়া দশমীর অনুভূতিটাই আলাদা। ❤️",
-                    "পুজো শেষ? আর একটা দিন হলে কী হতো!",
-                    "সিঁদুর, হাসি আর একটু মনখারাপ।",
-                    "চেনা মানুষ, পুজোর চেনা পাগলামি, নতুন স্মৃতি।",
-                    "মা, আবার দেখা হবে আগামী বছর। 🥹❤️",
-                    "যে মুহূর্তে কেউই বাড়ি ফিরতে চায় না।",
-                    "আজ মনটা একটু বেশি খারাপ… আবার দেখা হবে, মা।"
+                    "পুজো শেষ হলেও মন থেকে যায় মণ্ডপেই। ❤️",
+                    "আসছে বছর আবার হবে—এই কথাটাই ভরসা।",
+                    "সিঁদুর খেলা, চেনা মুখ, আর বাড়ি ফেরার আগে একটু মনখারাপ।",
+                    "পুজোর কয়েকটা দিন, সারা বছরের মতো স্মৃতি।",
+                    "মা, আবার এসো। আমরা অপেক্ষায় থাকব। 🥹❤️",
+                    "বাড়ি ফিরছি, কিন্তু মনটা এখনও মণ্ডপে।",
+                    "আজ বিদায়, কিন্তু আবার দেখা হবেই মা।"
+                )
+            }
+            "General Festival" -> {
+                en = listOf(
+                    "A little tradition, a lot of good memories. ❤️",
+                    "The kind of day you wish lasted a bit longer.",
+                    "Good food, familiar faces, and a reason to dress up.",
+                    "Celebrating in our own little way.",
+                    "Some days just feel a little more special.",
+                    "A camera roll full of moments from today.",
+                    "Already looking forward to the next one."
+                )
+                bn = listOf(
+                    "একটু ঐতিহ্য, অনেকগুলো সুন্দর স্মৃতি। ❤️",
+                    "এমন দিন আরেকটু লম্বা হলে ভালো লাগত।",
+                    "ভালো খাবার, চেনা মুখ আর একটু সাজগোজের অজুহাত।",
+                    "নিজেদের মতো করে একটু উদ্‌যাপন।",
+                    "কিছু দিন এমনিই একটু বেশি স্পেশাল লাগে।",
+                    "আজকের ছোট ছোট মুহূর্তে ক্যামেরা রোল ভরে গেল।",
+                    "পরেরবারের অপেক্ষা শুরু হয়ে গেল।"
+                )
+            }
+            "Banglish" -> {
+                en = listOf(
+                    "Plan chilo ekta chhobi, holo puro album. 😅",
+                    "Shobai mile thaklei din ta bhalo hoye jay. ❤️",
+                    "Ektu ghora, onek golpo, ar onek chhobi.",
+                    "Caption mathay ashchhe na, chhobi ta bhalo lagchhe.",
+                    "Ei moment ta abar repeat kora jabe?",
+                    "Camera roll er jonno ajke bhalo din chhilo.",
+                    "Beshi kichhu na, just bhalo laglo tai post."
+                )
+                bn = listOf(
+                    "একটা ছবি তোলার কথা ছিল, অ্যালবাম হয়ে গেল। 😅",
+                    "সবাই মিলে থাকলেই দিনটা ভালো হয়ে যায়। ❤️",
+                    "একটু ঘোরা, অনেক গল্প, আর অনেক ছবি।",
+                    "ক্যাপশন মাথায় আসছে না, ছবিটা ভালো লাগছে।",
+                    "এই মুহূর্তটা আবার ফিরে পেলে ভালো হতো।",
+                    "ক্যামেরা রোলের জন্য আজ ভালো দিন ছিল।",
+                    "বেশি কিছু না, ভালো লেগেছে তাই পোস্ট।"
                 )
             }
             "Celebration" -> {

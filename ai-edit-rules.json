@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "updated": "2026-10-28",
+  "balanced": {
+    "saturationMultiplier": 1.0,
+    "contrastAdd": 0.0
+  },
+  "saturated": {
+    "saturationMultiplier": 1.18,
+    "contrastAdd": 0.025
+  },
+  "cool": {
+    "warmthDelta": -5.0,
+    "saturationMultiplier": 1.02
+  }
+}

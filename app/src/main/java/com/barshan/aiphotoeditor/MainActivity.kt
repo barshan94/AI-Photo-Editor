@@ -122,6 +122,15 @@ private data class PhotoItem(
 )
 
 class MainActivity : ComponentActivity() {
+    private fun flushEditorCheckpoint() {
+        // Compose writes checkpoints with apply() as controls change. commit() here blocks
+        // until pending SharedPreferences writes reach disk when Android backgrounds the app.
+        getSharedPreferences("frame_ai_recovery", android.content.Context.MODE_PRIVATE)
+            .edit()
+            .putLong("last_lifecycle_flush_ms", System.currentTimeMillis())
+            .commit()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
@@ -132,6 +141,16 @@ class MainActivity : ComponentActivity() {
                 PhotoEditorHome()
             }
         }
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        flushEditorCheckpoint()
+        super.onSaveInstanceState(outState)
+    }
+
+    override fun onStop() {
+        flushEditorCheckpoint()
+        super.onStop()
     }
 }
 

@@ -298,10 +298,10 @@ private fun PhotoEditorHome() {
         captionAspectRatio = ratio
         val generated = CaptionSuggestionEngine.fromLabels(labels, ratio, captionTheme)
         val libraryMatches = CaptionLibrary.recommend(generated.detectedLabels, captionTheme, limit = 5)
-        val english = (generated.english + libraryMatches.map { it.text }).distinct()
-        val bengali = english.mapIndexed { index, _ ->
-            generated.bengali.getOrElse(index) { "এই মুহূর্তটা মনে রাখার মতো।" }
-        }
+        val captionPairs = (generated.english.zip(generated.bengali) +
+            libraryMatches.map { it.text to it.bengali }).distinctBy { it.first }
+        val english = captionPairs.map { it.first }
+        val bengali = captionPairs.map { it.second }
         val suggestions = CaptionSuggestionEngine.Suggestions(
             detectedLabels = generated.detectedLabels,
             english = english,
@@ -425,6 +425,15 @@ private fun PhotoEditorHome() {
             .putString("caption_library_category", captionLibraryCategory)
             .putLong("last_session_checkpoint_ms", System.currentTimeMillis())
             .apply()
+
+        // apply() updates memory immediately; this debounced commit flushes the full
+        // checkpoint to disk off the UI thread after the user pauses dragging/editing.
+        delay(350)
+        withContext(Dispatchers.IO) {
+            recoveryPrefs.edit()
+                .putLong("last_durable_checkpoint_ms", System.currentTimeMillis())
+                .commit()
+        }
     }
 
     val previewTransformState = rememberTransformableState { zoomChange, panChange, _ ->
@@ -1963,7 +1972,7 @@ private fun PhotoEditorHome() {
                                     Button(
                                         onClick = {
                                             captionEnglish = preset.text
-                                            captionBengali = "এই মুহূর্তটা মনে রাখার মতো।"
+                                            captionBengali = preset.bengali
                                             captionSuggestions = CaptionSuggestionEngine.Suggestions(
                                                 detectedLabels = captionSuggestions?.detectedLabels.orEmpty(),
                                                 english = listOf(preset.text), bengali = listOf(captionBengali)
@@ -1980,6 +1989,7 @@ private fun PhotoEditorHome() {
                                     ) {
                                         Column(modifier = Modifier.fillMaxWidth()) {
                                             Text(preset.text, fontSize = 12.sp, lineHeight = 16.sp, maxLines = 3)
+                                            Text(preset.bengali, color = SoftText, fontSize = 11.sp, lineHeight = 15.sp, maxLines = 2, modifier = Modifier.padding(top = 3.dp))
                                             Text(preset.category.uppercase(), color = Mint, fontSize = 9.sp,
                                                 fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 3.dp))
                                         }

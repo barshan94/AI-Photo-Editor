@@ -96,6 +96,23 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
 
+@Composable
+private fun EditorImageAction(symbol: String, label: String, enabled: Boolean, onClick: () -> Unit) {
+    Column(
+        modifier = Modifier.clip(RoundedCornerShape(9.dp))
+            .background(if (enabled) Color(0xFF293333) else Color(0xFF202626))
+            .clickable(enabled = enabled, onClick = onClick)
+            .padding(horizontal = 8.dp, vertical = 5.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(1.dp)
+    ) {
+        Text(symbol, color = if (enabled) Mint else SoftText.copy(alpha = 0.45f),
+            fontSize = 20.sp, fontWeight = FontWeight.Bold, lineHeight = 21.sp)
+        Text(label, color = if (enabled) BrightText else SoftText.copy(alpha = 0.45f),
+            fontSize = 8.sp, fontWeight = FontWeight.Medium, lineHeight = 10.sp)
+    }
+}
+
 private val Ink = Color(0xFF101313)
 private val Panel = Color(0xFF1A2020)
 private val Mint = Color(0xFF78E0D0)
@@ -183,6 +200,7 @@ private fun PhotoEditorHome() {
     var isAnalyzing by remember { mutableStateOf(false) }
     var analysisProgress by remember { mutableIntStateOf(0) }
     var isExporting by remember { mutableStateOf(false) }
+    var lastExportedUri by remember { mutableStateOf<Uri?>(null) }
     var exportProgress by remember { mutableIntStateOf(0) }
     var operationProgress by remember { mutableIntStateOf(0) }
     var operationStage by remember { mutableStateOf("Ready") }
@@ -1113,9 +1131,10 @@ private fun PhotoEditorHome() {
                 operationStage = "Saving edited copy to Pictures/FRAME AI"
                 val width = enhanced!!.width
                 val height = enhanced!!.height
-                withContext(Dispatchers.IO) {
+                val savedUri = withContext(Dispatchers.IO) {
                     AutoEnhancer.saveJpeg(context.contentResolver, enhanced!!)
                 }
+                lastExportedUri = savedUri
                 learnedProfile = PersonalEditLearning.recordAccepted(context, settings)
                 operationProgress = 100
                 operationStage = "Finished · original photo preserved"
@@ -1326,6 +1345,37 @@ private fun PhotoEditorHome() {
                                 ),
                             contentAlignment = Alignment.Center
                         ) {
+                            Row(
+                                modifier = Modifier.align(Alignment.TopEnd).padding(8.dp)
+                                    .clip(RoundedCornerShape(14.dp))
+                                    .background(Ink.copy(alpha = 0.86f))
+                                    .padding(horizontal = 5.dp, vertical = 4.dp),
+                                horizontalArrangement = Arrangement.spacedBy(3.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                EditorImageAction("↶", "Undo", undoHistory.isNotEmpty() && !isExporting) { undoEdit() }
+                                EditorImageAction("↷", "Redo", redoHistory.isNotEmpty() && !isExporting) { redoEdit() }
+                                EditorImageAction("⇩", "Export", previewBitmap != null && !isExporting && selectedStyle != "Original") {
+                                    val photo = activePhoto
+                                    if (photo != null) exportOne(photo, currentSettings(),
+                                        selectedStyle == "AI Portrait" || backgroundBlur > 0f ||
+                                            backgroundEnhancement > 0f || subjectBrightness > 0f ||
+                                            darkerAreaLift > 0f || skinSmoothing > 0f || makeupIntensity > 0f)
+                                }
+                                EditorImageAction("↗", "Share", lastExportedUri != null && !isExporting) {
+                                    val uri = lastExportedUri
+                                    if (uri != null) {
+                                        val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                                            type = "image/jpeg"
+                                            putExtra(Intent.EXTRA_STREAM, uri)
+                                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                        }
+                                        context.startActivity(Intent.createChooser(shareIntent, "Share edited photo"))
+                                    } else {
+                                        statusMessage = "Export an edited copy first, then tap Share."
+                                    }
+                                }
+                            }
                             val active = activePhoto
                             if (active != null) {
                                 if (isShowingOriginal) {
@@ -1832,52 +1882,6 @@ private fun PhotoEditorHome() {
                                 ),
                                 contentPadding = PaddingValues(horizontal = 5.dp)
                             ) { Text("Next →", fontSize = 11.sp) }
-                        }
-                        Spacer(modifier = Modifier.height(9.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                            Button(onClick = { undoEdit() }, enabled = undoHistory.isNotEmpty() && !isExporting,
-                                modifier = Modifier.weight(0.65f), shape = RoundedCornerShape(10.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = BrightText),
-                                contentPadding = PaddingValues(horizontal = 3.dp, vertical = 2.dp)
-                            ) { Text("Undo", fontSize = 10.sp) }
-                            Button(onClick = { redoEdit() }, enabled = redoHistory.isNotEmpty() && !isExporting,
-                                modifier = Modifier.weight(0.65f), shape = RoundedCornerShape(10.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = BrightText),
-                                contentPadding = PaddingValues(horizontal = 3.dp, vertical = 2.dp)
-                            ) { Text("Redo", fontSize = 10.sp) }
-                            Button(onClick = { compareBeforeAfter = !compareBeforeAfter; showEnhanced = true },
-                                enabled = previewBitmap != null && selectedStyle != "Original", modifier = Modifier.weight(0.85f),
-                                shape = RoundedCornerShape(10.dp),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = if (compareBeforeAfter) Mint else Color(0xFF293333),
-                                    contentColor = if (compareBeforeAfter) Ink else BrightText),
-                                contentPadding = PaddingValues(horizontal = 3.dp, vertical = 2.dp)
-                            ) { Text(if (compareBeforeAfter) "Close compare" else "Compare", fontSize = 10.sp) }
-                            Button(
-                                onClick = { showEnhanced = !showEnhanced; compareBeforeAfter = false },
-                                enabled = previewBitmap != null && selectedStyle != "Original",
-                                modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(12.dp),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = Color(0xFF293333), contentColor = BrightText
-                                ),
-                                contentPadding = PaddingValues(horizontal = 6.dp)
-                            ) {
-                                Text(if (showEnhanced) "Show original" else "Show enhanced", fontSize = 12.sp)
-                            }
-                            Button(
-                                onClick = {
-                                    val photo = activePhoto
-                                    if (photo != null) exportOne(photo, currentSettings(), selectedStyle == "AI Portrait" || backgroundBlur > 0f || backgroundEnhancement > 0f || subjectBrightness > 0f || darkerAreaLift > 0f || skinSmoothing > 0f || makeupIntensity > 0f)
-                                },
-                                enabled = previewBitmap != null && !isExporting && selectedStyle != "Original",
-                                modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(12.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Ink),
-                                contentPadding = PaddingValues(horizontal = 6.dp)
-                            ) {
-                                Text("Export copy", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                            }
                         }
                         Spacer(modifier = Modifier.height(12.dp))
                         if (activeEditorPanel == "AI Edit" && activeAiSubpanel == "Enhance") {

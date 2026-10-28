@@ -1411,6 +1411,71 @@ private fun PhotoEditorHome() {
                                     }
                                 }
                             }
+                            Row(
+                                modifier = Modifier.align(Alignment.TopEnd).padding(8.dp)
+                                    .clip(RoundedCornerShape(14.dp))
+                                    .background(Ink.copy(alpha = 0.78f)).padding(4.dp),
+                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Button(
+                                    onClick = { undoEdit() },
+                                    enabled = undoHistory.isNotEmpty() && !isExporting,
+                                    modifier = Modifier.size(36.dp),
+                                    shape = RoundedCornerShape(11.dp),
+                                    contentPadding = PaddingValues(0.dp),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = Color(0xFF293333), contentColor = BrightText
+                                    )
+                                ) { Text("↶", fontSize = 21.sp, fontWeight = FontWeight.Medium) }
+                                Button(
+                                    onClick = { redoEdit() },
+                                    enabled = redoHistory.isNotEmpty() && !isExporting,
+                                    modifier = Modifier.size(36.dp),
+                                    shape = RoundedCornerShape(11.dp),
+                                    contentPadding = PaddingValues(0.dp),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = Color(0xFF293333), contentColor = BrightText
+                                    )
+                                ) { Text("↷", fontSize = 21.sp, fontWeight = FontWeight.Medium) }
+                                Button(
+                                    onClick = {
+                                        val photo = activePhoto
+                                        if (photo != null) exportOne(
+                                            photo, currentSettings(),
+                                            selectedStyle == "AI Portrait" || backgroundBlur > 0f ||
+                                                backgroundEnhancement > 0f || subjectBrightness > 0f ||
+                                                darkerAreaLift > 0f || skinSmoothing > 0f || makeupIntensity > 0f
+                                        )
+                                    },
+                                    enabled = activePhoto != null && previewBitmap != null && !isExporting,
+                                    modifier = Modifier.size(36.dp),
+                                    shape = RoundedCornerShape(11.dp),
+                                    contentPadding = PaddingValues(0.dp),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = Mint, contentColor = Ink
+                                    )
+                                ) { Text("↓", fontSize = 20.sp, fontWeight = FontWeight.Bold) }
+                                Button(
+                                    onClick = {
+                                        val photo = activePhoto
+                                        if (photo != null) exportOne(
+                                            photo, currentSettings(),
+                                            selectedStyle == "AI Portrait" || backgroundBlur > 0f ||
+                                                backgroundEnhancement > 0f || subjectBrightness > 0f ||
+                                                darkerAreaLift > 0f || skinSmoothing > 0f || makeupIntensity > 0f,
+                                            shareAfterExport = true
+                                        )
+                                    },
+                                    enabled = activePhoto != null && previewBitmap != null && !isExporting,
+                                    modifier = Modifier.size(36.dp),
+                                    shape = RoundedCornerShape(11.dp),
+                                    contentPadding = PaddingValues(0.dp),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = Color(0xFF293333), contentColor = BrightText
+                                    )
+                                ) { Text("↗", fontSize = 20.sp, fontWeight = FontWeight.Bold) }
+                            }
                             if (isPreparingPreview) CircularProgressIndicator(color = Mint)
                             if (isExporting) {
                                 Box(

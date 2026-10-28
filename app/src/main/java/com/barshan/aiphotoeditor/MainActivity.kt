@@ -1739,23 +1739,21 @@ private fun PhotoEditorHome() {
                         ) {
                             Column(modifier = Modifier.fillMaxWidth().padding(12.dp)) {
                                 if (activeAiSubpanel == "Background") {
-                                Text("BACKGROUND EDITING", color = Mint, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                Text("Use the slider to blur the background while keeping the detected person clearer. Best for portraits and couples.", color = SoftText, fontSize = 10.sp, lineHeight = 14.sp)
-                                Text("BACKGROUND ENHANCE · SCENE-AWARE  " + backgroundEnhancement.toInt(), color = SoftText, fontSize = 11.sp)
-                                Slider(value = backgroundEnhancement, onValueChange = {
-                                    recordEditChange()
-                                    backgroundEnhancement = it
-                                    selectedStyle = if (it > 0f || backgroundBlur > 0f) "AI Portrait" else "Custom"
-                                    showEnhanced = true
-                                }, valueRange = 0f..10f)
-                                Text("Enhances background color separation and local contrast while protecting the detected person.", color = SoftText, fontSize = 10.sp, lineHeight = 14.sp)
-                                Text("BACKGROUND BLUR  " + backgroundBlur.toInt(), color = SoftText, fontSize = 11.sp)
-                                Slider(value = backgroundBlur, onValueChange = {
-                                    recordEditChange()
-                                    backgroundBlur = it
-                                    selectedStyle = if (it > 0f || subjectBrightness > 0f) "AI Portrait" else "Custom"
-                                    showEnhanced = true
-                                }, valueRange = 0f..20f)
+                                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                        listOf("Blur", "Enhance").forEach { tool ->
+                                            Button(onClick = { activeAiTool = tool }, modifier = Modifier.weight(1f).heightIn(min = 36.dp),
+                                                shape = RoundedCornerShape(8.dp),
+                                                colors = ButtonDefaults.buttonColors(containerColor = if (activeAiTool == tool) Mint else Color(0xFF293333), contentColor = if (activeAiTool == tool) Ink else BrightText),
+                                                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp)) { Text(tool, fontSize = 10.sp) }
+                                        }
+                                    }
+                                    if (activeAiTool == "Enhance") {
+                                        Text("Background enhancement  ${backgroundEnhancement.toInt()}", color = SoftText, fontSize = 11.sp)
+                                        Slider(value = backgroundEnhancement, onValueChange = { recordEditChange(); backgroundEnhancement = it; selectedStyle = if (it > 0f || backgroundBlur > 0f) "AI Portrait" else "Custom"; showEnhanced = true }, valueRange = 0f..10f)
+                                    } else {
+                                        Text("Background blur  ${backgroundBlur.toInt()}", color = SoftText, fontSize = 11.sp)
+                                        Slider(value = backgroundBlur, onValueChange = { recordEditChange(); backgroundBlur = it; selectedStyle = if (it > 0f || subjectBrightness > 0f) "AI Portrait" else "Custom"; showEnhanced = true }, valueRange = 0f..20f)
+                                    }
                                 }
                                 if (activeAiSubpanel == "Subject") {
                                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
@@ -2114,9 +2112,9 @@ private fun PhotoEditorHome() {
             if (activePhoto != null && activeEditorPanel == "Caption") {
                 Column(modifier = Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                     OutlinedTextField(value = captionEnglish, onValueChange = { captionEnglish = it },
-                        modifier = Modifier.fillMaxWidth(), label = { Text("English caption") }, minLines = 1, maxLines = 3)
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp, max = 76.dp), label = { Text("English caption") }, minLines = 2, maxLines = 3,
                     OutlinedTextField(value = captionBengali, onValueChange = { captionBengali = it },
-                        modifier = Modifier.fillMaxWidth(), label = { Text("বাংলা ক্যাপশন") }, minLines = 1, maxLines = 3)
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp, max = 76.dp), label = { Text("বাংলা ক্যাপশন") }, minLines = 2, maxLines = 3,
                     Button(onClick = { suggestCaptions() },
                         modifier = Modifier.fillMaxWidth().heightIn(min = 38.dp),
                         enabled = previewBitmap != null && !isGeneratingCaptions,

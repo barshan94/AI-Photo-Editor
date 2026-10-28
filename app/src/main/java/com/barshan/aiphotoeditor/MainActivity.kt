@@ -972,6 +972,8 @@ private fun PhotoEditorHome() {
                             applyAiLook(aiSettingsFor(PhotoAnalysisEngine.analyze(original!!)), aiLook)
                         } else if (preset == "Current edits") {
                             currentSettings()
+                        } else if (preset == "Auto Level") {
+                            EditSettings(straightenDegrees = AutoLeveler.estimateCorrectionDegrees(original!!) ?: 0f)
                         } else {
                             BatchExportPolicy.settingsForPreset(preset)
                         }
@@ -2371,10 +2373,12 @@ private fun PhotoEditorHome() {
                                                 )
                                             }
                                             val photoSettings = if (batchPreset == "AI Edit") {
-                                                applyAiLook(aiSettingsFor(PhotoAnalysisEngine.analyze(original!!)), batchAiLook)
-                                            } else {
-                                                settingsForBatch
-                                            }
+                                                 applyAiLook(aiSettingsFor(PhotoAnalysisEngine.analyze(original!!)), batchAiLook)
+                                             } else if (batchPreset == "Auto Level") {
+                                                 EditSettings(straightenDegrees = AutoLeveler.estimateCorrectionDegrees(original!!) ?: 0f)
+                                             } else {
+                                                 settingsForBatch
+                                             }
                                             if (useAiPortrait) {
                                                 val aiResult = SubjectAwareEnhancer.enhance(original!!, photoSettings, context)
                                                 enhanced = aiResult.bitmap

@@ -50,6 +50,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
@@ -294,6 +295,8 @@ private fun PhotoEditorHome() {
     var activeAiSubpanel by remember { mutableStateOf(recoveryPrefs.getString("active_ai_subpanel", "Subject") ?: "Subject") }
     var activeCropSubpanel by remember { mutableStateOf("Crop") }
     var activeAiTool by remember { mutableStateOf("Retouch") }
+    var aiEditLook by remember { mutableStateOf("Balanced") }
+    var activePerspectiveCorner by remember { mutableStateOf("Top-left") }
     var editedScore by remember { mutableStateOf<PhotoQualityScoring.Score?>(null) }
     var originalPreviewScore by remember { mutableStateOf<PhotoQualityScoring.Score?>(null) }
     var isShowingOriginal by remember { mutableStateOf(false) }
@@ -985,11 +988,22 @@ private fun PhotoEditorHome() {
             skinSmoothing = 0f
             makeupIntensity = 0f
         }
+        // Preserve scene-adaptive analysis; apply only the selected overall color preference.
+        when (aiEditLook) {
+            "Saturated" -> {
+                saturation = (saturation * 1.18f).coerceIn(0.85f, 1.55f)
+                contrast = (contrast + 0.025f).coerceAtMost(1.16f)
+            }
+            "Cool" -> {
+                warmth = (warmth - 5f).coerceIn(-12f, 10f)
+                saturation = (saturation * 1.02f).coerceIn(0.85f, 1.45f)
+            }
+        }
         selectedStyle = sceneStyle
         showEnhanced = true
         compareBeforeAfter = false
         photoAnalysisResult = result
-        statusMessage = "AI Edit applied: scene color, contrast, lighting and detected people were balanced together. Review the result and undo or adjust it if needed."
+        statusMessage = "AI Edit applied using scene and lighting analysis."
     }
     LaunchedEffect(activePhoto?.uri) {
         resetPreviewZoom()
@@ -1651,7 +1665,6 @@ private fun PhotoEditorHome() {
                                     Text("$operationProgress% · $operationStage", color = SoftText, fontSize = 10.sp, lineHeight = 14.sp,
                                         modifier = Modifier.padding(top = 3.dp))
                                 }
-                                Text("AI upscaling processes image tiles on this device. The input is memory-bounded to about 1024 px on its longest edge, then reconstructed at 4×. The source photo is never overwritten.", color = SoftText, fontSize = 10.sp, lineHeight = 14.sp)
                                 }
                                 if (activeAiSubpanel == "Remove") {
                                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -1689,12 +1702,6 @@ private fun PhotoEditorHome() {
                                 }
                                 if (activeAiSubpanel == "Enhance" && activeAiTool == "My style") {
                                 Text("PERSONAL EDIT LEARNING · PRIVATE ON THIS DEVICE", color = Mint, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                Text(
-                                    if (learnedProfile.acceptedEdits == 0) "No accepted edits learned yet. Export an edit you like; the app will remember its settings locally and use them as your personal starting point."
-                                    else "Learned from ${learnedProfile.acceptedEdits} exported edit(s). Your personal starting point updates gradually as you export edits you like. Photos are not stored for learning.",
-                                    color = SoftText, fontSize = 10.sp, lineHeight = 14.sp,
-                                    modifier = Modifier.padding(top = 3.dp, bottom = 8.dp)
-                                )
                                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                     Button(
                                         onClick = {
@@ -1734,7 +1741,6 @@ private fun PhotoEditorHome() {
                                         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 5.dp)
                                     ) { Text("Reset learning", fontSize = 10.sp) }
                                 }
-                                Text("Your editing preferences stay on this device. Photos are not stored for learning.", color = SoftText, fontSize = 9.sp, lineHeight = 12.sp)
                                 }
                             }
                         }
@@ -1861,34 +1867,67 @@ private fun PhotoEditorHome() {
                             }
                             }
                             if (activeCropSubpanel == "Perspective") {
-                            Text("PERSPECTIVE CROP", color = BrightText, fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 5.dp))
-                            Text("Move each corner inward independently. The selected quadrilateral is corrected into a rectangle—useful for signs, buildings, screens, or angled shots.", color = SoftText, fontSize = 10.sp, lineHeight = 14.sp)
-                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                Button(onClick = { showPerspectiveControls = !showPerspectiveControls }, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 5.dp, vertical = 5.dp), colors = ButtonDefaults.buttonColors(containerColor = if (showPerspectiveControls) Mint else Color(0xFF293333), contentColor = if (showPerspectiveControls) Ink else BrightText)) { Text(if (showPerspectiveControls) "Hide corner controls" else "Adjust four corners", fontSize = 10.sp) }
-                                Button(onClick = { recordEditChange(); perspectiveTopLeftX = 0f; perspectiveTopLeftY = 0f; perspectiveTopRightX = 0f; perspectiveTopRightY = 0f; perspectiveBottomRightX = 0f; perspectiveBottomRightY = 0f; perspectiveBottomLeftX = 0f; perspectiveBottomLeftY = 0f; selectedStyle = "Custom"; showEnhanced = true }, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 5.dp, vertical = 5.dp), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = BrightText)) { Text("Reset corners", fontSize = 10.sp) }
-                            }
-                            if (showPerspectiveControls) {
-                                Text("TOP-LEFT CORNER", color = Mint, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                                Text("Horizontal inset  ${(perspectiveTopLeftX * 100).toInt()}%", color = SoftText, fontSize = 10.sp)
-                                Slider(value = perspectiveTopLeftX, onValueChange = { recordEditChange(); perspectiveTopLeftX = it; selectedStyle = "Custom"; showEnhanced = true }, valueRange = 0f..0.35f)
-                                Text("Vertical inset  ${(perspectiveTopLeftY * 100).toInt()}%", color = SoftText, fontSize = 10.sp)
-                                Slider(value = perspectiveTopLeftY, onValueChange = { recordEditChange(); perspectiveTopLeftY = it; selectedStyle = "Custom"; showEnhanced = true }, valueRange = 0f..0.35f)
-                                Text("TOP-RIGHT CORNER", color = Mint, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                                Text("Horizontal inset  ${(perspectiveTopRightX * 100).toInt()}%", color = SoftText, fontSize = 10.sp)
-                                Slider(value = perspectiveTopRightX, onValueChange = { recordEditChange(); perspectiveTopRightX = it; selectedStyle = "Custom"; showEnhanced = true }, valueRange = 0f..0.35f)
-                                Text("Vertical inset  ${(perspectiveTopRightY * 100).toInt()}%", color = SoftText, fontSize = 10.sp)
-                                Slider(value = perspectiveTopRightY, onValueChange = { recordEditChange(); perspectiveTopRightY = it; selectedStyle = "Custom"; showEnhanced = true }, valueRange = 0f..0.35f)
-                                Text("BOTTOM-RIGHT CORNER", color = Mint, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                                Text("Horizontal inset  ${(perspectiveBottomRightX * 100).toInt()}%", color = SoftText, fontSize = 10.sp)
-                                Slider(value = perspectiveBottomRightX, onValueChange = { recordEditChange(); perspectiveBottomRightX = it; selectedStyle = "Custom"; showEnhanced = true }, valueRange = 0f..0.35f)
-                                Text("Vertical inset  ${(perspectiveBottomRightY * 100).toInt()}%", color = SoftText, fontSize = 10.sp)
-                                Slider(value = perspectiveBottomRightY, onValueChange = { recordEditChange(); perspectiveBottomRightY = it; selectedStyle = "Custom"; showEnhanced = true }, valueRange = 0f..0.35f)
-                                Text("BOTTOM-LEFT CORNER", color = Mint, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                                Text("Horizontal inset  ${(perspectiveBottomLeftX * 100).toInt()}%", color = SoftText, fontSize = 10.sp)
-                                Slider(value = perspectiveBottomLeftX, onValueChange = { recordEditChange(); perspectiveBottomLeftX = it; selectedStyle = "Custom"; showEnhanced = true }, valueRange = 0f..0.35f)
-                                Text("Vertical inset  ${(perspectiveBottomLeftY * 100).toInt()}%", color = SoftText, fontSize = 10.sp)
-                                Slider(value = perspectiveBottomLeftY, onValueChange = { recordEditChange(); perspectiveBottomLeftY = it; selectedStyle = "Custom"; showEnhanced = true }, valueRange = 0f..0.35f)
-                            }
+                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    listOf("Top-left", "Top-right", "Bottom-right", "Bottom-left").forEach { corner ->
+                                        Button(onClick = { activePerspectiveCorner = corner; showPerspectiveControls = true },
+                                            modifier = Modifier.weight(1f).heightIn(min = 36.dp), shape = RoundedCornerShape(8.dp),
+                                            colors = ButtonDefaults.buttonColors(containerColor = if (activePerspectiveCorner == corner) Mint else Color(0xFF293333), contentColor = if (activePerspectiveCorner == corner) Ink else BrightText),
+                                            contentPadding = PaddingValues(horizontal = 1.dp, vertical = 3.dp)
+                                        ) { Text(corner, fontSize = 8.sp, maxLines = 1) }
+                                    }
+                                }
+                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    Button(onClick = { showPerspectiveControls = !showPerspectiveControls }, modifier = Modifier.weight(1f),
+                                        contentPadding = PaddingValues(horizontal = 5.dp, vertical = 5.dp),
+                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = BrightText)
+                                    ) { Text(if (showPerspectiveControls) "Hide controls" else "Show controls", fontSize = 10.sp) }
+                                    Button(onClick = {
+                                        recordEditChange()
+                                        perspectiveTopLeftX = 0f; perspectiveTopLeftY = 0f
+                                        perspectiveTopRightX = 0f; perspectiveTopRightY = 0f
+                                        perspectiveBottomRightX = 0f; perspectiveBottomRightY = 0f
+                                        perspectiveBottomLeftX = 0f; perspectiveBottomLeftY = 0f
+                                        selectedStyle = "Custom"; showEnhanced = true
+                                    }, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 5.dp, vertical = 5.dp),
+                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = BrightText)
+                                    ) { Text("Reset corners", fontSize = 10.sp) }
+                                }
+                                if (showPerspectiveControls) {
+                                    val cornerX = when (activePerspectiveCorner) {
+                                        "Top-left" -> perspectiveTopLeftX
+                                        "Top-right" -> perspectiveTopRightX
+                                        "Bottom-right" -> perspectiveBottomRightX
+                                        else -> perspectiveBottomLeftX
+                                    }
+                                    val cornerY = when (activePerspectiveCorner) {
+                                        "Top-left" -> perspectiveTopLeftY
+                                        "Top-right" -> perspectiveTopRightY
+                                        "Bottom-right" -> perspectiveBottomRightY
+                                        else -> perspectiveBottomLeftY
+                                    }
+                                    Text("Horizontal  ${(cornerX * 100).toInt()}%", color = SoftText, fontSize = 10.sp)
+                                    Slider(value = cornerX, onValueChange = { value ->
+                                        recordEditChange()
+                                        when (activePerspectiveCorner) {
+                                            "Top-left" -> perspectiveTopLeftX = value
+                                            "Top-right" -> perspectiveTopRightX = value
+                                            "Bottom-right" -> perspectiveBottomRightX = value
+                                            else -> perspectiveBottomLeftX = value
+                                        }
+                                        selectedStyle = "Custom"; showEnhanced = true
+                                    }, valueRange = 0f..0.35f)
+                                    Text("Vertical  ${(cornerY * 100).toInt()}%", color = SoftText, fontSize = 10.sp)
+                                    Slider(value = cornerY, onValueChange = { value ->
+                                        recordEditChange()
+                                        when (activePerspectiveCorner) {
+                                            "Top-left" -> perspectiveTopLeftY = value
+                                            "Top-right" -> perspectiveTopRightY = value
+                                            "Bottom-right" -> perspectiveBottomRightY = value
+                                            else -> perspectiveBottomLeftY = value
+                                        }
+                                        selectedStyle = "Custom"; showEnhanced = true
+                                    }, valueRange = 0f..0.35f)
+                                }
                             }
                         }
                         if (activeEditorPanel == "Presets") {
@@ -1968,6 +2007,17 @@ private fun PhotoEditorHome() {
                                 )
                             }
                         }
+                        }
+                        if (activeEditorPanel == "AI Edit" && activeAiSubpanel == "Enhance") {
+                            Row(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                listOf("Balanced", "Saturated", "Cool").forEach { look ->
+                                    Button(onClick = { aiEditLook = look }, modifier = Modifier.weight(1f).heightIn(min = 36.dp),
+                                        shape = RoundedCornerShape(9.dp),
+                                        colors = ButtonDefaults.buttonColors(containerColor = if (aiEditLook == look) Mint else Color(0xFF293333), contentColor = if (aiEditLook == look) Ink else BrightText),
+                                        contentPadding = PaddingValues(horizontal = 3.dp, vertical = 4.dp)
+                                    ) { Text(look, fontSize = 10.sp, maxLines = 1) }
+                                }
+                            }
                         }
                         if (activeEditorPanel == "Universal Edit") {
                             Row(
@@ -2092,25 +2142,6 @@ private fun PhotoEditorHome() {
                             Text("Choose a crop ratio to reposition the crop window.", color = SoftText, fontSize = 10.sp)
                         }
                         Spacer(modifier = Modifier.height(8.dp))
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.End
-                        ) {
-                            Button(
-                                onClick = {
-                                    recordEditChange()
-                                    setStyle("Auto")
-                                    cropLabel = "Original"
-                                    cropOffsetX = 0f
-                                    cropOffsetY = 0f
-                                },
-                                shape = RoundedCornerShape(10.dp),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = Color(0xFF293333), contentColor = BrightText
-                                ),
-                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 2.dp)
-                            ) { Text("Reset edits", fontSize = 11.sp) }
-                        }
                         }
                         }
                     }
@@ -2119,11 +2150,29 @@ private fun PhotoEditorHome() {
 
             if (activePhoto != null && activeEditorPanel == "Caption") {
                 Column(modifier = Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                    OutlinedTextField(value = captionEnglish, onValueChange = { captionEnglish = it },
-                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp, max = 72.dp), label = { Text("English caption") }, minLines = 1, maxLines = 2
+                    OutlinedTextField(
+                        value = captionEnglish, onValueChange = { captionEnglish = it },
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp, max = 88.dp),
+                        label = { Text("English caption", color = SoftText) },
+                        textStyle = androidx.compose.ui.text.TextStyle(color = BrightText, fontSize = 14.sp),
+                        minLines = 1, maxLines = 2,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = BrightText, unfocusedTextColor = BrightText,
+                            focusedBorderColor = Mint, unfocusedBorderColor = SoftText,
+                            focusedLabelColor = Mint, unfocusedLabelColor = SoftText, cursorColor = Mint
+                        )
                     )
-                    OutlinedTextField(value = captionBengali, onValueChange = { captionBengali = it },
-                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp, max = 72.dp), label = { Text("বাংলা ক্যাপশন") }, minLines = 1, maxLines = 2
+                    OutlinedTextField(
+                        value = captionBengali, onValueChange = { captionBengali = it },
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp, max = 88.dp),
+                        label = { Text("বাংলা ক্যাপশন", color = SoftText) },
+                        textStyle = androidx.compose.ui.text.TextStyle(color = BrightText, fontSize = 14.sp),
+                        minLines = 1, maxLines = 2,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = BrightText, unfocusedTextColor = BrightText,
+                            focusedBorderColor = Mint, unfocusedBorderColor = SoftText,
+                            focusedLabelColor = Mint, unfocusedLabelColor = SoftText, cursorColor = Mint
+                        )
                     )
                     Button(onClick = { suggestCaptions() },
                         modifier = Modifier.fillMaxWidth().heightIn(min = 38.dp),

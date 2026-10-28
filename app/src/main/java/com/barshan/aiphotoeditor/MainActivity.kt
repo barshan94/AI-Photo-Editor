@@ -1828,7 +1828,7 @@ private fun PhotoEditorHome() {
                             color = SoftText, fontSize = 10.sp, lineHeight = 14.sp,
                             modifier = Modifier.padding(top = 3.dp, bottom = 6.dp))
                         Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                            listOf("Auto", "Festival", "Romantic", "Funny", "Devotional", "Travel", "Family", "Aesthetic").forEach { theme ->
+                            listOf("Auto", "Portrait", "Friends", "Festival", "Romantic", "Funny", "Devotional", "Travel", "Family", "Aesthetic").forEach { theme ->
                                 Button(onClick = {
                                     captionTheme = theme
                                     val existing = captionSuggestions

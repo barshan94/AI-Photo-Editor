@@ -62,7 +62,7 @@ object CaptionLibrary {
     }
 
     /** Rank local presets against visual labels and the user's selected caption style. */
-    fun recommend(labels: List<String>, theme: String = "Auto", limit: Int = 5): List<Entry> {
+    fun recommend(labels: List<String>, theme: String = "Auto", limit: Int = 5, updatedEntries: List<Entry> = emptyList()): List<Entry> {
         val labelText = labels.joinToString(" ").lowercase()
         val category = when {
             theme in topics.keys -> theme
@@ -78,8 +78,8 @@ object CaptionLibrary {
             else -> "Aesthetic"
         }
         val tokens = Regex("[^\\p{L}\\p{N}]+").split(labelText).filter { it.length > 2 }.toSet()
-        return all.asSequence()
-            .filter { it.category == category }
+        return (all + updatedEntries).distinctBy { it.text.lowercase() }.asSequence()
+            .filter { it.category == category || it.category == "General" }
             .sortedByDescending { entry ->
                 entry.keywords.count { keyword -> tokens.any { token -> keyword.contains(token) || token.contains(keyword) } }
             }

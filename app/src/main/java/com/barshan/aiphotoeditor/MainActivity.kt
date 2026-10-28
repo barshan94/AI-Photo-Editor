@@ -475,6 +475,8 @@ private fun PhotoEditorHome() {
                 backgroundBlur = 0f; backgroundEnhancement = 0f; subjectBrightness = 0f; darkerAreaLift = 0f
                 skinSmoothing = 0f; makeupIntensity = 0f
                 cropLabel = "Original"; cropOffsetX = 0f; cropOffsetY = 0f
+                rotationDegrees = 0f; straightenDegrees = 0f; mirrorHorizontal = false; mirrorVertical = false
+                perspectiveTopInset = 0f; perspectiveBottomInset = 0f; perspectiveLeftInset = 0f; perspectiveRightInset = 0f
             }
             "Natural" -> { brightness = 1f; contrast = 1.02f; saturation = 1.02f; warmth = 0f; backgroundBlur = 0f; backgroundEnhancement = 0f; subjectBrightness = 0f; darkerAreaLift = 0f; skinSmoothing = 0f; makeupIntensity = 0f }
             "Vivid" -> { brightness = 0f; contrast = 1.13f; saturation = 1.20f; warmth = 0f; backgroundBlur = 0f; backgroundEnhancement = 0f; subjectBrightness = 0f; darkerAreaLift = 0f; skinSmoothing = 0f; makeupIntensity = 0f }
@@ -1582,14 +1584,14 @@ private fun PhotoEditorHome() {
                             Slider(value = straightenDegrees, onValueChange = { straightenDegrees = it; selectedStyle = "Custom"; showEnhanced = true }, onValueChangeFinished = { recordEditChange() }, valueRange = -15f..15f)
                             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                 Button(onClick = {
-                                    recordEditChange()
-                                    val photo = activePhoto
-                                    val w = photo?.width ?: 0; val h = photo?.height ?: 0
-                                    cropLabel = when { w <= 0 || h <= 0 -> "Original"; w.toFloat() / h < 0.85f -> "Portrait 4:5"; w.toFloat() / h > 1.15f -> "Landscape 16:9"; else -> "Square" }
-                                    cropOffsetX = 0f; cropOffsetY = 0f; selectedStyle = "Custom"; showEnhanced = true
-                                    statusMessage = "Auto frame applied a crop based on the photo orientation. Drag the preview to refine."
-                                }, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 4.dp, vertical = 5.dp), colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Ink)) { Text("Auto frame", fontSize = 10.sp) }
-                                Button(onClick = { recordEditChange(); cropLabel = "Original"; cropOffsetX = 0f; cropOffsetY = 0f; rotationDegrees = 0f; straightenDegrees = 0f; mirrorHorizontal = false; mirrorVertical = false; selectedStyle = "Custom"; showEnhanced = true }, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 4.dp, vertical = 5.dp), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = BrightText)) { Text("Reset framing", fontSize = 10.sp) }
+                                    val bitmap = previewBitmap
+                                    if (bitmap != null && !bitmap.isRecycled) scope.launch {
+                                        val correction = withContext(Dispatchers.Default) { AutoLeveler.estimateCorrectionDegrees(bitmap) }
+                                        if (correction == null) statusMessage = "No reliable horizontal lines found. Use Straighten manually."
+                                        else { recordEditChange(); straightenDegrees = (straightenDegrees + correction).coerceIn(-15f, 15f); selectedStyle = "Custom"; showEnhanced = true; statusMessage = "Auto-level applied. Fine-tune with Straighten if needed." }
+                                    } else statusMessage = "Open a photo preview before auto-leveling."
+                                }, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 4.dp, vertical = 5.dp), colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Ink)) { Text("Auto-level", fontSize = 10.sp) }
+                                Button(onClick = { recordEditChange(); cropLabel = "Original"; cropOffsetX = 0f; cropOffsetY = 0f; rotationDegrees = 0f; straightenDegrees = 0f; mirrorHorizontal = false; mirrorVertical = false; perspectiveTopInset = 0f; perspectiveBottomInset = 0f; perspectiveLeftInset = 0f; perspectiveRightInset = 0f; showPerspectiveControls = false; selectedStyle = "Custom"; showEnhanced = true }, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 4.dp, vertical = 5.dp), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = BrightText)) { Text("Reset framing", fontSize = 10.sp) }
                             }
                             Text("CROP RATIO", color = BrightText, fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 7.dp))
                             Row(

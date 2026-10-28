@@ -208,10 +208,14 @@ private fun PhotoEditorHome() {
     var straightenDegrees by remember { mutableFloatStateOf(recoveryPrefs.getFloat("straighten_degrees", 0f)) }
     var mirrorHorizontal by remember { mutableStateOf(recoveryPrefs.getBoolean("mirror_horizontal", false)) }
     var mirrorVertical by remember { mutableStateOf(recoveryPrefs.getBoolean("mirror_vertical", false)) }
-    var perspectiveTopInset by remember { mutableFloatStateOf(recoveryPrefs.getFloat("perspective_top_inset", 0f)) }
-    var perspectiveBottomInset by remember { mutableFloatStateOf(recoveryPrefs.getFloat("perspective_bottom_inset", 0f)) }
-    var perspectiveLeftInset by remember { mutableFloatStateOf(recoveryPrefs.getFloat("perspective_left_inset", 0f)) }
-    var perspectiveRightInset by remember { mutableFloatStateOf(recoveryPrefs.getFloat("perspective_right_inset", 0f)) }
+    var perspectiveTopLeftX by remember { mutableFloatStateOf(recoveryPrefs.getFloat("perspective_tl_x", 0f)) }
+    var perspectiveTopLeftY by remember { mutableFloatStateOf(recoveryPrefs.getFloat("perspective_tl_y", 0f)) }
+    var perspectiveTopRightX by remember { mutableFloatStateOf(recoveryPrefs.getFloat("perspective_tr_x", 0f)) }
+    var perspectiveTopRightY by remember { mutableFloatStateOf(recoveryPrefs.getFloat("perspective_tr_y", 0f)) }
+    var perspectiveBottomRightX by remember { mutableFloatStateOf(recoveryPrefs.getFloat("perspective_br_x", 0f)) }
+    var perspectiveBottomRightY by remember { mutableFloatStateOf(recoveryPrefs.getFloat("perspective_br_y", 0f)) }
+    var perspectiveBottomLeftX by remember { mutableFloatStateOf(recoveryPrefs.getFloat("perspective_bl_x", 0f)) }
+    var perspectiveBottomLeftY by remember { mutableFloatStateOf(recoveryPrefs.getFloat("perspective_bl_y", 0f)) }
     var showPerspectiveControls by remember { mutableStateOf(false) }
     var selectedStyle by remember { mutableStateOf(recoveryPrefs.getString("selected_style", "Auto") ?: "Auto") }
     var activeEditorPanel by remember { mutableStateOf("Universal Edit") }
@@ -310,7 +314,8 @@ private fun PhotoEditorHome() {
     LaunchedEffect(
         selectedPhotos.map { it.uri.toString() }, activePhoto?.uri?.toString(),
         brightness, contrast, saturation, warmth, cropLabel, cropOffsetX, cropOffsetY, selectedStyle,
-        perspectiveTopInset, perspectiveBottomInset, perspectiveLeftInset, perspectiveRightInset
+        perspectiveTopLeftX, perspectiveTopLeftY, perspectiveTopRightX, perspectiveTopRightY,
+        perspectiveBottomRightX, perspectiveBottomRightY, perspectiveBottomLeftX, perspectiveBottomLeftY
     ) {
         recoveryPrefs.edit()
             .putString("selected_photo_uris", selectedPhotos.joinToString("\\n") { it.uri.toString() })
@@ -321,10 +326,10 @@ private fun PhotoEditorHome() {
             .putFloat("crop_offset_y", cropOffsetY).putFloat("rotation_degrees", rotationDegrees)
             .putFloat("straighten_degrees", straightenDegrees).putBoolean("mirror_horizontal", mirrorHorizontal)
             .putBoolean("mirror_vertical", mirrorVertical)
-            .putFloat("perspective_top_inset", perspectiveTopInset)
-            .putFloat("perspective_bottom_inset", perspectiveBottomInset)
-            .putFloat("perspective_left_inset", perspectiveLeftInset)
-            .putFloat("perspective_right_inset", perspectiveRightInset)
+            .putFloat("perspective_tl_x", perspectiveTopLeftX).putFloat("perspective_tl_y", perspectiveTopLeftY)
+            .putFloat("perspective_tr_x", perspectiveTopRightX).putFloat("perspective_tr_y", perspectiveTopRightY)
+            .putFloat("perspective_br_x", perspectiveBottomRightX).putFloat("perspective_br_y", perspectiveBottomRightY)
+            .putFloat("perspective_bl_x", perspectiveBottomLeftX).putFloat("perspective_bl_y", perspectiveBottomLeftY)
             .putString("selected_style", selectedStyle)
             .apply()
     }
@@ -395,10 +400,14 @@ private fun PhotoEditorHome() {
         straightenDegrees = straightenDegrees,
         mirrorHorizontal = mirrorHorizontal,
         mirrorVertical = mirrorVertical,
-        perspectiveTopInset = perspectiveTopInset,
-        perspectiveBottomInset = perspectiveBottomInset,
-        perspectiveLeftInset = perspectiveLeftInset,
-        perspectiveRightInset = perspectiveRightInset,
+        perspectiveTopLeftX = perspectiveTopLeftX,
+        perspectiveTopLeftY = perspectiveTopLeftY,
+        perspectiveTopRightX = perspectiveTopRightX,
+        perspectiveTopRightY = perspectiveTopRightY,
+        perspectiveBottomRightX = perspectiveBottomRightX,
+        perspectiveBottomRightY = perspectiveBottomRightY,
+        perspectiveBottomLeftX = perspectiveBottomLeftX,
+        perspectiveBottomLeftY = perspectiveBottomLeftY,
         backgroundBlur = backgroundBlur,
         backgroundEnhancement = backgroundEnhancement,
         subjectBrightness = subjectBrightness,
@@ -433,10 +442,14 @@ private fun PhotoEditorHome() {
         straightenDegrees = settings.straightenDegrees
         mirrorHorizontal = settings.mirrorHorizontal
         mirrorVertical = settings.mirrorVertical
-        perspectiveTopInset = settings.perspectiveTopInset
-        perspectiveBottomInset = settings.perspectiveBottomInset
-        perspectiveLeftInset = settings.perspectiveLeftInset
-        perspectiveRightInset = settings.perspectiveRightInset
+        perspectiveTopLeftX = settings.perspectiveTopLeftX
+        perspectiveTopLeftY = settings.perspectiveTopLeftY
+        perspectiveTopRightX = settings.perspectiveTopRightX
+        perspectiveTopRightY = settings.perspectiveTopRightY
+        perspectiveBottomRightX = settings.perspectiveBottomRightX
+        perspectiveBottomRightY = settings.perspectiveBottomRightY
+        perspectiveBottomLeftX = settings.perspectiveBottomLeftX
+        perspectiveBottomLeftY = settings.perspectiveBottomLeftY
         cropLabel = when (settings.cropRatio) {
             1f -> "Square"
             0.8f -> "Portrait 4:5"
@@ -476,7 +489,8 @@ private fun PhotoEditorHome() {
                 skinSmoothing = 0f; makeupIntensity = 0f
                 cropLabel = "Original"; cropOffsetX = 0f; cropOffsetY = 0f
                 rotationDegrees = 0f; straightenDegrees = 0f; mirrorHorizontal = false; mirrorVertical = false
-                perspectiveTopInset = 0f; perspectiveBottomInset = 0f; perspectiveLeftInset = 0f; perspectiveRightInset = 0f
+                perspectiveTopLeftX = 0f; perspectiveTopLeftY = 0f; perspectiveTopRightX = 0f; perspectiveTopRightY = 0f
+                perspectiveBottomRightX = 0f; perspectiveBottomRightY = 0f; perspectiveBottomLeftX = 0f; perspectiveBottomLeftY = 0f
             }
             "Natural" -> { brightness = 1f; contrast = 1.02f; saturation = 1.02f; warmth = 0f; backgroundBlur = 0f; backgroundEnhancement = 0f; subjectBrightness = 0f; darkerAreaLift = 0f; skinSmoothing = 0f; makeupIntensity = 0f }
             "Vivid" -> { brightness = 0f; contrast = 1.13f; saturation = 1.20f; warmth = 0f; backgroundBlur = 0f; backgroundEnhancement = 0f; subjectBrightness = 0f; darkerAreaLift = 0f; skinSmoothing = 0f; makeupIntensity = 0f }
@@ -659,10 +673,14 @@ private fun PhotoEditorHome() {
         straightenDegrees = 0f
         mirrorHorizontal = false
         mirrorVertical = false
-        perspectiveTopInset = 0f
-        perspectiveBottomInset = 0f
-        perspectiveLeftInset = 0f
-        perspectiveRightInset = 0f
+        perspectiveTopLeftX = 0f
+        perspectiveTopLeftY = 0f
+        perspectiveTopRightX = 0f
+        perspectiveTopRightY = 0f
+        perspectiveBottomRightX = 0f
+        perspectiveBottomRightY = 0f
+        perspectiveBottomLeftX = 0f
+        perspectiveBottomLeftY = 0f
         showPerspectiveControls = false
         selectedStyle = "Original"
         showEnhanced = true
@@ -865,7 +883,7 @@ private fun PhotoEditorHome() {
     }
 
     // Debounced live preview: controls update the image without an Apply button.
-    LaunchedEffect(activePhoto?.uri, brightness, contrast, saturation, warmth, backgroundBlur, backgroundEnhancement, subjectBrightness, darkerAreaLift, skinSmoothing, makeupIntensity, cropLabel, cropOffsetX, cropOffsetY, rotationDegrees, straightenDegrees, mirrorHorizontal, mirrorVertical, perspectiveTopInset, perspectiveBottomInset, perspectiveLeftInset, perspectiveRightInset, selectedStyle) {
+    LaunchedEffect(activePhoto?.uri, brightness, contrast, saturation, warmth, backgroundBlur, backgroundEnhancement, subjectBrightness, darkerAreaLift, skinSmoothing, makeupIntensity, cropLabel, cropOffsetX, cropOffsetY, rotationDegrees, straightenDegrees, mirrorHorizontal, mirrorVertical, perspectiveTopLeftX, perspectiveTopLeftY, perspectiveTopRightX, perspectiveTopRightY, perspectiveBottomRightX, perspectiveBottomRightY, perspectiveBottomLeftX, perspectiveBottomLeftY, selectedStyle) {
         if (selectedStyle == "Object Removal") return@LaunchedEffect
         val photo = activePhoto
         if (photo != null) {
@@ -1338,7 +1356,7 @@ private fun PhotoEditorHome() {
                         ) {
                             Text("EDIT WORKSPACE", color = Mint, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                listOf("Universal Edit", "AI Edit", "Presets").forEach { panel ->
+                                listOf("Universal Edit", "AI Edit", "Presets", "Crop & Rotate").forEach { panel ->
                                     Button(
                                         onClick = { activeEditorPanel = panel; compareBeforeAfter = false },
                                         modifier = Modifier.weight(1f),
@@ -1573,50 +1591,7 @@ private fun PhotoEditorHome() {
                                     ) { Text(style, fontSize = 10.sp) }
                                 }
                             }
-                            Text("CROP & TRANSFORM", color = BrightText, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                                Button(onClick = { recordEditChange(); rotationDegrees = (rotationDegrees - 90f).mod(360f); selectedStyle = "Custom"; showEnhanced = true }, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 3.dp, vertical = 4.dp), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = BrightText)) { Text("↶ Rotate", fontSize = 10.sp) }
-                                Button(onClick = { recordEditChange(); rotationDegrees = (rotationDegrees + 90f).mod(360f); selectedStyle = "Custom"; showEnhanced = true }, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 3.dp, vertical = 4.dp), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = BrightText)) { Text("Rotate ↻", fontSize = 10.sp) }
-                                Button(onClick = { recordEditChange(); mirrorHorizontal = !mirrorHorizontal; selectedStyle = "Custom"; showEnhanced = true }, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 3.dp, vertical = 4.dp), colors = ButtonDefaults.buttonColors(containerColor = if (mirrorHorizontal) Mint else Color(0xFF293333), contentColor = if (mirrorHorizontal) Ink else BrightText)) { Text("Mirror H", fontSize = 10.sp) }
-                                Button(onClick = { recordEditChange(); mirrorVertical = !mirrorVertical; selectedStyle = "Custom"; showEnhanced = true }, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 3.dp, vertical = 4.dp), colors = ButtonDefaults.buttonColors(containerColor = if (mirrorVertical) Mint else Color(0xFF293333), contentColor = if (mirrorVertical) Ink else BrightText)) { Text("Mirror V", fontSize = 10.sp) }
-                            }
-                            Text("STRAIGHTEN", color = BrightText, fontSize = 10.sp, modifier = Modifier.padding(top = 5.dp))
-                            Slider(value = straightenDegrees, onValueChange = { straightenDegrees = it; selectedStyle = "Custom"; showEnhanced = true }, onValueChangeFinished = { recordEditChange() }, valueRange = -15f..15f)
-                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                Button(onClick = {
-                                    val bitmap = previewBitmap
-                                    if (bitmap != null && !bitmap.isRecycled) scope.launch {
-                                        val correction = withContext(Dispatchers.Default) { AutoLeveler.estimateCorrectionDegrees(bitmap) }
-                                        if (correction == null) statusMessage = "No reliable horizontal lines found. Use Straighten manually."
-                                        else { recordEditChange(); straightenDegrees = (straightenDegrees + correction).coerceIn(-15f, 15f); selectedStyle = "Custom"; showEnhanced = true; statusMessage = "Auto-level applied. Fine-tune with Straighten if needed." }
-                                    } else statusMessage = "Open a photo preview before auto-leveling."
-                                }, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 4.dp, vertical = 5.dp), colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Ink)) { Text("Auto-level", fontSize = 10.sp) }
-                                Button(onClick = { recordEditChange(); cropLabel = "Original"; cropOffsetX = 0f; cropOffsetY = 0f; rotationDegrees = 0f; straightenDegrees = 0f; mirrorHorizontal = false; mirrorVertical = false; perspectiveTopInset = 0f; perspectiveBottomInset = 0f; perspectiveLeftInset = 0f; perspectiveRightInset = 0f; showPerspectiveControls = false; selectedStyle = "Custom"; showEnhanced = true }, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 4.dp, vertical = 5.dp), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = BrightText)) { Text("Reset framing", fontSize = 10.sp) }
-                            }
-                            Text("CROP RATIO", color = BrightText, fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 7.dp))
-                            Row(
-                                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
-                            ) {
-                                listOf("Original", "Square", "Portrait 4:5", "Story 9:16", "Landscape 16:9").forEach { crop ->
-                                    Button(
-                                        onClick = {
-                                            recordEditChange()
-                                            cropLabel = crop
-                                            selectedStyle = if (crop == "Original" && brightness == 0f &&
-                                                contrast == 1f && saturation == 1f && warmth == 0f) "Original" else "Custom"
-                                            showEnhanced = true
-                                            compareBeforeAfter = false
-                                        },
-                                        shape = RoundedCornerShape(10.dp),
-                                        colors = ButtonDefaults.buttonColors(
-                                            containerColor = if (cropLabel == crop) Mint else Color(0xFF293333),
-                                            contentColor = if (cropLabel == crop) Ink else BrightText
-                                        ),
-                                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp)
-                                    ) { Text(crop, fontSize = 10.sp) }
-                                }
-                            }
+
                         }
                         val activeIndex = selectedPhotos.indexOfFirst { it.uri == activePhoto?.uri }
                         Row(
@@ -1767,59 +1742,10 @@ private fun PhotoEditorHome() {
                                 Text(if (showCropGuides) "Guides on" else "Guides off", color = Mint, fontSize = 10.sp,
                                     modifier = Modifier.clickable { showCropGuides = !showCropGuides }.padding(4.dp))
                             }
-                            Text("CROP & FRAME", color = BrightText, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                                Button(onClick = { recordEditChange(); rotationDegrees = (rotationDegrees + 90f).mod(360f); selectedStyle = "Custom"; showEnhanced = true }, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 3.dp, vertical = 4.dp)) { Text("Rotate", fontSize = 10.sp) }
-                                Button(onClick = { recordEditChange(); mirrorHorizontal = !mirrorHorizontal; selectedStyle = "Custom"; showEnhanced = true }, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 3.dp, vertical = 4.dp)) { Text("Mirror H", fontSize = 10.sp) }
-                                Button(onClick = { recordEditChange(); mirrorVertical = !mirrorVertical; selectedStyle = "Custom"; showEnhanced = true }, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 3.dp, vertical = 4.dp)) { Text("Mirror V", fontSize = 10.sp) }
-                                Button(onClick = {
-                                    val bitmap = previewBitmap
-                                    if (bitmap == null || bitmap.isRecycled) {
-                                        statusMessage = "Open a photo preview before auto-leveling."
-                                    } else {
-                                        statusMessage = "Finding likely horizontal lines…"
-                                        scope.launch {
-                                            val correction = withContext(Dispatchers.Default) { AutoLeveler.estimateCorrectionDegrees(bitmap) }
-                                            if (correction == null) {
-                                                statusMessage = "No reliable horizon or horizontal line found. Use Straighten manually."
-                                            } else {
-                                                recordEditChange()
-                                                straightenDegrees = (straightenDegrees + correction).coerceIn(-15f, 15f)
-                                                selectedStyle = "Custom"
-                                                showEnhanced = true
-                                                statusMessage = if (correction == 0f) "Photo already looks level." else "Auto-level applied " + correction + "°. Fine-tune with Straighten if needed."
-                                            }
-                                        }
-                                    }
-                                }, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 3.dp, vertical = 4.dp)) { Text("Auto-level", fontSize = 10.sp) }
-                            }
-                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                                Button(onClick = { showPerspectiveControls = !showPerspectiveControls }, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp), colors = ButtonDefaults.buttonColors(containerColor = if (showPerspectiveControls) Mint else Color(0xFF293333), contentColor = if (showPerspectiveControls) Ink else BrightText)) { Text(if (showPerspectiveControls) "Hide perspective crop" else "Perspective crop", fontSize = 10.sp) }
-                                Button(onClick = { recordEditChange(); perspectiveTopInset = 0f; perspectiveBottomInset = 0f; perspectiveLeftInset = 0f; perspectiveRightInset = 0f; selectedStyle = "Custom"; showEnhanced = true }, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = BrightText)) { Text("Reset perspective", fontSize = 10.sp) }
-                            }
-                            if (showPerspectiveControls) {
-                                Text("PERSPECTIVE CROP · ADJUST EACH EDGE", color = Mint, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                                Text("Move each edge inward to select the area to keep. The four-sided selection is rectified into a straight rectangular image.", color = SoftText, fontSize = 10.sp, lineHeight = 14.sp)
-                                Text("TOP EDGE  ${(perspectiveTopInset * 100).toInt()}%", color = SoftText, fontSize = 10.sp)
-                                Slider(value = perspectiveTopInset, onValueChange = { recordEditChange(); perspectiveTopInset = it; selectedStyle = "Custom"; showEnhanced = true }, valueRange = 0f..0.28f)
-                                Text("BOTTOM EDGE  ${(perspectiveBottomInset * 100).toInt()}%", color = SoftText, fontSize = 10.sp)
-                                Slider(value = perspectiveBottomInset, onValueChange = { recordEditChange(); perspectiveBottomInset = it; selectedStyle = "Custom"; showEnhanced = true }, valueRange = 0f..0.28f)
-                                Text("LEFT EDGE  ${(perspectiveLeftInset * 100).toInt()}%", color = SoftText, fontSize = 10.sp)
-                                Slider(value = perspectiveLeftInset, onValueChange = { recordEditChange(); perspectiveLeftInset = it; selectedStyle = "Custom"; showEnhanced = true }, valueRange = 0f..0.28f)
-                                Text("RIGHT EDGE  ${(perspectiveRightInset * 100).toInt()}%", color = SoftText, fontSize = 10.sp)
-                                Slider(value = perspectiveRightInset, onValueChange = { recordEditChange(); perspectiveRightInset = it; selectedStyle = "Custom"; showEnhanced = true }, valueRange = 0f..0.28f)
-                            }
-                            Text("STRAIGHTEN ${straightenDegrees.toInt()}°", color = SoftText, fontSize = 10.sp)
-                            Slider(value = straightenDegrees, onValueChange = { straightenDegrees = it; selectedStyle = "Custom"; showEnhanced = true }, onValueChangeFinished = { recordEditChange() }, valueRange = -15f..15f)
-                            Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                                listOf("Original", "Square", "Portrait 4:5", "Story 9:16", "Landscape 16:9").forEach { crop ->
-                                    Button(onClick = { recordEditChange(); cropLabel = crop; cropOffsetX = 0f; cropOffsetY = 0f; selectedStyle = "Custom"; showEnhanced = true }, contentPadding = PaddingValues(horizontal = 7.dp, vertical = 3.dp)) { Text(crop, fontSize = 10.sp) }
-                                }
-                            }
                         Spacer(modifier = Modifier.height(12.dp))
-                        Text("BILINGUAL CAPTION STARTERS", color = BrightText, fontSize = 11.sp,
+                        Text("CAPTION IDEAS THAT SOUND LIKE YOU", color = BrightText, fontSize = 11.sp,
                             fontWeight = FontWeight.Bold)
-                        Text("Uses on-device image labels for ideas. Pick a context if the photo's cultural vibe is missed; captions are editable.",
+                        Text("Short, casual caption ideas based on visual clues. Pick a vibe or edit the wording so it sounds like you.",
                             color = SoftText, fontSize = 10.sp, lineHeight = 14.sp,
                             modifier = Modifier.padding(top = 3.dp, bottom = 6.dp))
                         Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(5.dp)) {

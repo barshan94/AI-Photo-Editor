@@ -133,7 +133,13 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        CaptionCatalogUpdateWorker.schedule(this)
+        // Optional online caption refresh must never prevent the editor UI from launching.
+        // WorkManager may be unavailable during early startup on some device/install states.
+        try {
+            CaptionCatalogUpdateWorker.schedule(this)
+        } catch (_: Exception) {
+            // Bundled offline captions and the photo editor remain fully usable without scheduling.
+        }
         setContent {
             MaterialTheme(colorScheme = darkColorScheme(
                 primary = Mint, onPrimary = Ink, background = Ink,

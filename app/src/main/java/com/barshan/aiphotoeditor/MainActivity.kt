@@ -103,6 +103,42 @@ private val Mint = Color(0xFF78E0D0)
 private val SoftText = Color(0xFFA7B5B2)
 private val BrightText = Color(0xFFF2F7F5)
 
+@Composable
+private fun CompactAdjustmentSlider(
+    label: String,
+    value: Float,
+    valueRange: ClosedFloatingPointRange<Float>,
+    step: Float,
+    modifier: Modifier = Modifier,
+    onValueChange: (Float) -> Unit
+) {
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Text("${label}  ${value.toInt()}", color = SoftText, fontSize = 10.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+            Button(
+                onClick = { onValueChange((value - step).coerceIn(valueRange.start, valueRange.endInclusive)) },
+                modifier = Modifier.size(28.dp),
+                shape = RoundedCornerShape(8.dp),
+                contentPadding = PaddingValues(0.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = BrightText)
+            ) { Text("−", fontSize = 16.sp) }
+            Slider(
+                value = value,
+                onValueChange = onValueChange,
+                valueRange = valueRange,
+                modifier = Modifier.weight(1f)
+            )
+            Button(
+                onClick = { onValueChange((value + step).coerceIn(valueRange.start, valueRange.endInclusive)) },
+                modifier = Modifier.size(28.dp),
+                shape = RoundedCornerShape(8.dp),
+                contentPadding = PaddingValues(0.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = BrightText)
+            ) { Text("+", fontSize = 16.sp) }
+        }
+    }
+}
+
 private data class PhotoItem(
     val uri: Uri,
     val score: Int? = null,
@@ -1729,38 +1765,68 @@ private fun PhotoEditorHome() {
                                 }
                                 if (activeAiSubpanel == "Subject") {
                                 Text("SUBJECT RETOUCH", color = Mint, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                Text("DARKER SKIN AREAS · ADAPTIVE LIFT  " + darkerAreaLift.toInt(), color = SoftText, fontSize = 11.sp)
-                                Slider(value = darkerAreaLift, onValueChange = {
-                                    recordEditChange()
-                                    darkerAreaLift = it
-                                    selectedStyle = if (it > 0f || backgroundBlur > 0f || subjectBrightness > 0f) "AI Portrait" else "Custom"
-                                    showEnhanced = true
-                                }, valueRange = 0f..30f)
-                                Text("Targets darker detected skin pixels more strongly (for example, hands) while applying less lift to already-bright areas like the face.", color = SoftText, fontSize = 10.sp, lineHeight = 14.sp)
-                                Text("OVERALL SKIN LIGHTENING  " + subjectBrightness.toInt(), color = SoftText, fontSize = 11.sp)
-                                Slider(value = subjectBrightness, onValueChange = {
-                                    recordEditChange()
-                                    subjectBrightness = it
-                                    selectedStyle = if (it > 0f || backgroundBlur > 0f || darkerAreaLift > 0f) "AI Portrait" else "Custom"
-                                    showEnhanced = true
-                                }, valueRange = 0f..25f)
-                                Text("Targets detected face and body skin separately from darker-area lift. Your photo stays on this device.", color = SoftText, fontSize = 10.sp, lineHeight = 14.sp)
-                                Text("SKIN SOFTENING · KEEP NATURAL TEXTURE  " + skinSmoothing.toInt(), color = SoftText, fontSize = 11.sp)
-                                Slider(value = skinSmoothing, onValueChange = {
-                                    recordEditChange()
-                                    skinSmoothing = it
-                                    selectedStyle = if (it > 0f || backgroundBlur > 0f || subjectBrightness > 0f || darkerAreaLift > 0f) "AI Portrait" else "Custom"
-                                    showEnhanced = true
-                                }, valueRange = 0f..10f)
-                                Text("Skin-only smoothing is stronger at higher settings. Compare before/after and lower the strength if fine texture looks too soft.", color = SoftText, fontSize = 10.sp, lineHeight = 14.sp)
-                                Text("NATURAL MAKEUP · LIP + CHEEK TINT  " + makeupIntensity.toInt(), color = SoftText, fontSize = 11.sp)
-                                Slider(value = makeupIntensity, onValueChange = {
-                                    recordEditChange()
-                                    makeupIntensity = it
-                                    selectedStyle = if (it > 0f || backgroundBlur > 0f || subjectBrightness > 0f || darkerAreaLift > 0f || skinSmoothing > 0f) "AI Portrait" else "Custom"
-                                    showEnhanced = true
-                                }, valueRange = 0f..10f)
-                                Text("Uses detected face contours for a stronger but still translucent lip tint and softly feathered cheek color. It is optional and remains off at zero.", color = SoftText, fontSize = 10.sp, lineHeight = 14.sp)
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    CompactAdjustmentSlider(
+                                        label = "Darker areas",
+                                        value = darkerAreaLift,
+                                        valueRange = 0f..30f,
+                                        step = 1f,
+                                        modifier = Modifier.weight(1f)
+                                    ) { next ->
+                                        recordEditChange()
+                                        darkerAreaLift = next
+                                        selectedStyle = if (next > 0f || backgroundBlur > 0f || backgroundEnhancement > 0f || subjectBrightness > 0f || skinSmoothing > 0f || makeupIntensity > 0f) "AI Portrait" else "Custom"
+                                        showEnhanced = true
+                                    }
+                                    CompactAdjustmentSlider(
+                                        label = "Skin lightening",
+                                        value = subjectBrightness,
+                                        valueRange = 0f..25f,
+                                        step = 1f,
+                                        modifier = Modifier.weight(1f)
+                                    ) { next ->
+                                        recordEditChange()
+                                        subjectBrightness = next
+                                        selectedStyle = if (next > 0f || backgroundBlur > 0f || backgroundEnhancement > 0f || darkerAreaLift > 0f || skinSmoothing > 0f || makeupIntensity > 0f) "AI Portrait" else "Custom"
+                                        showEnhanced = true
+                                    }
+                                }
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    CompactAdjustmentSlider(
+                                        label = "Skin softening",
+                                        value = skinSmoothing,
+                                        valueRange = 0f..10f,
+                                        step = 1f,
+                                        modifier = Modifier.weight(1f)
+                                    ) { next ->
+                                        recordEditChange()
+                                        skinSmoothing = next
+                                        selectedStyle = if (next > 0f || backgroundBlur > 0f || backgroundEnhancement > 0f || subjectBrightness > 0f || darkerAreaLift > 0f || makeupIntensity > 0f) "AI Portrait" else "Custom"
+                                        showEnhanced = true
+                                    }
+                                    CompactAdjustmentSlider(
+                                        label = "Makeup strength",
+                                        value = makeupIntensity,
+                                        valueRange = 0f..10f,
+                                        step = 1f,
+                                        modifier = Modifier.weight(1f)
+                                    ) { next ->
+                                        recordEditChange()
+                                        makeupIntensity = next
+                                        selectedStyle = if (next > 0f || backgroundBlur > 0f || backgroundEnhancement > 0f || subjectBrightness > 0f || darkerAreaLift > 0f || skinSmoothing > 0f) "AI Portrait" else "Custom"
+                                        showEnhanced = true
+                                    }
+                                }
+                                Text(
+                                    "Each control has fine-step − / + buttons. Makeup is off at zero; higher strength increases the contour-guided effect. Keep natural texture by using a light touch.",
+                                    color = SoftText, fontSize = 10.sp, lineHeight = 14.sp
+                                )
                                 }
                             }
                         }

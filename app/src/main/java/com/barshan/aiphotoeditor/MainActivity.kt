@@ -2015,7 +2015,7 @@ private fun PhotoEditorHome() {
                             modifier = Modifier.padding(top = 3.dp, bottom = 8.dp))
                         OutlinedTextField(
                             value = captionSearchQuery, onValueChange = { captionSearchQuery = it },
-                            modifier = Modifier.fillMaxWidth(), label = { Text("Search 1,000 offline captions") },
+                            modifier = Modifier.fillMaxWidth(), label = { Text("Search captions by topic or phrase") },
                             singleLine = true, shape = RoundedCornerShape(14.dp)
                         )
                         val updatedCaptionEntries = CaptionUpdateStore.read(context).map { item ->

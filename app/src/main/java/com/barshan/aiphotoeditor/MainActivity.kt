@@ -1417,6 +1417,15 @@ private fun PhotoEditorHome() {
                                 color = SoftText, fontSize = 10.sp, lineHeight = 14.sp,
                                 modifier = Modifier.padding(top = 6.dp, bottom = 3.dp)
                             )
+                            Card(
+                                modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 10.dp),
+                                shape = RoundedCornerShape(20.dp),
+                                colors = CardDefaults.cardColors(containerColor = Panel),
+                                border = BorderStroke(1.dp, Color(0xFF2A3634))
+                            ) {
+                                Column(
+                                    modifier = Modifier.fillMaxWidth().padding(14.dp)
+                                ) {
                             if (activeEditorPanel == "AI Edit") {
                                 Row(
                                     modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())
@@ -1719,24 +1728,24 @@ private fun PhotoEditorHome() {
                             }
                         }
                         if (activeEditorPanel == "Presets") {
-                            Text("QUICK EDIT", color = BrightText, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            Text("QUICK LOOKS", color = BrightText, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                             Row(
                                 modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                horizontalArrangement = Arrangement.spacedBy(7.dp)
                             ) {
                                 listOf("Original", "Auto", "Natural", "AI Portrait", "Vivid", "Warm", "Cool", "Mono").forEach { style ->
-                                    Button(
-                                        onClick = { setStyle(style) },
-                                        shape = RoundedCornerShape(10.dp),
-                                        colors = ButtonDefaults.buttonColors(
-                                            containerColor = if (selectedStyle == style) Mint else Color(0xFF293333),
-                                            contentColor = if (selectedStyle == style) Ink else BrightText
-                                        ),
-                                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp)
-                                    ) { Text(style, fontSize = 10.sp) }
+                                    EditorChip(
+                                        label = style,
+                                        selected = selectedStyle == style,
+                                        compact = true,
+                                        onClick = { setStyle(style) }
+                                    )
                                 }
                             }
 
+                        }
+                                }
+                            }
                         }
                         val activeIndex = selectedPhotos.indexOfFirst { it.uri == activePhoto?.uri }
                         Row(
@@ -1986,17 +1995,19 @@ private fun PhotoEditorHome() {
                             OutlinedTextField(value = captionBengali, onValueChange = { captionBengali = it },
                                 modifier = Modifier.fillMaxWidth().padding(top = 5.dp),
                                 label = { Text("বাংলা ক্যাপশন") }, minLines = 2, maxLines = 4)
-                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                Button(onClick = { clipboardManager.setText(AnnotatedString(captionEnglish)) },
-                                    shape = RoundedCornerShape(10.dp),
-                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = BrightText),
-                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
-                                ) { Text("Copy English", fontSize = 10.sp) }
-                                Button(onClick = { clipboardManager.setText(AnnotatedString(captionBengali)) },
-                                    shape = RoundedCornerShape(10.dp),
-                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = BrightText),
-                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
-                                ) { Text("Copy বাংলা", fontSize = 10.sp) }
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Button(onClick = { clipboardManager.setText(AnnotatedString(captionEnglish)); statusMessage = "English caption copied." },
+                                    modifier = Modifier.weight(1f).height(42.dp),
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF25302F), contentColor = BrightText),
+                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                                ) { Text("Copy English", fontSize = 11.sp) }
+                                Button(onClick = { clipboardManager.setText(AnnotatedString(captionBengali)); statusMessage = "বাংলা ক্যাপশন কপি হয়েছে।" },
+                                    modifier = Modifier.weight(1f).height(42.dp),
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF25302F), contentColor = BrightText),
+                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                                ) { Text("Copy বাংলা", fontSize = 11.sp) }
                             }
                         }
                         }
@@ -2687,19 +2698,19 @@ private fun EditorChip(
     Surface(
         onClick = onClick,
         shape = RoundedCornerShape(if (compact) 12.dp else 15.dp),
-        color = if (selected) Mint else Color(0xFF1C2322),
-        contentColor = if (selected) Ink else BrightText,
+        color = if (selected) Color(0xFF19332F) else Color(0xFF1B2222),
+        contentColor = if (selected) Mint else BrightText,
         border = BorderStroke(
-            1.dp,
-            if (selected) Mint.copy(alpha = 0.95f) else Color(0xFF303B39)
+            if (selected) 1.25.dp else 1.dp,
+            if (selected) Mint.copy(alpha = 0.88f) else Color(0xFF303B39)
         ),
         tonalElevation = 0.dp,
         shadowElevation = 0.dp
     ) {
         Box(
-            modifier = Modifier.heightIn(min = if (compact) 40.dp else 46.dp).padding(
+            modifier = Modifier.heightIn(min = if (compact) 40.dp else 44.dp).padding(
                 horizontal = if (compact) 12.dp else 16.dp,
-                vertical = if (compact) 7.dp else 10.dp
+                vertical = if (compact) 7.dp else 9.dp
             ),
             contentAlignment = Alignment.Center
         ) {

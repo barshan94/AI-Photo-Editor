@@ -1946,7 +1946,7 @@ private fun PhotoEditorHome() {
                             CaptionLibrary.categories.forEach { category ->
                                 Button(
                                     onClick = { captionLibraryCategory = category },
-                                    modifier = Modifier.heightIn(min = 36.dp), shape = RoundedCornerShape(18.dp),
+                                    modifier = Modifier.heightIn(min = 44.dp), shape = RoundedCornerShape(18.dp),
                                     contentPadding = PaddingValues(horizontal = 11.dp, vertical = 5.dp),
                                     colors = ButtonDefaults.buttonColors(
                                         containerColor = if (captionLibraryCategory == category) Mint else Color(0xFF293333),
@@ -1955,7 +1955,7 @@ private fun PhotoEditorHome() {
                                 ) { Text(category, fontSize = 10.sp, maxLines = 1) }
                             }
                         }
-                        if (captionSearchQuery.isNotBlank() || captionLibraryCategory != "All") {
+                        {
                             val matchingPresets = CaptionLibrary.search(captionSearchQuery, captionLibraryCategory, 6)
                             if (matchingPresets.isEmpty()) {
                                 Text("No matches yet. Try a broader word or another category.", color = SoftText, fontSize = 11.sp)

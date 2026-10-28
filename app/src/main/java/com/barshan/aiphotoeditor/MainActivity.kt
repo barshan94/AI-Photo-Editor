@@ -2414,7 +2414,7 @@ private fun PhotoEditorHome() {
                     .sortedBy { entry -> entry.value.mapNotNull { it.captureTimeMillis }.minOrNull() ?: Long.MAX_VALUE }
                 Spacer(modifier = Modifier.height(12.dp))
                 Card(
-                    modifier = Modifier.fillMaxWidth().weight(1f),
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 220.dp, max = 560.dp),
                     shape = RoundedCornerShape(20.dp),
                     colors = CardDefaults.cardColors(containerColor = Panel)
                 ) {
@@ -2481,7 +2481,7 @@ private fun PhotoEditorHome() {
                     .take(2)
                 Spacer(modifier = Modifier.height(12.dp))
                 Card(
-                    modifier = Modifier.fillMaxWidth().weight(1f),
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 220.dp, max = 560.dp),
                     shape = RoundedCornerShape(20.dp),
                     colors = CardDefaults.cardColors(containerColor = Panel)
                 ) {
@@ -2602,7 +2602,7 @@ private fun PhotoEditorHome() {
 
             if (activePhoto == null && !showBurstComparison && !showBurstGroupPicker && selectedPhotos.isEmpty()) {
                 Box(
-                    modifier = Modifier.weight(1f).fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 160.dp, max = 560.dp)
                         .clip(RoundedCornerShape(20.dp)).background(Color(0xFF151A1A)),
                     contentAlignment = Alignment.Center
                 ) {
@@ -2631,7 +2631,7 @@ private fun PhotoEditorHome() {
             } else if (activePhoto == null && !showBurstComparison && !showBurstGroupPicker) {
                 LazyVerticalGrid(
                     columns = GridCells.Fixed(3),
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 160.dp, max = 560.dp),
                     contentPadding = PaddingValues(bottom = 10.dp),
                     horizontalArrangement = Arrangement.spacedBy(7.dp),
                     verticalArrangement = Arrangement.spacedBy(7.dp)

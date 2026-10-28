@@ -861,12 +861,13 @@ private fun PhotoEditorHome() {
                 val scoredBitmap = adjusted!!
                 editedScore = scoreEditedBitmap(scoredBitmap)
                 previewBitmap?.let { if (!it.isRecycled) it.recycle() }
-                previewBitmap = adjusted
-                adjusted = null
+                val captionBitmap = adjusted
+                previewBitmap = captionBitmap
                 if (captionPhotoUri != photo.uri.toString()) {
                     captionPhotoUri = photo.uri.toString()
-                    suggestCaptions()
+                    suggestCaptions(captionBitmap)
                 }
+                adjusted = null
                 showEnhanced = true
                 statusMessage = if (selectedStyle == "Original") {
                     "Original preview. Choose a style or adjust the image to create an edit."

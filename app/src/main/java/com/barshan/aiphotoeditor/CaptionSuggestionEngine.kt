@@ -16,7 +16,8 @@ object CaptionSuggestionEngine {
             .distinct()
             .take(10)
         val words = trusted.joinToString(" ")
-        val festival = has(words, "durga puja", "durga", "bijoya", "bijoya dashami", "dashami", "sindoor", "sindur", "vermilion", "puja pandal", "worship", "goddess", "religious festival", "festival", "idol", "temple")
+        val bijoyaFestival = has(words, "durga puja", "durga", "bijoya", "bijoya dashami", "dashami", "sindoor", "sindur", "vermilion", "puja pandal", "goddess", "idol")
+        val generalCelebration = has(words, "religious festival", "festival", "celebration", "party", "fireworks", "parade", "confetti")
         val wedding = has(words, "wedding", "bride", "groom", "marriage", "engagement", "wedding ceremony")
         val travel = has(words, "beach", "ocean", "sea", "waterfall", "mountain", "landscape", "sunset", "sunrise", "forest", "travel", "tourist", "cityscape", "street", "bridge")
         val food = has(words, "food", "dish", "cuisine", "dessert", "meal", "restaurant", "cake", "coffee")
@@ -26,8 +27,9 @@ object CaptionSuggestionEngine {
         val friends = has(words, "friends", "group", "crowd", "team", "classmates")
         val portrait = has(words, "person", "people", "face", "portrait", "human", "man", "woman", "child")
         val scene = if (theme != "Auto") theme else when {
-            festival -> "Festival"
+            bijoyaFestival -> "Festival"
             wedding -> "Romantic"
+            generalCelebration -> "Celebration"
             food -> "Food"
             pets -> "Pets"
             travel -> "Travel"
@@ -61,6 +63,26 @@ object CaptionSuggestionEngine {
                     "মা, আবার দেখা হবে আগামী বছর। 🥹❤️",
                     "যে মুহূর্তে কেউই বাড়ি ফিরতে চায় না।",
                     "আজ মনটা একটু বেশি খারাপ… আবার দেখা হবে, মা।"
+                )
+            }
+            "Celebration" -> {
+                en = listOf(
+                    "Good people, good day, no complaints.",
+                    "A little celebration was exactly what we needed.",
+                    "The photos will explain the rest.",
+                    "One of those days that turned out better than planned.",
+                    "A good excuse to get everyone together.",
+                    "More of this, please. ❤️",
+                    "We came, we celebrated, we took too many photos."
+                )
+                bn = listOf(
+                    "ভালো মানুষ, সুন্দর দিন—আর কী চাই।",
+                    "এমন একটা উদ্‌যাপন দরকারই ছিল।",
+                    "বাকিটা ছবিগুলোই বলে দেবে।",
+                    "পরিকল্পনার চেয়েও সুন্দর হয়ে গেল দিনটা।",
+                    "সবাই একসঙ্গে হওয়ার একটা ভালো অজুহাত।",
+                    "এমন দিন আরও চাই। ❤️",
+                    "এলাম, আনন্দ করলাম, অনেক ছবি তুললাম।"
                 )
             }
             "Romantic" -> {

@@ -143,10 +143,10 @@ object AutoEnhancer {
         }
 
         // Perspective crop: map a user-defined four-sided crop quadrilateral to a rectangle.
-        val top = settings.perspectiveTopInset.coerceIn(0f, 0.28f)
-        val bottom = settings.perspectiveBottomInset.coerceIn(0f, 0.28f)
-        val left = settings.perspectiveLeftInset.coerceIn(0f, 0.28f)
-        val right = settings.perspectiveRightInset.coerceIn(0f, 0.28f)
+        val topInset = settings.perspectiveTopInset.coerceIn(0f, 0.28f)
+        val bottomInset = settings.perspectiveBottomInset.coerceIn(0f, 0.28f)
+        val leftInset = settings.perspectiveLeftInset.coerceIn(0f, 0.28f)
+        val rightInset = settings.perspectiveRightInset.coerceIn(0f, 0.28f)
         if (top + bottom < 0.56f && left + right < 0.56f &&
             (top + bottom + left + right) > 0.001f) {
             val outWidth = (transformed.width * (1f - (top + bottom) / 2f)).toInt().coerceAtLeast(2)

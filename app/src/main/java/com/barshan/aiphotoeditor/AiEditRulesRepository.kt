@@ -63,23 +63,28 @@ object AiEditRulesRepository {
         }
     }
 
-    private fun parse(raw: String): Rules? = try {
-        val root = JSONObject(raw)
-        val version = root.optInt("version", 0)
-        if (version < 1) return null
-        val balanced = root.optJSONObject("balanced") ?: JSONObject()
-        val saturated = root.optJSONObject("saturated") ?: JSONObject()
-        val cool = root.optJSONObject("cool") ?: JSONObject()
-        Rules(
-            version = version,
-            balancedSaturationMultiplier = balanced.optDouble("saturationMultiplier", 1.0).toFloat().coerceIn(0.85f, 1.15f),
-            balancedContrastAdd = balanced.optDouble("contrastAdd", 0.0).toFloat().coerceIn(-0.05f, 0.05f),
-            saturatedSaturationMultiplier = saturated.optDouble("saturationMultiplier", 1.18).toFloat().coerceIn(1.0f, 1.45f),
-            saturatedContrastAdd = saturated.optDouble("contrastAdd", 0.025).toFloat().coerceIn(0f, 0.08f),
-            coolWarmthDelta = cool.optDouble("warmthDelta", -5.0).toFloat().coerceIn(-12f, 0f),
-            coolSaturationMultiplier = cool.optDouble("saturationMultiplier", 1.02).toFloat().coerceIn(0.9f, 1.15f)
-        )
-    } catch (_: Exception) {
-        null
+    private fun parse(raw: String): Rules? {
+        return try {
+            val root = JSONObject(raw)
+            val version = root.optInt("version", 0)
+            if (version < 1) {
+                null
+            } else {
+                val balanced = root.optJSONObject("balanced") ?: JSONObject()
+                val saturated = root.optJSONObject("saturated") ?: JSONObject()
+                val cool = root.optJSONObject("cool") ?: JSONObject()
+                Rules(
+                    version = version,
+                    balancedSaturationMultiplier = balanced.optDouble("saturationMultiplier", 1.0).toFloat().coerceIn(0.85f, 1.15f),
+                    balancedContrastAdd = balanced.optDouble("contrastAdd", 0.0).toFloat().coerceIn(-0.05f, 0.05f),
+                    saturatedSaturationMultiplier = saturated.optDouble("saturationMultiplier", 1.18).toFloat().coerceIn(1.0f, 1.45f),
+                    saturatedContrastAdd = saturated.optDouble("contrastAdd", 0.025).toFloat().coerceIn(0f, 0.08f),
+                    coolWarmthDelta = cool.optDouble("warmthDelta", -5.0).toFloat().coerceIn(-12f, 0f),
+                    coolSaturationMultiplier = cool.optDouble("saturationMultiplier", 1.02).toFloat().coerceIn(0.9f, 1.15f)
+                )
+            }
+        } catch (_: Exception) {
+            null
+        }
     }
 }

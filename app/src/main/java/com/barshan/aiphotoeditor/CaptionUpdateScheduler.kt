@@ -10,7 +10,7 @@ import java.util.concurrent.TimeUnit
 
 object CaptionUpdateScheduler {
     fun schedule(context: Context) {
-        val constraints = Constraints.Builder().setRequiredNetworkType(NetworkType.UNMETERED).build()
+        val constraints = Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()
         val request = PeriodicWorkRequestBuilder<CaptionUpdateWorker>(12, TimeUnit.HOURS)
             .setConstraints(constraints)
             .setBackoffCriteria(androidx.work.BackoffPolicy.EXPONENTIAL, 30, TimeUnit.MINUTES)

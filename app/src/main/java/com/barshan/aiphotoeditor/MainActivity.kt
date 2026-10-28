@@ -1911,7 +1911,7 @@ private fun PhotoEditorHome() {
                                 "WhatsApp" to "com.whatsapp",
                                 "TikTok" to "com.zhiliaoapp.musically"
                             ).forEach { (platform, packageName) ->
-                                OutlinedButton(
+                                Button(
                                     onClick = {
                                         val uri = lastExportUri
                                         if (uri == null) {
@@ -1936,6 +1936,7 @@ private fun PhotoEditorHome() {
                                     enabled = lastExportUri != null && !isExporting,
                                     modifier = Modifier.weight(1f),
                                     shape = RoundedCornerShape(10.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF202929), contentColor = BrightText),
                                     contentPadding = PaddingValues(horizontal = 2.dp, vertical = 8.dp)
                                 ) {
                                     Text(platform, fontSize = 9.sp, maxLines = 1)

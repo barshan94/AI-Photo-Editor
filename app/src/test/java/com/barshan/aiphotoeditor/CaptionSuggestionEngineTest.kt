@@ -21,6 +21,12 @@ class CaptionSuggestionEngineTest {
     }
 
     @Test
+    fun genericFestivalLabelsDoNotAssumeDurgaBijoya() {
+        val result = CaptionSuggestionEngine.fromLabels(listOf("festival" to 0.95f), 1f)
+        assertFalse(result.english.any { it.contains("Bijoya") || it.contains("Durga") })
+    }
+
+    @Test
     fun singlePersonGetsCasualPortraitCaptionsInsteadOfFamilyCaptions() {
         val result = CaptionSuggestionEngine.fromLabels(listOf("person" to 0.95f), 0.8f)
         assertTrue(result.english.any { it.contains("Felt cute") })

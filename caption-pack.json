@@ -1,0 +1,313 @@
+{
+  "version": 1,
+  "entries": [
+    {
+      "category": "Portrait",
+      "text": "A little more like myself today.",
+      "keywords": [
+        "portrait",
+        "selfie",
+        "confidence",
+        "casual",
+        "personal"
+      ]
+    },
+    {
+      "category": "Portrait",
+      "text": "No occasion needed to keep a good moment.",
+      "keywords": [
+        "portrait",
+        "selfie",
+        "everyday",
+        "casual"
+      ]
+    },
+    {
+      "category": "Portrait",
+      "text": "Soft light, honest mood, no big explanation.",
+      "keywords": [
+        "portrait",
+        "light",
+        "aesthetic",
+        "mood"
+      ]
+    },
+    {
+      "category": "Portrait",
+      "text": "Showing up as I am, and that is enough.",
+      "keywords": [
+        "portrait",
+        "confidence",
+        "self love"
+      ]
+    },
+    {
+      "category": "Friends",
+      "text": "The kind of chaos that becomes a favourite memory.",
+      "keywords": [
+        "friends",
+        "group",
+        "funny",
+        "memories"
+      ]
+    },
+    {
+      "category": "Friends",
+      "text": "Plans change. The people make the day.",
+      "keywords": [
+        "friends",
+        "group",
+        "hangout",
+        "casual"
+      ]
+    },
+    {
+      "category": "Friends",
+      "text": "One frame, a hundred stories we will keep retelling.",
+      "keywords": [
+        "friends",
+        "group",
+        "memories"
+      ]
+    },
+    {
+      "category": "Family",
+      "text": "A simple day with the people who make it home.",
+      "keywords": [
+        "family",
+        "parents",
+        "home",
+        "memories"
+      ]
+    },
+    {
+      "category": "Family",
+      "text": "Not a perfect frame, just my favourite people.",
+      "keywords": [
+        "family",
+        "group",
+        "love"
+      ]
+    },
+    {
+      "category": "Romantic",
+      "text": "My favourite place is still beside you.",
+      "keywords": [
+        "couple",
+        "romantic",
+        "love",
+        "partner"
+      ]
+    },
+    {
+      "category": "Romantic",
+      "text": "A quiet kind of happiness, shared with you.",
+      "keywords": [
+        "couple",
+        "romantic",
+        "love",
+        "soft"
+      ]
+    },
+    {
+      "category": "Romantic",
+      "text": "Some moments feel warmer because you are in them.",
+      "keywords": [
+        "couple",
+        "love",
+        "romantic"
+      ]
+    },
+    {
+      "category": "Wedding",
+      "text": "A new chapter, held together by love and blessings.",
+      "keywords": [
+        "wedding",
+        "bride",
+        "groom",
+        "marriage"
+      ]
+    },
+    {
+      "category": "Wedding",
+      "text": "A day full of rituals, joy, and people we love.",
+      "keywords": [
+        "wedding",
+        "ceremony",
+        "family",
+        "celebration"
+      ]
+    },
+    {
+      "category": "Festival",
+      "text": "Tradition in the frame, memories for years.",
+      "keywords": [
+        "festival",
+        "puja",
+        "tradition",
+        "culture"
+      ]
+    },
+    {
+      "category": "Festival",
+      "text": "A little colour, a lot of feeling, and familiar faces.",
+      "keywords": [
+        "festival",
+        "celebration",
+        "culture",
+        "friends"
+      ]
+    },
+    {
+      "category": "Festival",
+      "text": "Carrying the blessings and the joy home with us.",
+      "keywords": [
+        "festival",
+        "devotional",
+        "family",
+        "faith"
+      ]
+    },
+    {
+      "category": "Devotional",
+      "text": "Grateful for the blessings we notice and the ones we do not.",
+      "keywords": [
+        "devotional",
+        "faith",
+        "prayer",
+        "gratitude"
+      ]
+    },
+    {
+      "category": "Devotional",
+      "text": "A prayer in the heart, peace in the moment.",
+      "keywords": [
+        "devotional",
+        "faith",
+        "temple",
+        "prayer"
+      ]
+    },
+    {
+      "category": "Travel",
+      "text": "A new view has a way of resetting the mind.",
+      "keywords": [
+        "travel",
+        "landscape",
+        "trip",
+        "mountain",
+        "beach"
+      ]
+    },
+    {
+      "category": "Travel",
+      "text": "Took the longer route and found the better memory.",
+      "keywords": [
+        "travel",
+        "road",
+        "journey",
+        "trip"
+      ]
+    },
+    {
+      "category": "Travel",
+      "text": "Collecting places that make time slow down.",
+      "keywords": [
+        "travel",
+        "nature",
+        "landscape",
+        "holiday"
+      ]
+    },
+    {
+      "category": "Nature",
+      "text": "A reminder that the world is still full of quiet wonders.",
+      "keywords": [
+        "nature",
+        "flowers",
+        "trees",
+        "landscape"
+      ]
+    },
+    {
+      "category": "Nature",
+      "text": "Let the light do what it does best.",
+      "keywords": [
+        "nature",
+        "sunset",
+        "sunrise",
+        "light"
+      ]
+    },
+    {
+      "category": "Food",
+      "text": "The camera eats first; the people come next.",
+      "keywords": [
+        "food",
+        "meal",
+        "restaurant",
+        "friends"
+      ]
+    },
+    {
+      "category": "Food",
+      "text": "A good table and better company.",
+      "keywords": [
+        "food",
+        "dinner",
+        "friends",
+        "family"
+      ]
+    },
+    {
+      "category": "Pets",
+      "text": "Small paws, big personality, entire camera roll.",
+      "keywords": [
+        "pet",
+        "dog",
+        "cat",
+        "animal"
+      ]
+    },
+    {
+      "category": "Aesthetic",
+      "text": "The little details were the whole story.",
+      "keywords": [
+        "aesthetic",
+        "details",
+        "texture",
+        "mood"
+      ]
+    },
+    {
+      "category": "Aesthetic",
+      "text": "A frame that feels like taking a deep breath.",
+      "keywords": [
+        "aesthetic",
+        "calm",
+        "soft",
+        "minimal"
+      ]
+    },
+    {
+      "category": "Funny",
+      "text": "We said one picture. The camera roll disagreed.",
+      "keywords": [
+        "funny",
+        "friends",
+        "selfie",
+        "group"
+      ]
+    },
+    {
+      "category": "Funny",
+      "text": "Proof that we can look organised for at least one frame.",
+      "keywords": [
+        "funny",
+        "group",
+        "friends",
+        "portrait"
+      ]
+    }
+  ]
+}

@@ -88,7 +88,7 @@ object CaptionLibrary {
                 if (normalized.isBlank()) 0 else
                     (if (entry.text.lowercase().startsWith(normalized) || entry.bengali.startsWith(normalized)) 100 else 0) +
                     (if (entry.text.lowercase().contains(normalized) || entry.bengali.contains(normalized)) 30 else 0) +
-                    queryTokens.sumOf { token -> if (entry.keywords.any { it.startsWith(token) }) 5 else 0 }
+                    queryTokens.count { token -> entry.keywords.any { it.startsWith(token) } } * 5
             }
             .take(limit.coerceAtLeast(1))
             .toList()

@@ -1655,9 +1655,23 @@ EditorImageAction("⇩", "Export", previewBitmap != null && !isExporting && sele
                                                             val newY = pressed.map { it.position.y }.average().toFloat()
                                                             val oldDistance = previous.map { p -> sqrt((p.previousPosition.x - oldX) * (p.previousPosition.x - oldX) + (p.previousPosition.y - oldY) * (p.previousPosition.y - oldY)) }.average().toFloat().coerceAtLeast(1f)
                                                             val newDistance = pressed.map { p -> sqrt((p.position.x - newX) * (p.position.x - newX) + (p.position.y - newY) * (p.position.y - newY)) }.average().toFloat()
-                                                            previewScale = (previewScale * newDistance / oldDistance).coerceIn(1f, 5f)
-                                                            if (previewScale <= 1.001f) { previewOffsetX = 0f; previewOffsetY = 0f }
-                                                            else { previewOffsetX += newX - oldX; previewOffsetY += newY - oldY }
+                                                            val oldScale = previewScale
+                                                            val newScale = (oldScale * newDistance / oldDistance).coerceIn(1f, 5f)
+                                                            val scaleFactor = newScale / oldScale
+                                                            previewScale = newScale
+                                                            if (newScale <= 1.001f) {
+                                                                previewOffsetX = 0f
+                                                                previewOffsetY = 0f
+                                                            } else {
+                                                                // Pan with the two-finger centroid and keep the image inside a
+                                                                // bounded travel range so it cannot disappear off-screen.
+                                                                val centerX = previewWidthPx / 2f
+                                                                val centerY = previewHeightPx / 2f
+                                                                previewOffsetX = (newX - centerX - (oldX - centerX - previewOffsetX) * scaleFactor)
+                                                                    .coerceIn(-previewWidthPx * (newScale - 1f) / 2f, previewWidthPx * (newScale - 1f) / 2f)
+                                                                previewOffsetY = (newY - centerY - (oldY - centerY - previewOffsetY) * scaleFactor)
+                                                                    .coerceIn(-previewHeightPx * (newScale - 1f) / 2f, previewHeightPx * (newScale - 1f) / 2f)
+                                                            }
                                                         }
                                                         event.changes.forEach { it.consume() }
                                                     } else if (!multiTouch && pressed.isNotEmpty()) {

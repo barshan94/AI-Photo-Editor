@@ -12,8 +12,8 @@ import kotlin.math.min
 /**
  * Runs the official TensorFlow Lite ESRGAN model locally.
  *
- * The published model expects RGB float values in the 0..255 range and returns RGB values in
- * that same range. Overlapping tiles reduce seams; the input is bounded to keep 4x output safe.
+ * The published model expects normalized RGB float values in 0..1 and returns normalized RGB
+ * values. Overlapping tiles reduce seams; the input is bounded to keep 4x output safe.
  */
 internal object AiUpscaler {
     data class Result(val bitmap: Bitmap, val inputWasResizedForMemory: Boolean)
@@ -99,21 +99,20 @@ internal object AiUpscaler {
                     }
                     input.clear()
                     for (pixel in inputPixels) {
-                        // The official model expects RGB values in the 0..255 range.
-                        input.putFloat(((pixel shr 16) and 0xFF).toFloat())
-                        input.putFloat(((pixel shr 8) and 0xFF).toFloat())
-                        input.putFloat((pixel and 0xFF).toFloat())
+                        // The official TFLite model expects normalized RGB values in 0..1.
+                        input.putFloat(((pixel shr 16) and 0xFF) / 255f)
+                        input.putFloat(((pixel shr 8) and 0xFF) / 255f)
+                        input.putFloat((pixel and 0xFF) / 255f)
                     }
                     input.rewind()
                     output.clear()
                     interpreter.run(input, output)
                     output.rewind()
                     for (i in tileOutput.indices) {
-                        // Model output is also in the 0..255 range; multiplying by 255
-                        // clips nearly every pixel and destroys the reconstructed detail.
-                        val red = output.float.toInt().coerceIn(0, 255)
-                        val green = output.float.toInt().coerceIn(0, 255)
-                        val blue = output.float.toInt().coerceIn(0, 255)
+                        // ESRGAN returns normalized float RGB values. Convert back to 8-bit channels.
+                        val red = (output.float * 255f).toInt().coerceIn(0, 255)
+                        val green = (output.float * 255f).toInt().coerceIn(0, 255)
+                        val blue = (output.float * 255f).toInt().coerceIn(0, 255)
                         tileOutput[i] = (0xFF shl 24) or (red shl 16) or (green shl 8) or blue
                     }
                     for (oy in 0 until outputTileHeight) {

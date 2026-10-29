@@ -18,6 +18,7 @@ import java.nio.ByteOrder
 import java.nio.FloatBuffer
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.roundToInt
 
 /** Local LaMa object-removal inference. Mask polarity is 1 = remove, 0 = preserve. */
 internal object LamaInpainter {
@@ -70,8 +71,21 @@ internal object LamaInpainter {
                 maskCanvas.drawPath(path, paint)
             }
         }
-        val scaledMask = Bitmap.createScaledBitmap(fullMask, modelSize, modelSize, true)
-        val image512 = Bitmap.createScaledBitmap(source, modelSize, modelSize, true)
+        // Preserve the source aspect ratio. Stretching every portrait/landscape photo into
+        // a square distorts scene geometry and makes LaMa's reconstruction look wrong.
+        val fitScale = min(modelSize.toFloat() / source.width, modelSize.toFloat() / source.height)
+        val fitWidth = (source.width * fitScale).roundToInt().coerceIn(1, modelSize)
+        val fitHeight = (source.height * fitScale).roundToInt().coerceIn(1, modelSize)
+        val offsetX = (modelSize - fitWidth) / 2
+        val offsetY = (modelSize - fitHeight) / 2
+        val contentRect = Rect(offsetX, offsetY, offsetX + fitWidth, offsetY + fitHeight)
+        val image512 = Bitmap.createBitmap(modelSize, modelSize, Bitmap.Config.ARGB_8888)
+        Canvas(image512).apply {
+            drawColor(AndroidColor.BLACK)
+            drawBitmap(source, null, contentRect, Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG))
+        }
+        val scaledMask = Bitmap.createBitmap(modelSize, modelSize, Bitmap.Config.ARGB_8888)
+        Canvas(scaledMask).drawBitmap(fullMask, null, contentRect, Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG))
         // Keep the inference mask crisp, but feather the final composite edge so the repaired
         // region does not look like a pasted rectangle or leave a hard brush outline.
         val featherWidth = (source.width / 8).coerceAtLeast(1)
@@ -131,7 +145,9 @@ internal object LamaInpainter {
                 }
                 val repaired512 = Bitmap.createBitmap(modelSize, modelSize, Bitmap.Config.ARGB_8888)
                 repaired512.setPixels(repairedPixels, 0, modelSize, 0, 0, modelSize, modelSize)
-                val repairedFull = Bitmap.createScaledBitmap(repaired512, source.width, source.height, true)
+                val repairedContent = Bitmap.createBitmap(repaired512, offsetX, offsetY, fitWidth, fitHeight)
+                val repairedFull = Bitmap.createScaledBitmap(repairedContent, source.width, source.height, true)
+                repairedContent.recycle()
                 val result = source.copy(Bitmap.Config.ARGB_8888, true)
                 val sourceRow = IntArray(source.width)
                 val maskRow = IntArray(source.width)

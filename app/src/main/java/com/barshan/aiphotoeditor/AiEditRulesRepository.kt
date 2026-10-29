@@ -13,7 +13,7 @@ import java.net.URL
  */
 object AiEditRulesRepository {
     data class Rules(
-        val version: Int = 1,
+        val version: Int = 0,
         val balancedSaturationMultiplier: Float = 1.0f,
         val balancedContrastAdd: Float = 0.0f,
         val saturatedSaturationMultiplier: Float = 1.18f,

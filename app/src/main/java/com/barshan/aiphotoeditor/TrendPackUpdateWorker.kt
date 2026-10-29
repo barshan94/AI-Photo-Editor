@@ -1,6 +1,8 @@
 package com.barshan.aiphotoeditor
 
 import android.content.Context
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import androidx.work.Constraints
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingPeriodicWorkPolicy
@@ -24,6 +26,14 @@ class TrendPackUpdateWorker(
 ) : CoroutineWorker(appContext, params) {
 
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
+        val connectivity = applicationContext.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        val activeNetwork = connectivity.activeNetwork
+        val capabilities = activeNetwork?.let(connectivity::getNetworkCapabilities)
+        // UNMETERED is a useful WorkManager constraint, but explicitly require Wi-Fi too:
+        // some carriers mark cellular connections as unmetered.
+        if (capabilities?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) != true) {
+            return@withContext Result.retry()
+        }
         try {
             CaptionCatalogRepository.refresh(applicationContext)
             AiEditRulesRepository.refresh(applicationContext)

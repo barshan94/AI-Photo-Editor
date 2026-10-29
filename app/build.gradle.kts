@@ -20,7 +20,10 @@ android {
     }
     buildTypes {
         release {
-            isMinifyEnabled = false
+            // Shrink unused bytecode and resources in distributable builds.
+            // AI models in app/src/main/assets are retained and their behavior is unchanged.
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }

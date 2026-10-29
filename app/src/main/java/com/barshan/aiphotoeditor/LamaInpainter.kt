@@ -117,7 +117,6 @@ internal object LamaInpainter {
         val workingMask = Bitmap.createBitmap(fullMask, cropLeft, cropTop, cropWidth, cropHeight)
 
         // Preserve the crop aspect ratio so the local scene geometry is not distorted.
-        // a square distorts scene geometry and makes LaMa's reconstruction look wrong.
         val fitScale = min(modelSize.toFloat() / workingSource.width, modelSize.toFloat() / workingSource.height)
         val fitWidth = (workingSource.width * fitScale).roundToInt().coerceIn(1, modelSize)
         val fitHeight = (workingSource.height * fitScale).roundToInt().coerceIn(1, modelSize)
@@ -232,8 +231,8 @@ internal object LamaInpainter {
             compositeMask.recycle()
             scaledMask.recycle()
             image512.recycle()
-            workingSource.recycle()
-            workingMask.recycle()
+            if (workingSource !== source && !workingSource.isRecycled) workingSource.recycle()
+            if (workingMask !== fullMask && !workingMask.isRecycled) workingMask.recycle()
         }
     }
 }

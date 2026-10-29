@@ -2,7 +2,7 @@ name: Android APK
 
 on:
   push:
-    branches: [main, fix/editor-image-toolbar]
+    branches: [main, fix/editor-image-toolbar, experiment/apk-size-audit, experiment/under-100mb-model-downloads]
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -42,6 +42,52 @@ jobs:
       - name: Report APK sizes
         run: |
           du -h app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/release/app-release.apk
+      - name: Audit release APK contents
+        run: |
+          python3 - <<'PY'
+          import zipfile, os, collections
+          apk = "app/build/outputs/apk/release/app-release.apk"
+          report = "apk-size-audit.txt"
+          with zipfile.ZipFile(apk) as z:
+              entries = [(i.file_size, i.compress_size, i.filename) for i in z.infolist() if not i.is_dir()]
+          entries.sort(reverse=True)
+          totals = collections.defaultdict(lambda: [0,0,0])
+          for raw, packed, name in entries:
+              top = name.split("/",1)[0]
+              totals[top][0] += raw
+              totals[top][1] += packed
+              totals[top][2] += 1
+          with open(report, "w") as f:
+              f.write("RELEASE APK SIZE AUDIT (ZIP entry sizes are APK internal sizes, not outer ZIP compression)\\n")
+              f.write(f"APK bytes on disk: {os.path.getsize(apk)}\\n")
+              f.write(f"Total uncompressed entry bytes: {sum(x[0] for x in entries)}\\n\\n")
+              f.write("TOP-LEVEL CONTENT TOTALS (uncompressed bytes | APK-stored bytes | files)\\n")
+              for k,v in sorted(totals.items(), key=lambda kv: kv[1][0], reverse=True):
+                  f.write(f"{v[0]:>12} | {v[1]:>12} | {v[2]:>5} | {k}\\n")
+              f.write("\\nLARGEST 60 ENTRIES (uncompressed | stored | path)\\n")
+              for raw,packed,name in entries[:60]:
+                  f.write(f"{raw:>12} | {packed:>12} | {name}\\n")
+              f.write("\\nNATIVE LIBRARY TOTALS BY ABI\\n")
+              abi=collections.defaultdict(int)
+              for raw,packed,name in entries:
+                  if name.startswith("lib/"):
+                      parts=name.split("/")
+                      if len(parts)>1: abi[parts[1]]+=raw
+              for k,v in sorted(abi.items(),key=lambda kv:kv[1],reverse=True):
+                  f.write(f"{v:>12} | {k}\\n")
+          print(open(report).read())
+          PY
+      - name: Capture release dependency tree
+        run: gradle --no-daemon :app:dependencies --configuration releaseRuntimeClasspath > release-runtime-dependencies.txt
+      - name: Upload APK size audit reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-photo-editor-size-audit
+          path: |
+            apk-size-audit.txt
+            release-runtime-dependencies.txt
+          if-no-files-found: error
+          retention-days: 14
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:

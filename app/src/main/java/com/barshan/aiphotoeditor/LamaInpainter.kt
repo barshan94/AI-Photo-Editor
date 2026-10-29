@@ -2,7 +2,6 @@ package com.barshan.aiphotoeditor
 
 import android.content.Context
 import android.graphics.Bitmap
-import android.graphics.BlurMaskFilter
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.Path
@@ -75,15 +74,11 @@ internal object LamaInpainter {
         val image512 = Bitmap.createScaledBitmap(source, modelSize, modelSize, true)
         // Keep the inference mask crisp, but feather the final composite edge so the repaired
         // region does not look like a pasted rectangle or leave a hard brush outline.
-        val compositeMask = Bitmap.createBitmap(source.width, source.height, Bitmap.Config.ARGB_8888)
-        Canvas(compositeMask).drawBitmap(
-            fullMask,
-            0f,
-            0f,
-            Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                maskFilter = BlurMaskFilter((min(source.width, source.height) * 0.004f).coerceIn(3f, 18f), BlurMaskFilter.Blur.NORMAL)
-            }
-        )
+        val featherWidth = (source.width / 8).coerceAtLeast(1)
+        val featherHeight = (source.height / 8).coerceAtLeast(1)
+        val lowResolutionMask = Bitmap.createScaledBitmap(fullMask, featherWidth, featherHeight, true)
+        val compositeMask = Bitmap.createScaledBitmap(lowResolutionMask, source.width, source.height, true)
+        lowResolutionMask.recycle()
         var session: OrtSession? = null
         var imageTensor: OnnxTensor? = null
         try {
@@ -141,17 +136,17 @@ internal object LamaInpainter {
                 val sourceRow = IntArray(source.width)
                 val maskRow = IntArray(source.width)
                 val resultRow = IntArray(source.width)
+                val repairedRow = IntArray(source.width)
                 for (y in 0 until source.height) {
                     source.getPixels(sourceRow, 0, source.width, 0, y, source.width, 1)
                     compositeMask.getPixels(maskRow, 0, source.width, 0, y, source.width, 1)
-                    val my = min(modelSize - 1, y * modelSize / source.height)
-                    for (x in 0 until source.width) {
+                    repairedFull.getPixels(repairedRow, 0, source.width, 0, y, source.width, 1)
+                        for (x in 0 until source.width) {
                         val alpha = AndroidColor.alpha(maskRow[x]) / 255f
                         if (alpha <= 0f) {
                             resultRow[x] = sourceRow[x]
                         } else {
-                            val mx = min(modelSize - 1, x * modelSize / source.width)
-                            val repaired = repairedFull.getPixel(x, y)
+                            val repaired = repairedRow[x]
                             val original = sourceRow[x]
                             val r = (AndroidColor.red(original) * (1f - alpha) + AndroidColor.red(repaired) * alpha).toInt().coerceIn(0, 255)
                             val g = (AndroidColor.green(original) * (1f - alpha) + AndroidColor.green(repaired) * alpha).toInt().coerceIn(0, 255)

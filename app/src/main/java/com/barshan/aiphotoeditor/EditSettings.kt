@@ -7,6 +7,8 @@ data class EditSettings(
     val saturation: Float = 1.06f,
     val warmth: Float = 0f,
     val cropRatio: Float? = null,
+    /** Preserves the selected crop preset/freeform state through undo, redo, and batch edits. */
+    val cropLabel: String = "Original",
     /** Optional independent crop width/height fractions for free-size cropping (0..1). */
     val freeCropWidthFraction: Float? = null,
     val freeCropHeightFraction: Float? = null,

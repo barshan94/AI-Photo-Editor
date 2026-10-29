@@ -196,17 +196,25 @@ object AutoEnhancer {
             }
         }
 
-        val ratio = settings.cropRatio ?: return transformed
-        if (ratio <= 0f) return transformed
-        val sourceRatio = transformed.width.toFloat() / transformed.height.toFloat()
+        val ratio = settings.cropRatio
+        val freeWidth = settings.freeCropWidthFraction
+        val freeHeight = settings.freeCropHeightFraction
+        if ((ratio == null || ratio <= 0f) && (freeWidth == null || freeHeight == null)) return transformed
         val cropWidth: Int
         val cropHeight: Int
-        if (sourceRatio > ratio) {
-            cropHeight = transformed.height
-            cropWidth = (cropHeight * ratio).toInt().coerceIn(1, transformed.width)
+        if (freeWidth != null && freeHeight != null) {
+            cropWidth = (transformed.width * freeWidth.coerceIn(0.2f, 1f)).toInt().coerceIn(1, transformed.width)
+            cropHeight = (transformed.height * freeHeight.coerceIn(0.2f, 1f)).toInt().coerceIn(1, transformed.height)
         } else {
-            cropWidth = transformed.width
-            cropHeight = (cropWidth / ratio).toInt().coerceIn(1, transformed.height)
+            val safeRatio = ratio ?: return transformed
+            val sourceRatio = transformed.width.toFloat() / transformed.height.toFloat()
+            if (sourceRatio > safeRatio) {
+                cropHeight = transformed.height
+                cropWidth = (cropHeight * safeRatio).toInt().coerceIn(1, transformed.width)
+            } else {
+                cropWidth = transformed.width
+                cropHeight = (cropWidth / safeRatio).toInt().coerceIn(1, transformed.height)
+            }
         }
         val availableX = (transformed.width - cropWidth).coerceAtLeast(0)
         val availableY = (transformed.height - cropHeight).coerceAtLeast(0)

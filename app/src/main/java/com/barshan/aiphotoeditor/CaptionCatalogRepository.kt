@@ -23,14 +23,29 @@ object CaptionCatalogRepository {
         val raw = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             .getString("remote_caption_entries", "").orEmpty()
         return raw.lineSequence().mapIndexedNotNull { index, line ->
-            val split = line.split('\t', limit = 2)
-            if (split.size != 2 || split[0].isBlank() || split[1].isBlank()) null
+            val split = line.split('\t', limit = 3)
+            if (split.size < 2 || split[0].isBlank() || split[1].isBlank()) null
             else {
-                val words = Regex("[^\\p{L}\\p{N}]+").split(split[1].lowercase())
-                    .filter { it.length > 1 }.toSet() + split[0].lowercase()
-                CaptionLibrary.Entry("remote-$index", split[0], split[1], "বাংলা অনুবাদ উপলভ্য নয়।", words)
+                val bengali = split.getOrNull(2)?.takeIf { it.isNotBlank() } ?: "মনে রাখার মতো একটি মুহূর্ত।"
+                val words = (Regex("[^\\p{L}\\p{N}]+").split((split[1] + " " + bengali).lowercase())
+                    .filter { it.length > 1 }.toSet() + split[0].lowercase())
+                CaptionLibrary.Entry("remote-$index", split[0], split[1], bengali, words)
             }
         }.toList()
+    }
+
+    private fun readBoundedText(input: java.io.InputStream, maxChars: Int): String? {
+        input.bufferedReader(Charsets.UTF_8).use { reader ->
+            val output = StringBuilder()
+            val buffer = CharArray(4096)
+            while (true) {
+                val count = reader.read(buffer)
+                if (count < 0) break
+                if (output.length + count > maxChars) return null
+                output.append(buffer, 0, count)
+            }
+            return output.toString()
+        }
     }
 
     suspend fun refresh(context: Context): List<CaptionLibrary.Entry> = withContext(Dispatchers.IO) {
@@ -46,8 +61,8 @@ object CaptionCatalogRepository {
                 setRequestProperty("User-Agent", "AI-Photo-Editor-Android")
             }
             if (connection.responseCode !in 200..299) return@withContext cached
-            val body = connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
-            if (body.length > MAX_CATALOG_CHARS) return@withContext cached
+            val body = readBoundedText(connection.inputStream, MAX_CATALOG_CHARS)
+                ?: return@withContext cached
             val root = JSONObject(body)
             val version = root.optInt("version", 0)
             val captions = root.optJSONArray("captions") ?: JSONArray()
@@ -58,18 +73,22 @@ object CaptionCatalogRepository {
                     val item = captions.optJSONObject(i) ?: continue
                     val category = item.optString("category").trim().take(32)
                     val text = item.optString("text").replace('\n', ' ').replace('\r', ' ').trim().take(240)
-                    if (category.isNotBlank() && text.length >= 4 && !text.contains('\t')) {
-                        add("$category\t$text")
+                    val bengali = item.optString("bengali", "").replace('\n', ' ').replace('\r', ' ').trim().take(240)
+                    if (category.isNotBlank() && text.length >= 4 && !text.contains('\t') && !bengali.contains('\t')) {
+                        add(category + "\t" + text + "\t" + bengali.ifBlank { "মনে রাখার মতো একটি মুহূর্ত।" })
                     }
                 }
             }.distinct().take(MAX_CAPTIONS)
 
             val prefs = appContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             val previousVersion = prefs.getInt("remote_caption_version", 0)
-            if (version >= previousVersion && cleaned.isNotEmpty()) {
+            val cleanedText = cleaned.joinToString("\n")
+            val previousText = prefs.getString("remote_caption_entries", "").orEmpty()
+            // Content changes must refresh even when a publisher forgets to bump the version.
+            if (cleaned.isNotEmpty() && (version > previousVersion || cleanedText != previousText)) {
                 val saved = prefs.edit()
-                    .putInt("remote_caption_version", version)
-                    .putString("remote_caption_entries", cleaned.joinToString("\n"))
+                    .putInt("remote_caption_version", maxOf(version, previousVersion))
+                    .putString("remote_caption_entries", cleanedText)
                     .putLong("remote_caption_updated_ms", System.currentTimeMillis())
                     .commit()
                 if (!saved) return@withContext cached

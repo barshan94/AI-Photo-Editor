@@ -11,6 +11,8 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.rememberTransformableState
@@ -26,6 +28,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -41,6 +44,7 @@ import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.ImageSearch
 import androidx.compose.material.icons.rounded.Tune
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -49,9 +53,11 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -96,6 +102,21 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
 
+@Composable
+private fun EditorImageAction(symbol: String, label: String, enabled: Boolean, onClick: () -> Unit) {
+    Column(
+        modifier = Modifier.size(34.dp).clip(RoundedCornerShape(9.dp))
+            .background(if (enabled) Color(0xFF293333) else Color(0xFF202626))
+            .clickable(enabled = enabled, onClick = onClick)
+            .padding(3.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Text(symbol, color = if (enabled) Mint else SoftText.copy(alpha = 0.45f),
+            fontSize = 19.sp, fontWeight = FontWeight.Bold, lineHeight = 22.sp)
+    }
+}
+
 private val Ink = Color(0xFF101313)
 private val Panel = Color(0xFF1A2020)
 private val Mint = Color(0xFF78E0D0)
@@ -133,7 +154,8 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // Launch the editor immediately. Optional caption refresh runs asynchronously in the UI scope.
+        // Queue silent background updates; WorkManager waits for unmetered connectivity.
+        TrendPackUpdateScheduler.schedule(applicationContext)
         setContent {
             MaterialTheme(colorScheme = darkColorScheme(
                 primary = Mint, onPrimary = Ink, background = Ink,
@@ -155,6 +177,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun PhotoEditorHome() {
     val context = LocalContext.current
@@ -163,9 +186,8 @@ private fun PhotoEditorHome() {
     var remoteCaptionEntries by remember {
         mutableStateOf(CaptionCatalogRepository.readCachedEntries(context))
     }
-    LaunchedEffect(Unit) {
-        // Network work stays off the main thread and is optional; offline editing never waits for it.
-        remoteCaptionEntries = CaptionCatalogRepository.refresh(context)
+    var aiEditRules by remember {
+        mutableStateOf(AiEditRulesRepository.readCachedRules(context))
     }
     val recoveryPrefs = remember {
         context.getSharedPreferences("frame_ai_recovery", android.content.Context.MODE_PRIVATE)
@@ -183,10 +205,12 @@ private fun PhotoEditorHome() {
     var isAnalyzing by remember { mutableStateOf(false) }
     var analysisProgress by remember { mutableIntStateOf(0) }
     var isExporting by remember { mutableStateOf(false) }
+    var lastExportedUri by remember { mutableStateOf<Uri?>(null) }
     var exportProgress by remember { mutableIntStateOf(0) }
     var operationProgress by remember { mutableIntStateOf(0) }
     var operationStage by remember { mutableStateOf("Ready") }
     var batchPreset by remember { mutableStateOf("Current edits") }
+    var batchAiLook by remember { mutableStateOf("Natural") }
     var batchSummary by remember { mutableStateOf<String?>(null) }
     var batchPreviewImages by remember { mutableStateOf<Map<Uri, ByteArray>>(emptyMap()) }
     var batchPreviewScores by remember { mutableStateOf<Map<Uri, PhotoQualityScoring.Score>>(emptyMap()) }
@@ -211,13 +235,14 @@ private fun PhotoEditorHome() {
     var showEnhanced by remember { mutableStateOf(recoveryPrefs.getBoolean("show_enhanced", true)) }
     var compareBeforeAfter by remember { mutableStateOf(false) }
     var comparePosition by remember { mutableFloatStateOf(0.5f) }
-    var showCropGuides by remember { mutableStateOf(recoveryPrefs.getBoolean("show_crop_guides", true)) }
+    var showCropGuides by remember { mutableStateOf(true) }
     val undoHistory = remember { mutableStateListOf<EditSettings>() }
     val redoHistory = remember { mutableStateListOf<EditSettings>() }
     var brightness by remember { mutableFloatStateOf(recoveryPrefs.getFloat("brightness", 0f)) }
     var contrast by remember { mutableFloatStateOf(recoveryPrefs.getFloat("contrast", 1.07f)) }
     var saturation by remember { mutableFloatStateOf(recoveryPrefs.getFloat("saturation", 1.06f)) }
     var warmth by remember { mutableFloatStateOf(recoveryPrefs.getFloat("warmth", 0f)) }
+    var activeAdjustment by remember { mutableStateOf("Brightness") }
     var backgroundBlur by remember { mutableFloatStateOf(recoveryPrefs.getFloat("background_blur", 0f)) }
     var backgroundEnhancement by remember { mutableFloatStateOf(recoveryPrefs.getFloat("background_enhancement", 0f)) }
     var subjectBrightness by remember { mutableFloatStateOf(recoveryPrefs.getFloat("subject_brightness", 0f)) }
@@ -226,6 +251,12 @@ private fun PhotoEditorHome() {
     var makeupIntensity by remember { mutableFloatStateOf(recoveryPrefs.getFloat("makeup_intensity", 0f)) }
     var removalBrushMode by remember { mutableStateOf(recoveryPrefs.getBoolean("removal_brush_mode", false)) }
     var removalBrushSize by remember { mutableFloatStateOf(recoveryPrefs.getFloat("removal_brush_size", 24f)) }
+    var automaticRemovalMask by remember { mutableStateOf<Bitmap?>(null) }
+    var isSelectingRemovalTarget by remember { mutableStateOf(false) }
+    LaunchedEffect(activePhoto?.uri) {
+        automaticRemovalMask?.let { if (!it.isRecycled) it.recycle() }
+        automaticRemovalMask = null
+    }
     val removalStrokes = remember {
         mutableStateListOf<List<Offset>>().apply {
             val saved = recoveryPrefs.getString("removal_strokes", "").orEmpty()
@@ -258,6 +289,8 @@ private fun PhotoEditorHome() {
     var cropLabel by remember { mutableStateOf(recoveryPrefs.getString("crop_label", "Original") ?: "Original") }
     var cropOffsetX by remember { mutableFloatStateOf(recoveryPrefs.getFloat("crop_offset_x", 0f)) }
     var cropOffsetY by remember { mutableFloatStateOf(recoveryPrefs.getFloat("crop_offset_y", 0f)) }
+    var freeCropWidth by remember { mutableFloatStateOf(recoveryPrefs.getFloat("free_crop_width", 0.85f)) }
+    var freeCropHeight by remember { mutableFloatStateOf(recoveryPrefs.getFloat("free_crop_height", 0.85f)) }
     var rotationDegrees by remember { mutableFloatStateOf(recoveryPrefs.getFloat("rotation_degrees", 0f)) }
     var straightenDegrees by remember { mutableFloatStateOf(recoveryPrefs.getFloat("straighten_degrees", 0f)) }
     var mirrorHorizontal by remember { mutableStateOf(recoveryPrefs.getBoolean("mirror_horizontal", false)) }
@@ -274,6 +307,17 @@ private fun PhotoEditorHome() {
     var selectedStyle by remember { mutableStateOf(recoveryPrefs.getString("selected_style", "Auto") ?: "Auto") }
     var activeEditorPanel by remember { mutableStateOf(recoveryPrefs.getString("active_editor_panel", "Universal Edit") ?: "Universal Edit") }
     var activeAiSubpanel by remember { mutableStateOf(recoveryPrefs.getString("active_ai_subpanel", "Subject") ?: "Subject") }
+    var activeCropSubpanel by remember { mutableStateOf("Crop") }
+    var activeAiTool by remember { mutableStateOf("Retouch") }
+    var aiEditLook by remember { mutableStateOf("Balanced") }
+    var showSingleAiLookOptions by remember { mutableStateOf(false) }
+    var showResetLearning by remember { mutableStateOf(false) }
+    var showDeleteLearningConfirmation by remember { mutableStateOf(false) }
+    var showBatchAiOptions by remember { mutableStateOf(false) }
+    var batchEditedSettingsByUri by remember { mutableStateOf<Map<Uri, EditSettings>>(emptyMap()) }
+    var batchManualOverrides by remember { mutableStateOf<Set<Uri>>(emptySet()) }
+    var editorOpeningSettings by remember { mutableStateOf<EditSettings?>(null) }
+    var activePerspectiveCorner by remember { mutableStateOf("Top-left") }
     var editedScore by remember { mutableStateOf<PhotoQualityScoring.Score?>(null) }
     var originalPreviewScore by remember { mutableStateOf<PhotoQualityScoring.Score?>(null) }
     var isShowingOriginal by remember { mutableStateOf(false) }
@@ -292,11 +336,26 @@ private fun PhotoEditorHome() {
             }
         )
     }
-    var captionEnglish by remember { mutableStateOf(recoveryPrefs.getString("caption_english", "").orEmpty()) }
-    var captionBengali by remember { mutableStateOf(recoveryPrefs.getString("caption_bengali", "").orEmpty()) }
+    var captionEnglish by remember {
+        mutableStateOf(recoveryPrefs.getString("caption_english", "").orEmpty().ifBlank { "A moment worth keeping." })
+    }
+    var captionBengali by remember {
+        mutableStateOf(recoveryPrefs.getString("caption_bengali", "").orEmpty().ifBlank { "মনে রাখার মতো একটি মুহূর্ত।" })
+    }
     var captionIndex by remember { mutableIntStateOf(0) }
+    var captionGenerationRound by remember { mutableIntStateOf(0) }
     var captionPhotoUri by remember { mutableStateOf<String?>(recoveryPrefs.getString("caption_photo_uri", null)) }
+    var captionSourceSignature by remember { mutableStateOf("") }
     var isGeneratingCaptions by remember { mutableStateOf(false) }
+    var showBatchCaptionChoice by remember { mutableStateOf(false) }
+    var showIndividualBatchCaptionPicker by remember { mutableStateOf(false) }
+    var batchCaptionResults by remember { mutableStateOf<Map<Uri, List<Pair<String, String>>>>(emptyMap()) }
+    var expandedBatchCaptionOptions by remember { mutableStateOf<Set<Uri>>(emptySet()) }
+    var batchCaptionTheme by remember { mutableStateOf("Auto") }
+    var batchCaptionRound by remember { mutableIntStateOf(0) }
+    var isGeneratingBatchCaptions by remember { mutableStateOf(false) }
+    var captionShareLanguage by remember { mutableStateOf("Both") }
+    var originalHoldPhoto by remember { mutableStateOf<PhotoItem?>(null) }
     var captionTheme by remember { mutableStateOf(recoveryPrefs.getString("caption_theme", "Auto") ?: "Auto") }
     var captionAspectRatio by remember { mutableFloatStateOf(recoveryPrefs.getFloat("caption_aspect_ratio", 1f)) }
     var captionSearchQuery by remember { mutableStateOf(recoveryPrefs.getString("caption_search_query", "").orEmpty()) }
@@ -304,12 +363,38 @@ private fun PhotoEditorHome() {
 
     fun applyCaptionSuggestions(labels: List<Pair<String, Float>>, ratio: Float) {
         captionAspectRatio = ratio
-        val generated = CaptionSuggestionEngine.fromLabels(labels, ratio, captionTheme)
-        val libraryMatches = CaptionLibrary.recommend(generated.detectedLabels, captionTheme, limit = 5)
+        val effectiveTheme = if (captionTheme in setOf("Durga Puja", "Bijoya Dashami")) "Festival" else captionTheme
+        val generated = CaptionSuggestionEngine.fromLabels(labels, ratio, effectiveTheme)
+        val libraryMatches = CaptionLibrary.recommend(generated.detectedLabels, effectiveTheme, limit = 5)
+        val detected = generated.detectedLabels.joinToString(" ").lowercase()
+        val festivalCategories = setOf("Festival", "Durga Puja", "Bijoya Dashami")
+        val remoteMatches = remoteCaptionEntries.filter { entry ->
+            entry.category.equals(captionTheme, ignoreCase = true) ||
+                (captionTheme == "Festival" && entry.category in festivalCategories) ||
+                (captionTheme in setOf("Durga Puja", "Bijoya Dashami") && entry.category == "Festival") ||
+                (captionTheme == "Auto" && entry.category.equals("Aesthetic", ignoreCase = true)) ||
+                entry.keywords.any { keyword ->
+                    keyword.length > 2 && detected.isNotBlank() && detected.contains(keyword, ignoreCase = true)
+                }
+        }.take(12)
         val captionPairs = (generated.english.zip(generated.bengali) +
-            libraryMatches.map { it.text to it.bengali }).distinctBy { it.first }
-        val english = captionPairs.map { it.first }
-        val bengali = captionPairs.map { it.second }
+            libraryMatches.map { it.text to it.bengali } +
+            remoteMatches.mapIndexed { index, entry ->
+                entry.text to (libraryMatches.getOrNull(index)?.bengali
+                    ?: generated.bengali.getOrNull(index % generated.bengali.size)
+                    ?: "মনে রাখার মতো একটি মুহূর্ত।")
+            }).distinctBy { it.first }
+        val safePairs = (captionPairs + listOf(
+            "A moment worth keeping." to "মনে রাখার মতো একটি মুহূর্ত।",
+            "Little moments, lasting memories." to "ছোট ছোট মুহূর্ত, চিরদিনের স্মৃতি।",
+            "Just living this moment." to "এই মুহূর্তটুকু উপভোগ করছি।"
+        )).distinctBy { it.first }.filter { it.first.isNotBlank() }
+        // Rotate the suggestion order on each regeneration so the selected result changes,
+        // while preserving each English/Bengali pair.
+        val rotation = if (safePairs.isEmpty()) 0 else captionGenerationRound.mod(safePairs.size)
+        val rotatedPairs = if (safePairs.isEmpty()) safePairs else safePairs.drop(rotation) + safePairs.take(rotation)
+        val english = rotatedPairs.map { it.first }
+        val bengali = rotatedPairs.map { it.second }
         val suggestions = CaptionSuggestionEngine.Suggestions(
             detectedLabels = generated.detectedLabels,
             english = english,
@@ -317,17 +402,73 @@ private fun PhotoEditorHome() {
         )
         captionSuggestions = suggestions
         captionIndex = 0
-        captionEnglish = suggestions.english.first()
-        captionBengali = suggestions.bengali.first()
+        captionEnglish = suggestions.english.firstOrNull() ?: "A moment worth keeping."
+        captionBengali = suggestions.bengali.firstOrNull() ?: "মনে রাখার মতো একটি মুহূর্ত।"
         isGeneratingCaptions = false
     }
 
+    fun captionEditSignature(): String = listOf(
+        brightness, contrast, saturation, warmth, cropLabel, cropOffsetX, cropOffsetY,
+        rotationDegrees, straightenDegrees, mirrorHorizontal, mirrorVertical,
+        perspectiveTopLeftX, perspectiveTopLeftY, perspectiveTopRightX, perspectiveTopRightY,
+        perspectiveBottomRightX, perspectiveBottomRightY, perspectiveBottomLeftX, perspectiveBottomLeftY,
+        backgroundBlur, backgroundEnhancement, subjectBrightness, darkerAreaLift, skinSmoothing, makeupIntensity
+    ).joinToString("|")
+
+    suspend fun createBatchCaption(photo: PhotoItem, theme: String, round: Int): List<Pair<String, String>> {
+        var bitmap: Bitmap? = null
+        try {
+            bitmap = withContext(Dispatchers.IO) {
+                AutoEnhancer.decodeForEditing(context.contentResolver, photo.uri, maxDimension = 640)
+            }
+            val workingBitmap = bitmap ?: return listOf("A moment worth keeping." to "মনে রাখার মতো একটি মুহূর্ত।")
+            val ratio = workingBitmap.width.toFloat() / workingBitmap.height.coerceAtLeast(1).toFloat()
+            val analysis = PhotoAnalysisEngine.analyze(workingBitmap)
+            val labels = analysis.labels.map { label -> label.substringBefore(" (") to 0.9f }
+            val ideas = CaptionSuggestionEngine.fromLabels(labels, ratio, theme)
+            val count = minOf(ideas.english.size, ideas.bengali.size)
+            if (count <= 0) return listOf("A moment worth keeping." to "মনে রাখার মতো একটি মুহূর্ত।")
+            return (0 until minOf(3, count)).map { offset ->
+                val index = (round + offset).mod(count)
+                ideas.english[index] to ideas.bengali[index]
+            }.distinctBy { it.first }
+        } finally {
+            bitmap?.let { if (!it.isRecycled) it.recycle() }
+        }
+    }
+
+    fun generateBatchCaptions(photos: List<PhotoItem>, theme: String = batchCaptionTheme, round: Int = batchCaptionRound) {
+        val eligible = photos.filter { it.decision != "Reject" }
+        if (eligible.isEmpty() || isGeneratingBatchCaptions) return
+        isGeneratingBatchCaptions = true
+        statusMessage = "Preparing photo-specific captions…"
+        scope.launch {
+            try {
+                for ((index, photo) in eligible.withIndex()) {
+                    try {
+                        val options = createBatchCaption(photo, theme, round + index)
+                        batchCaptionResults = batchCaptionResults + (photo.uri to options)
+                    } catch (_: Exception) {
+                        batchCaptionResults = batchCaptionResults + (photo.uri to
+                            listOf("A moment worth keeping." to "মনে রাখার মতো একটি মুহূর্ত।"))
+                    }
+                }
+                statusMessage = "Photo-specific $theme captions are ready. Generate more to see alternatives."
+            } finally {
+                isGeneratingBatchCaptions = false
+            }
+        }
+    }
+
     fun suggestCaptions(bitmapOverride: Bitmap? = null) {
+        captionGenerationRound += 1
         val bitmap = bitmapOverride ?: previewBitmap
         if (bitmap == null || bitmap.isRecycled) {
             statusMessage = "Prepare a photo preview before suggesting captions."
             return
         }
+        captionPhotoUri = activePhoto?.uri?.toString()
+        captionSourceSignature = captionEditSignature()
         isGeneratingCaptions = true
         statusMessage = "Looking for visual clues on this device…"
         val bitmapForLabels = try { bitmap.copy(Bitmap.Config.ARGB_8888, false) } catch (_: Exception) { null }
@@ -338,6 +479,12 @@ private fun PhotoEditorHome() {
         }
         val labeler = ImageLabeling.getClient(ImageLabelerOptions.DEFAULT_OPTIONS)
         val ratio = bitmapForLabels.width.toFloat() / bitmapForLabels.height.coerceAtLeast(1).toFloat()
+        // Put real text in both fields immediately; ML Kit replaces these starters when analysis finishes.
+        val fallback = CaptionSuggestionEngine.fromLabels(emptyList(), ratio, captionTheme)
+        captionSuggestions = fallback
+        captionIndex = 0
+        captionEnglish = fallback.english.firstOrNull() ?: "A moment worth keeping."
+        captionBengali = fallback.bengali.firstOrNull() ?: "মনে রাখার মতো একটি মুহূর্ত।"
         try {
             labeler.process(InputImage.fromBitmap(bitmapForLabels, 0))
                 .addOnSuccessListener { labels ->
@@ -364,6 +511,12 @@ private fun PhotoEditorHome() {
         }
     }
 
+    fun suggestMoreCaptions() {
+        // Generate fresh options for the current photo and theme instead of cycling
+        // through a single recovered caption from an earlier session.
+        suggestCaptions(previewBitmap)
+    }
+
     // Restore technical scores for photos recovered after process death.
     LaunchedEffect(Unit) {
         val photosNeedingScores = selectedPhotos.filter { it.score == null }.map { it.uri }
@@ -387,13 +540,25 @@ private fun PhotoEditorHome() {
         if (photosNeedingScores.isNotEmpty()) statusMessage = "Recovered your previous photo selection and edit settings."
     }
 
+    // Refresh text packs on launch too. WorkManager remains a backup, not the only update path.
+    LaunchedEffect(Unit) {
+        val refreshed = CaptionCatalogRepository.refresh(context)
+        if (refreshed.isNotEmpty()) {
+            remoteCaptionEntries = refreshed
+            if (activeEditorPanel == "Caption" && previewBitmap != null && !previewBitmap!!.isRecycled) {
+                suggestCaptions(previewBitmap)
+            }
+        }
+        aiEditRules = AiEditRulesRepository.refresh(context)
+    }
+
     // Durable session checkpoint: every editable value and caption is written whenever it changes.
     // This intentionally stores settings/text/URI references only; original image bytes are never overwritten.
     LaunchedEffect(
         selectedPhotos.map { it.uri.toString() }, activePhoto?.uri?.toString(),
         brightness, contrast, saturation, warmth, backgroundBlur, backgroundEnhancement,
         subjectBrightness, darkerAreaLift, skinSmoothing, makeupIntensity,
-        cropLabel, cropOffsetX, cropOffsetY, rotationDegrees, straightenDegrees,
+        cropLabel, cropOffsetX, cropOffsetY, freeCropWidth, freeCropHeight, rotationDegrees, straightenDegrees,
         mirrorHorizontal, mirrorVertical, selectedStyle, showEnhanced, showCropGuides,
         showPerspectiveControls, removalBrushMode, removalBrushSize,
         perspectiveTopLeftX, perspectiveTopLeftY, perspectiveTopRightX, perspectiveTopRightY,
@@ -411,6 +576,7 @@ private fun PhotoEditorHome() {
             .putFloat("subject_brightness", subjectBrightness).putFloat("darker_area_lift", darkerAreaLift)
             .putFloat("skin_smoothing", skinSmoothing).putFloat("makeup_intensity", makeupIntensity)
             .putString("crop_label", cropLabel).putFloat("crop_offset_x", cropOffsetX)
+            .putFloat("free_crop_width", freeCropWidth).putFloat("free_crop_height", freeCropHeight)
             .putFloat("crop_offset_y", cropOffsetY).putFloat("rotation_degrees", rotationDegrees)
             .putFloat("straighten_degrees", straightenDegrees).putBoolean("mirror_horizontal", mirrorHorizontal)
             .putBoolean("mirror_vertical", mirrorVertical)
@@ -418,7 +584,7 @@ private fun PhotoEditorHome() {
             .putFloat("perspective_tr_x", perspectiveTopRightX).putFloat("perspective_tr_y", perspectiveTopRightY)
             .putFloat("perspective_br_x", perspectiveBottomRightX).putFloat("perspective_br_y", perspectiveBottomRightY)
             .putFloat("perspective_bl_x", perspectiveBottomLeftX).putFloat("perspective_bl_y", perspectiveBottomLeftY)
-            .putBoolean("show_enhanced", showEnhanced).putBoolean("show_crop_guides", showCropGuides)
+            .putBoolean("show_enhanced", showEnhanced)
             .putBoolean("show_perspective_controls", showPerspectiveControls)
             .putBoolean("removal_brush_mode", removalBrushMode).putFloat("removal_brush_size", removalBrushSize)
             .putString("removal_strokes", (removalStrokes.toList() + listOf(currentRemovalStroke).filter { it.isNotEmpty() })
@@ -504,6 +670,8 @@ private fun PhotoEditorHome() {
             "Landscape 16:9" -> 16f / 9f
             else -> null
         },
+        freeCropWidthFraction = if (cropLabel == "Free") freeCropWidth else null,
+        freeCropHeightFraction = if (cropLabel == "Free") freeCropHeight else null,
         cropOffsetX = cropOffsetX,
         cropOffsetY = cropOffsetY,
         rotationDegrees = rotationDegrees,
@@ -617,10 +785,11 @@ private fun PhotoEditorHome() {
         contract = ActivityResultContracts.OpenMultipleDocuments()
     ) { uris ->
         if (uris.isNotEmpty()) {
-            selectedPhotos.clear()
-            activePhoto = null
-            previewBitmap = null
-            uris.forEach { uri ->
+            // Add to the existing selection rather than replacing it.
+            val newlyAddedUris = uris.distinct().filter { uri ->
+                selectedPhotos.none { it.uri == uri }
+            }
+            newlyAddedUris.forEach { uri ->
                 try {
                     context.contentResolver.takePersistableUriPermission(
                         uri, Intent.FLAG_GRANT_READ_URI_PERMISSION
@@ -630,11 +799,15 @@ private fun PhotoEditorHome() {
                 }
                 selectedPhotos.add(PhotoItem(uri = uri))
             }
-            isAnalyzing = true
-            analysisProgress = 0
-            statusMessage = "Analysing photo quality…"
+            if (newlyAddedUris.isNotEmpty()) {
+                isAnalyzing = true
+                analysisProgress = 0
+                statusMessage = "Adding and analysing " + newlyAddedUris.size + " new photo(s)…"
+            } else {
+                statusMessage = "Those photos are already selected."
+            }
             scope.launch {
-                val urisToAnalyze = selectedPhotos.map { it.uri }
+                val urisToAnalyze = newlyAddedUris
                 for ((index, uri) in urisToAnalyze.withIndex()) {
                     try {
                         val result = withContext(Dispatchers.Default) {
@@ -796,6 +969,10 @@ private fun PhotoEditorHome() {
         showEnhanced = true
         undoHistory.clear()
         redoHistory.clear()
+        batchEditedSettingsByUri[photo.uri]?.let { applyEditSnapshot(it) }
+        editorOpeningSettings = currentSettings()
+        showSingleAiLookOptions = false
+        showResetLearning = false
         isPreparingPreview = true
         statusMessage = "Opening original photo… Choose an edit when you're ready."
     }
@@ -840,6 +1017,21 @@ private fun PhotoEditorHome() {
         )
     }
 
+    fun applyAiLook(settings: EditSettings, look: String): EditSettings = when (look) {
+        "Saturated" -> settings.copy(
+            saturation = (settings.saturation * aiEditRules.saturatedSaturationMultiplier).coerceIn(0.85f, 1.55f),
+            contrast = (settings.contrast + aiEditRules.saturatedContrastAdd).coerceIn(0.85f, 1.25f)
+        )
+        "Cool" -> settings.copy(
+            warmth = (settings.warmth + aiEditRules.coolWarmthDelta).coerceIn(-20f, 20f),
+            saturation = (settings.saturation * aiEditRules.coolSaturationMultiplier).coerceIn(0.85f, 1.45f)
+        )
+        else -> settings.copy(
+            saturation = (settings.saturation * aiEditRules.balancedSaturationMultiplier).coerceIn(0.85f, 1.45f),
+            contrast = (settings.contrast + aiEditRules.balancedContrastAdd).coerceIn(0.85f, 1.25f)
+        )
+    }
+
     fun recommendedFormats(width: Int, height: Int): List<String> {
         val ratio = width.toFloat() / height.coerceAtLeast(1).toFloat()
         return when {
@@ -852,7 +1044,7 @@ private fun PhotoEditorHome() {
     }
 
     /** Build a small, visible preview for every eligible grid photo without opening a single-photo editor. */
-    fun previewBatchPreset(preset: String) {
+    fun previewBatchPreset(preset: String, aiLook: String = batchAiLook) {
         if (isPreparingBatchPreview || isExporting || isAnalyzing) return
         batchPreset = preset
         batchSummary = null
@@ -881,14 +1073,22 @@ private fun PhotoEditorHome() {
                         batchPreviewFormats = batchPreviewFormats + (photo.uri to recommendedFormats(original!!.width, original!!.height))
                         val originalScore = scoreEditedBitmap(original!!)
                         batchOriginalScores = batchOriginalScores + (photo.uri to originalScore)
-                        val settings = if (preset == "AI Edit") {
-                            aiSettingsFor(PhotoAnalysisEngine.analyze(original!!))
+                        val settings = if (photo.uri in batchManualOverrides) {
+                            batchEditedSettingsByUri[photo.uri] ?: EditSettings(contrast = 1f, saturation = 1f)
+                        } else if (preset == "AI Edit") {
+                            applyAiLook(aiSettingsFor(PhotoAnalysisEngine.analyze(original!!)), aiLook)
                         } else if (preset == "Current edits") {
-                            currentSettings()
+                            batchEditedSettingsByUri[photo.uri] ?: EditSettings(contrast = 1f, saturation = 1f)
+                        } else if (preset == "Auto Level") {
+                            EditSettings(straightenDegrees = AutoLeveler.estimateCorrectionDegrees(original!!) ?: 0f)
                         } else {
                             BatchExportPolicy.settingsForPreset(preset)
                         }
-                        val useSubjectAware = preset == "AI Edit" || preset == "AI Portrait" ||
+                        if (photo.uri !in batchManualOverrides) {
+                            batchEditedSettingsByUri = batchEditedSettingsByUri + (photo.uri to settings)
+                        }
+                        val useSubjectAware = (preset == "AI Edit" && photo.uri !in batchManualOverrides) ||
+                            preset == "AI Portrait" ||
                             settings.backgroundBlur > 0f || settings.backgroundEnhancement > 0f ||
                             settings.subjectBrightness > 0f || settings.darkerAreaLift > 0f ||
                             settings.skinSmoothing > 0f || settings.makeupIntensity > 0f
@@ -965,12 +1165,70 @@ private fun PhotoEditorHome() {
             skinSmoothing = 0f
             makeupIntensity = 0f
         }
+        // Preserve scene-adaptive analysis; apply only the selected overall color preference.
+        val lookSettings = applyAiLook(
+            EditSettings(contrast = contrast, saturation = saturation, warmth = warmth),
+            aiEditLook
+        )
+        contrast = lookSettings.contrast
+        saturation = lookSettings.saturation
+        warmth = lookSettings.warmth
         selectedStyle = sceneStyle
         showEnhanced = true
         compareBeforeAfter = false
         photoAnalysisResult = result
-        statusMessage = "AI Edit applied: scene color, contrast, lighting and detected people were balanced together. Review the result and undo or adjust it if needed."
+        statusMessage = "AI Edit applied using scene and lighting analysis."
     }
+    fun applyMyStyle() {
+        activeAiTool = "My style"
+        if (learnedProfile.acceptedEdits > 0) {
+            recordEditChange()
+            applyEditSnapshot(learnedProfile.toSettings())
+            selectedStyle = "Personal"
+            showEnhanced = true
+            compareBeforeAfter = false
+            statusMessage = "Applied your personal edit suggestion based on ${learnedProfile.preferredEditType}. Review it before exporting."
+        } else {
+            recordEditChange()
+            applyEditSnapshot(currentSettings().copy(contrast = 1.07f, saturation = 1.06f))
+            selectedStyle = "Personal"
+            showEnhanced = true
+            compareBeforeAfter = false
+            statusMessage = "Applied a natural starting style. Export an edit you like to teach My Style your preferences."
+        }
+    }
+
+    // Run AI scene analysis only after the user chooses a look and taps Edit.
+    fun runAiEdit() {
+        val photo = activePhoto ?: return
+        if (isRunningPhotoAnalysis || isExporting) return
+        isRunningPhotoAnalysis = true
+        photoAnalysisResult = null
+        statusMessage = "Inspecting subjects, scene labels, and lighting on this device…"
+        scope.launch {
+            var analysisBitmap: Bitmap? = null
+            try {
+                analysisBitmap = withContext(Dispatchers.IO) {
+                    AutoEnhancer.decodeForEditing(context.contentResolver, photo.uri, maxDimension = 1400)
+                }
+                val result = PhotoAnalysisEngine.analyze(analysisBitmap!!)
+                photoAnalysisResult = result
+                applyAiSuggestedEdit(result)
+                applyEditSnapshot(applyAiLook(currentSettings(), aiEditLook))
+                selectedStyle = "Custom"
+                showEnhanced = true
+                statusMessage = "$aiEditLook AI edit applied. Review it before exporting."
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                statusMessage = "AI analysis failed: " + (error.message ?: "could not inspect this image")
+            } finally {
+                analysisBitmap?.let { if (!it.isRecycled) it.recycle() }
+                isRunningPhotoAnalysis = false
+            }
+        }
+    }
+
     LaunchedEffect(activePhoto?.uri) {
         resetPreviewZoom()
         isShowingOriginal = false
@@ -982,8 +1240,16 @@ private fun PhotoEditorHome() {
     // Android system Back returns to the current batch instead of exiting the editor.
     BackHandler(enabled = activePhoto != null || showBurstComparison || showBurstGroupPicker) {
         if (activePhoto != null) {
+            val editedPhoto = activePhoto!!
+            val editedSettings = currentSettings()
+            batchEditedSettingsByUri = batchEditedSettingsByUri + (editedPhoto.uri to editedSettings)
+            if (editorOpeningSettings != editedSettings) {
+                batchManualOverrides = batchManualOverrides + editedPhoto.uri
+            }
+            editorOpeningSettings = null
             activePhoto = null
             resetPreviewZoom()
+            previewBatchPreset("Current edits")
         } else if (showBurstComparison) {
             showBurstComparison = false
             comparisonGroupId = null
@@ -1025,7 +1291,7 @@ private fun PhotoEditorHome() {
                 previewBitmap?.let { if (!it.isRecycled) it.recycle() }
                 val captionBitmap = adjusted
                 previewBitmap = captionBitmap
-                if (captionPhotoUri != photo.uri.toString()) {
+                if (captionPhotoUri != photo.uri.toString() || captionEnglish.isBlank() || captionBengali.isBlank()) {
                     captionPhotoUri = photo.uri.toString()
                     suggestCaptions(captionBitmap)
                 }
@@ -1065,7 +1331,7 @@ private fun PhotoEditorHome() {
                 original = withContext(Dispatchers.IO) {
                     AutoEnhancer.decodeForEditing(
                         context.contentResolver, photo.uri,
-                        maxDimension = if (useAiUpscale) 1024 else Int.MAX_VALUE
+                        maxDimension = if (useAiUpscale) 1536 else Int.MAX_VALUE
                     )
                 }
                 operationProgress = 12
@@ -1110,19 +1376,25 @@ private fun PhotoEditorHome() {
                 }
                 if (useAiUpscale && enhanced != null) editedScore = scoreEditedBitmap(enhanced!!)
                 operationProgress = 94
-                operationStage = "Saving edited copy to Pictures/FRAME AI"
+                operationStage = "Saving edited copy to Pictures/PixelCraft"
                 val width = enhanced!!.width
                 val height = enhanced!!.height
-                withContext(Dispatchers.IO) {
+                val savedUri = withContext(Dispatchers.IO) {
                     AutoEnhancer.saveJpeg(context.contentResolver, enhanced!!)
                 }
-                learnedProfile = PersonalEditLearning.recordAccepted(context, settings)
+                lastExportedUri = savedUri
+                val learnedEditType = when {
+                    selectedStyle == "Personal" -> learnedProfile.preferredEditType
+                    selectedStyle == "Custom" -> "AI Edit · $aiEditLook"
+                    else -> selectedStyle
+                }
+                learnedProfile = PersonalEditLearning.recordAccepted(context, settings, learnedEditType)
                 operationProgress = 100
                 operationStage = "Finished · original photo preserved"
                 statusMessage = (aiNotice?.let { "$it " } ?: if (useAiPortrait) {
                     "AI Portrait enhancement applied. "
                 } else "") + (if (useAiUpscale) "Saved AI-upscaled " else "Saved full-resolution ") + width + "x" + height +
-                    " copy to Pictures/FRAME AI. Original untouched."
+                    " copy to Pictures/PixelCraft. Original untouched."
             } catch (error: CancellationException) {
                 statusMessage = "Export cancelled. No original photo was changed."
                 throw error
@@ -1142,8 +1414,8 @@ private fun PhotoEditorHome() {
     fun removeMarkedObject(photo: PhotoItem) {
         if (isExporting) return
         val strokes = removalStrokes.toList()
-        if (strokes.none { it.isNotEmpty() }) {
-            statusMessage = "Tap Mark object, then paint over the unwanted object or person in the preview."
+        if (strokes.none { it.isNotEmpty() } && automaticRemovalMask == null) {
+            statusMessage = "Select a person or paint over the unwanted object in the preview."
             return
         }
         isExporting = true
@@ -1154,12 +1426,16 @@ private fun PhotoEditorHome() {
             var original: Bitmap? = null
             var repaired: Bitmap? = null
             try {
-                original = withContext(Dispatchers.IO) {
-                    AutoEnhancer.decodeForEditing(context.contentResolver, photo.uri, maxDimension = 2400)
+                original = if (selectedStyle == "Object Removal" && previewBitmap != null && !previewBitmap!!.isRecycled) {
+                    Bitmap.createBitmap(previewBitmap!!)
+                } else {
+                    withContext(Dispatchers.IO) {
+                        AutoEnhancer.decodeForEditing(context.contentResolver, photo.uri, maxDimension = 2400)
+                    }
                 }
                 operationProgress = 20
                 operationStage = "Reconstructing the marked area"
-                val result = LamaInpainter.inpaint(context, original!!, strokes, removalBrushSize)
+                val result = LamaInpainter.inpaint(context, original!!, strokes, removalBrushSize, automaticRemovalMask)
                 repaired = result.bitmap
                 editedScore = scoreEditedBitmap(repaired!!)
                 operationProgress = 92
@@ -1172,9 +1448,9 @@ private fun PhotoEditorHome() {
                 showEnhanced = true
                 compareBeforeAfter = false
                 removalBrushMode = false
-                removalStrokes.clear()
-                currentRemovalStroke = emptyList()
-                statusMessage = "Object removal finished locally. Saved the edited copy to Pictures/FRAME AI; original untouched."
+                // Keep the mask so the user can run another repair pass on the same area.
+                // The next pass uses the repaired preview as its source instead of the original.
+                statusMessage = "Object updated. You can refine the same area again without repainting."
             } catch (error: CancellationException) {
                 statusMessage = "Object removal cancelled. Original photo remains untouched."
                 throw error
@@ -1214,11 +1490,8 @@ private fun PhotoEditorHome() {
                 Column(modifier = Modifier.padding(start = 11.dp)) {
                     Text("FRAME / AI", color = BrightText, fontSize = 18.sp,
                         fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
-                    Text("YOUR PERSONAL PHOTO EDITOR", color = SoftText,
-                        fontSize = 9.sp, letterSpacing = 1.1.sp)
                 }
                 Spacer(modifier = Modifier.weight(1f))
-                Text("BETA 2.2", color = Mint, fontSize = 10.sp, fontWeight = FontWeight.Bold)
             }
             }
 
@@ -1236,31 +1509,94 @@ private fun PhotoEditorHome() {
                             val baseline = originalPreviewScore
                             val displayed = if (isShowingOriginal) baseline else live
                             val delta = if (live != null && baseline != null) live.score - baseline.score else null
-                            Column(
-                                modifier = Modifier.fillMaxWidth().padding(top = 7.dp, bottom = 2.dp)
-                                    .clip(RoundedCornerShape(10.dp)).background(Color(0xFF111818)).padding(9.dp)
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(top = 7.dp, bottom = 2.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
-                                Text(
-                                    if (displayed == null || baseline == null) "TECHNICAL SCORE · CALCULATING…" else if (isShowingOriginal)
-                                        "ORIGINAL SCORE  ${displayed.score}/100" else
-                                        "EDITED SCORE  ${displayed.score}/100  (Δ ${if (delta!! > 0) "+" else ""}$delta · original ${baseline.score})",
-                                    color = when { !isShowingOriginal && delta != null && delta > 0 -> Mint; !isShowingOriginal && delta != null && delta < 0 -> Color(0xFFFF8B8B); else -> BrightText },
-                                    fontSize = 11.sp, fontWeight = FontWeight.Bold
-                                )
-                                Text(
-                                    if (displayed == null) "Measuring the current preview…" else
-                                        "Sharpness ${displayed.sharpness} · Exposure ${displayed.exposure} · Contrast ${displayed.contrast}",
-                                    color = SoftText, fontSize = 10.sp, modifier = Modifier.padding(top = 3.dp)
-                                )
-                                Text(
-                                    if (displayed == null) scorePhoto.note else "Reason: ${displayed.note}",
-                                    color = SoftText, fontSize = 9.sp, lineHeight = 12.sp,
-                                    modifier = Modifier.padding(top = 2.dp)
-                                )
+                                Column(
+                                    modifier = Modifier.weight(1.25f).clip(RoundedCornerShape(10.dp))
+                                        .background(Color(0xFF111818)).padding(9.dp)
+                                ) {
+                                    Text(
+                                        if (displayed == null || baseline == null) "TECHNICAL SCORE · CALCULATING…" else if (isShowingOriginal)
+                                            "ORIGINAL SCORE  ${displayed.score}/100" else
+                                            "EDITED SCORE  ${displayed.score}/100  (Δ ${if (delta!! > 0) "+" else ""}$delta · original ${baseline.score})",
+                                        color = when { !isShowingOriginal && delta != null && delta > 0 -> Mint; !isShowingOriginal && delta != null && delta < 0 -> Color(0xFFFF8B8B); else -> BrightText },
+                                        fontSize = 10.sp, fontWeight = FontWeight.Bold, lineHeight = 13.sp
+                                    )
+                                    Text(
+                                        if (displayed == null) "Measuring preview…" else
+                                            "Sharpness ${displayed.sharpness} · Exposure ${displayed.exposure} · Contrast ${displayed.contrast}",
+                                        color = SoftText, fontSize = 9.sp, modifier = Modifier.padding(top = 3.dp), lineHeight = 12.sp
+                                    )
+                                }
+                                Column(
+                                    modifier = Modifier.weight(0.9f),
+                                    verticalArrangement = Arrangement.spacedBy(3.dp)
+                                ) {
+                                    Row(
+                                        horizontalArrangement = Arrangement.spacedBy(3.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+
+                                    EditorImageAction("↶", "Undo", undoHistory.isNotEmpty() && !isExporting) { undoEdit() }
+                                    EditorImageAction("↷", "Redo", redoHistory.isNotEmpty() && !isExporting) { redoEdit() }
+                                    EditorImageAction("⟲", "Reset", activePhoto != null && !isExporting) {
+                                        recordEditChange()
+                                        brightness = 0f; contrast = 1f; saturation = 1f; warmth = 0f
+                                        backgroundBlur = 0f; backgroundEnhancement = 0f; subjectBrightness = 0f
+                                        darkerAreaLift = 0f; skinSmoothing = 0f; makeupIntensity = 0f
+                                        cropLabel = "Original"; cropOffsetX = 0f; cropOffsetY = 0f
+                                        rotationDegrees = 0f; straightenDegrees = 0f
+                                        mirrorHorizontal = false; mirrorVertical = false
+                                        perspectiveTopLeftX = 0f; perspectiveTopLeftY = 0f
+                                        perspectiveTopRightX = 0f; perspectiveTopRightY = 0f
+                                        perspectiveBottomRightX = 0f; perspectiveBottomRightY = 0f
+                                        perspectiveBottomLeftX = 0f; perspectiveBottomLeftY = 0f
+                                        showPerspectiveControls = false; removalBrushMode = false
+                                        removalStrokes.clear(); currentRemovalStroke = emptyList()
+                                        selectedStyle = "Auto"; showEnhanced = true; compareBeforeAfter = false
+                                        statusMessage = "All edits reset. Original photo remains unchanged."
+                                    }
+                                    }
+                                    Row(
+                                        horizontalArrangement = Arrangement.spacedBy(3.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+EditorImageAction("⇩", "Export", previewBitmap != null && !isExporting && selectedStyle != "Original") {
+                                        val photo = activePhoto
+                                        if (photo != null) exportOne(photo, currentSettings(),
+                                            selectedStyle == "AI Portrait" || backgroundBlur > 0f ||
+                                                backgroundEnhancement > 0f || subjectBrightness > 0f ||
+                                                darkerAreaLift > 0f || skinSmoothing > 0f || makeupIntensity > 0f)
+                                    }
+                                    EditorImageAction("↗", "Share", lastExportedUri != null && !isExporting) {
+                                        val uri = lastExportedUri
+                                        if (uri != null) {
+                                            val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                                                type = "image/jpeg"
+                                                putExtra(Intent.EXTRA_STREAM, uri)
+                                                val sharedCaption = when (captionShareLanguage) {
+                                                    "English" -> captionEnglish.trim()
+                                                    "বাংলা" -> captionBengali.trim()
+                                                    else -> listOf(captionEnglish.trim(), captionBengali.trim())
+                                                        .filter { it.isNotBlank() }.joinToString("\n\n")
+                                                }
+                                                if (sharedCaption.isNotBlank()) putExtra(Intent.EXTRA_TEXT, sharedCaption)
+                                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                            }
+                                            context.startActivity(Intent.createChooser(shareIntent, "Share edited photo"))
+                                        } else {
+                                            statusMessage = "Export an edited copy first, then tap Share."
+                                        }
+                                    }
+                                    }
+                                }
                             }
                         }
 
-                        Spacer(modifier = Modifier.height(8.dp))
+                        Spacer(modifier = Modifier.height(4.dp))
                         val previewAspectRatio = previewBitmap?.let {
                             it.width.toFloat() / it.height.coerceAtLeast(1).toFloat()
                         } ?: activePhoto?.let {
@@ -1408,6 +1744,35 @@ private fun PhotoEditorHome() {
                                     }
                                 }
                             }
+                            if (activePhoto != null && selectedPhotos.size > 1) {
+                                val photoIndex = selectedPhotos.indexOfFirst { it.uri == activePhoto?.uri }
+                                Box(
+                                    modifier = Modifier.align(Alignment.CenterStart)
+                                        .padding(start = 6.dp).size(width = 38.dp, height = 52.dp)
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(Ink.copy(alpha = 0.72f))
+                                        .clickable(enabled = photoIndex > 0 && !isExporting) {
+                                            if (photoIndex > 0) openEditor(selectedPhotos[photoIndex - 1])
+                                        },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text("‹", color = if (photoIndex > 0) BrightText else SoftText.copy(alpha = 0.35f),
+                                        fontSize = 34.sp, lineHeight = 36.sp, fontWeight = FontWeight.Light)
+                                }
+                                Box(
+                                    modifier = Modifier.align(Alignment.CenterEnd)
+                                        .padding(end = 6.dp).size(width = 38.dp, height = 52.dp)
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(Ink.copy(alpha = 0.72f))
+                                        .clickable(enabled = photoIndex in 0 until selectedPhotos.lastIndex && !isExporting) {
+                                            if (photoIndex in 0 until selectedPhotos.lastIndex) openEditor(selectedPhotos[photoIndex + 1])
+                                        },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text("›", color = if (photoIndex in 0 until selectedPhotos.lastIndex) BrightText else SoftText.copy(alpha = 0.35f),
+                                        fontSize = 34.sp, lineHeight = 36.sp, fontWeight = FontWeight.Light)
+                                }
+                            }
                             if (isPreparingPreview) CircularProgressIndicator(color = Mint)
                             if (isExporting) {
                                 Box(
@@ -1467,16 +1832,27 @@ private fun PhotoEditorHome() {
                         Column(
                             modifier = Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState())
                         ) {
-                            Text("EDIT WORKSPACE", color = Mint, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                             Row(
-                                modifier = Modifier.fillMaxWidth(),
+                                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                                 horizontalArrangement = Arrangement.spacedBy(5.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                listOf("Universal Edit", "AI Edit", "Presets", "Crop & Rotate").forEach { panel ->
+                                listOf("Universal Edit", "AI Edit", "Presets", "Crop & Rotate", "Caption").forEach { panel ->
                                     Button(
-                                        onClick = { activeEditorPanel = panel; compareBeforeAfter = false },
-                                        modifier = Modifier.weight(1f).heightIn(min = 44.dp),
+                                        onClick = {
+                                            activeEditorPanel = panel
+                                            compareBeforeAfter = false
+                                            if (panel == "Caption") {
+                                                val photo = activePhoto
+                                                val bitmap = previewBitmap
+                                                if (photo != null && bitmap != null && !bitmap.isRecycled &&
+                                                    (captionPhotoUri != photo.uri.toString() || captionSuggestions?.english.isNullOrEmpty() || captionSourceSignature != captionEditSignature())) {
+                                                    captionPhotoUri = photo.uri.toString()
+                                                    suggestCaptions(bitmap)
+                                                }
+                                            }
+                                        },
+                                        modifier = Modifier.width(96.dp).heightIn(min = 44.dp),
                                         shape = RoundedCornerShape(11.dp),
                                         colors = ButtonDefaults.buttonColors(
                                             containerColor = if (activeEditorPanel == panel) Mint else Color(0xFF293333),
@@ -1493,15 +1869,108 @@ private fun PhotoEditorHome() {
                                     }
                                 }
                             }
-                            Text("Choose one AI editing group at a time to keep the workspace focused.", color = SoftText, fontSize = 10.sp, lineHeight = 14.sp)
-                            if (activeEditorPanel == "AI Edit") {
+            if (activeEditorPanel == "Caption") {
+                Column(modifier = Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                    Text("CAPTION IDEAS", color = Mint, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    val visibleCaptionIdeas = captionSuggestions?.english?.take(3).orEmpty()
+                    if (visibleCaptionIdeas.isNotEmpty()) {
+                        Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                            visibleCaptionIdeas.forEachIndexed { index, idea ->
+                                Button(
+                                    onClick = {
+                                        captionIndex = index
+                                        captionEnglish = idea
+                                        captionBengali = captionSuggestions?.bengali?.getOrNull(index).orEmpty()
+                                    },
+                                    modifier = Modifier.fillMaxWidth().heightIn(min = 44.dp),
+                                    shape = RoundedCornerShape(10.dp),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = if (captionEnglish == idea) Color(0xFF263B38) else Color(0xFF202626),
+                                        contentColor = BrightText
+                                    ),
+                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 7.dp)
+                                ) {
+                                    Text(idea, fontSize = 11.sp, lineHeight = 15.sp, maxLines = 3,
+                                        modifier = Modifier.fillMaxWidth())
+                                }
+                            }
+                        }
+                    } else {
+                        Text("A moment worth keeping.", color = BrightText, fontSize = 12.sp)
+                    }
+                    Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        listOf("English", "বাংলা", "Both").forEach { language ->
+                            Button(
+                                onClick = { captionShareLanguage = language },
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = if (captionShareLanguage == language) Mint else Color(0xFF293333),
+                                    contentColor = if (captionShareLanguage == language) Ink else BrightText
+                                )
+                            ) { Text(language, fontSize = 11.sp) }
+                        }
+                    }
+                    if (captionShareLanguage == "English" || captionShareLanguage == "Both") {
+                    OutlinedTextField(
+                        value = captionEnglish, onValueChange = { captionEnglish = it },
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp, max = 88.dp),
+                        label = { Text("English caption", color = SoftText) },
+                        textStyle = androidx.compose.ui.text.TextStyle(color = BrightText, fontSize = 14.sp),
+                        minLines = 1, maxLines = 2,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = BrightText, unfocusedTextColor = BrightText,
+                            focusedBorderColor = Mint, unfocusedBorderColor = SoftText,
+                            focusedLabelColor = Mint, unfocusedLabelColor = SoftText, cursorColor = Mint
+                        )
+                    )
+                    }
+                    if (captionShareLanguage == "বাংলা" || captionShareLanguage == "Both") {
+                    OutlinedTextField(
+                        value = captionBengali, onValueChange = { captionBengali = it },
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp, max = 88.dp),
+                        label = { Text("বাংলা ক্যাপশন", color = SoftText) },
+                        textStyle = androidx.compose.ui.text.TextStyle(color = BrightText, fontSize = 14.sp),
+                        minLines = 1, maxLines = 2,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = BrightText, unfocusedTextColor = BrightText,
+                            focusedBorderColor = Mint, unfocusedBorderColor = SoftText,
+                            focusedLabelColor = Mint, unfocusedLabelColor = SoftText, cursorColor = Mint
+                        )
+                    )
+                    }
+                    Button(onClick = { suggestMoreCaptions() },
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 38.dp),
+                        enabled = previewBitmap != null && !isGeneratingCaptions,
+                        shape = RoundedCornerShape(10.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Ink),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                    ) { Text(if (isGeneratingCaptions) "Suggesting…" else "Suggest more", fontSize = 11.sp) }
+                    Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                        listOf("Auto", "Portrait", "Friends", "Festival", "Durga Puja", "Bijoya Dashami", "Celebration", "Romantic", "Funny", "Devotional", "Travel", "Family", "Aesthetic").forEach { theme ->
+                            Button(onClick = {
+                                captionTheme = theme
+                                val existing = captionSuggestions
+                                if (existing != null) applyCaptionSuggestions(existing.detectedLabels.map { it to 0.9f }, captionAspectRatio)
+                                else suggestCaptions()
+                            }, contentPadding = PaddingValues(horizontal = 9.dp, vertical = 3.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = if (captionTheme == theme) Mint else Color(0xFF293333),
+                                    contentColor = if (captionTheme == theme) Ink else BrightText
+                                )) { Text(theme, fontSize = 10.sp, maxLines = 1) }
+                        }
+                    }
+                }
+            }
+                                                        if (activeEditorPanel == "AI Edit") {
                                 Row(
                                     modifier = Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 8.dp),
                                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                                 ) {
                                     listOf("Subject", "Background", "Remove", "Enhance").forEach { group ->
                                         Button(
-                                            onClick = { activeAiSubpanel = group; compareBeforeAfter = false },
+                                            onClick = { activeAiSubpanel = group; activeAiTool = when (group) { "Subject" -> "Retouch"; "Background" -> "Blur"; "Remove" -> "Mark object"; else -> "Upscale" }; compareBeforeAfter = false },
                                             modifier = Modifier.weight(1f),
                                             shape = RoundedCornerShape(9.dp),
                                             colors = ButtonDefaults.buttonColors(
@@ -1520,20 +1989,46 @@ private fun PhotoEditorHome() {
                             shape = RoundedCornerShape(14.dp)
                         ) {
                             Column(modifier = Modifier.fillMaxWidth().padding(12.dp)) {
-                                Text("AI EDIT ACTIONS", color = Mint, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                                Text("Improve detail, remove unwanted objects, inspect the scene, and build a personal editing style.", color = SoftText, fontSize = 10.sp, lineHeight = 14.sp, modifier = Modifier.padding(top = 3.dp, bottom = 8.dp))
                                 if (activeAiSubpanel == "Enhance") {
-                                Button(
-                                    onClick = {
-                                        val photo = activePhoto
-                                        if (photo != null) exportOne(photo, currentSettings(), useAiUpscale = true)
-                                        else statusMessage = "Open a photo first to use AI Upscale."
-                                    },
-                                    enabled = activePhoto != null && !isExporting,
-                                    modifier = Modifier.fillMaxWidth(),
-                                    colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Ink)
-                                ) { Text(if (isExporting && operationStage.contains("tile", ignoreCase = true)) "Upscaling…" else if (isExporting) "Processing photo…" else "Run AI Upscale 4×") }
-                                if (isExporting && activePhoto != null) {
+                                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                        Button(
+                                            onClick = {
+                                                activePhoto?.let { photo ->
+                                                    if (!isExporting) exportOne(photo, currentSettings(), useAiUpscale = true)
+                                                }
+                                            },
+                                            enabled = activePhoto != null && !isExporting,
+                                            modifier = Modifier.weight(1f).heightIn(min = 38.dp),
+                                            shape = RoundedCornerShape(8.dp),
+                                            colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Ink),
+                                            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp)
+                                        ) { Text(if (isExporting && activePhoto != null) "Upscaling…" else "AI Upscale", fontSize = 11.sp) }
+                                        Box(
+                                            modifier = Modifier.weight(1f).heightIn(min = 38.dp)
+                                                .clip(RoundedCornerShape(8.dp))
+                                                .background(Color(0xFF293333))
+                                                .combinedClickable(
+                                                    onClick = {
+                                                        if (showResetLearning) showDeleteLearningConfirmation = true
+                                                        else applyMyStyle()
+                                                    },
+                                                    onLongClick = {
+                                                        activeAiTool = "My style"
+                                                        showResetLearning = true
+                                                        statusMessage = "Tap Delete learning to remove the saved personal style."
+                                                    }
+                                                )
+                                                .padding(horizontal = 6.dp, vertical = 4.dp),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Text(
+                                                if (showResetLearning) "Delete learning" else "My style",
+                                                color = BrightText, fontSize = 11.sp, maxLines = 1
+                                            )
+                                        }
+                                    }
+                                }
+                                if (isExporting && activePhoto != null && activeAiSubpanel == "Enhance") {
                                     if (operationStage.contains("Reading original", ignoreCase = true) || operationStage.contains("Loading", ignoreCase = true) || operationStage.contains("Applying current", ignoreCase = true) || operationStage.contains("Preparing current", ignoreCase = true) || operationStage.contains("Detecting", ignoreCase = true)) {
                                         LinearProgressIndicator(modifier = Modifier.fillMaxWidth().padding(top = 5.dp), color = Mint)
                                     } else {
@@ -1544,8 +2039,6 @@ private fun PhotoEditorHome() {
                                     }
                                     Text("$operationProgress% · $operationStage", color = SoftText, fontSize = 10.sp, lineHeight = 14.sp,
                                         modifier = Modifier.padding(top = 3.dp))
-                                }
-                                Text("AI upscaling processes image tiles on this device. The input is memory-bounded to about 1024 px on its longest edge, then reconstructed at 4×. The source photo is never overwritten.", color = SoftText, fontSize = 10.sp, lineHeight = 14.sp)
                                 }
                                 if (activeAiSubpanel == "Remove") {
                                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -1563,74 +2056,70 @@ private fun PhotoEditorHome() {
                                         colors = ButtonDefaults.buttonColors(containerColor = if (removalBrushMode) Color(0xFFFF6B6B) else Color(0xFF293333), contentColor = if (removalBrushMode) Ink else BrightText)
                                     ) { Text(if (removalBrushMode) "Finish marking" else "Mark object") }
                                     Button(
-                                        onClick = { removalStrokes.clear(); currentRemovalStroke = emptyList(); statusMessage = "Object mask cleared." },
-                                        enabled = removalStrokes.isNotEmpty() && !isExporting,
+                                        onClick = {
+                                            removalStrokes.clear()
+                                            currentRemovalStroke = emptyList()
+                                            automaticRemovalMask?.let { if (!it.isRecycled) it.recycle() }
+                                            automaticRemovalMask = null
+                                            statusMessage = "Object selection cleared."
+                                        },
+                                        enabled = (removalStrokes.isNotEmpty() || automaticRemovalMask != null) && !isExporting,
                                         modifier = Modifier.weight(1f),
                                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = BrightText)
                                     ) { Text("Clear mask") }
                                 }
-                                if (removalBrushMode || removalStrokes.isNotEmpty()) {
+                                Button(
+                                    onClick = {
+                                        val bitmap = previewBitmap
+                                        if (bitmap == null || bitmap.isRecycled || isSelectingRemovalTarget || isExporting) {
+                                            statusMessage = "Open a photo preview first."
+                                        } else {
+                                            isSelectingRemovalTarget = true
+                                            statusMessage = "Finding the person in this photo…"
+                                            scope.launch {
+                                                try {
+                                                    val segmentation = MulticlassSegmentationEngine.segment(context, bitmap)
+                                                    val maskPixels = IntArray(bitmap.width * bitmap.height)
+                                                    for (y in 0 until bitmap.height) {
+                                                        val sy = y * segmentation.height / bitmap.height
+                                                        for (x in 0 until bitmap.width) {
+                                                            val sx = x * segmentation.width / bitmap.width
+                                                            val category = segmentation.classAt(sx, sy)
+                                                            maskPixels[y * bitmap.width + x] =
+                                                                if (category in MulticlassSegmentationEngine.HAIR..MulticlassSegmentationEngine.CLOTHES) android.graphics.Color.WHITE else android.graphics.Color.TRANSPARENT
+                                                        }
+                                                    }
+                                                    val mask = Bitmap.createBitmap(bitmap.width, bitmap.height, Bitmap.Config.ARGB_8888)
+                                                    mask.setPixels(maskPixels, 0, bitmap.width, 0, 0, bitmap.width, bitmap.height)
+                                                    automaticRemovalMask?.let { if (!it.isRecycled) it.recycle() }
+                                                    automaticRemovalMask = mask
+                                                    statusMessage = "Person selected. Tap Remove marked area to remove it, or paint over another object."
+                                                } catch (error: Exception) {
+                                                    statusMessage = "Could not select a person in this photo. You can still mark the object manually."
+                                                } finally {
+                                                    isSelectingRemovalTarget = false
+                                                }
+                                            }
+                                        }
+                                    },
+                                    enabled = activePhoto != null && !isExporting && !isSelectingRemovalTarget,
+                                    modifier = Modifier.fillMaxWidth().padding(top = 5.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = BrightText)
+                                ) { Text(if (isSelectingRemovalTarget) "Selecting…" else "Select person", fontSize = 11.sp) }
+                                if (removalBrushMode || removalStrokes.isNotEmpty() || automaticRemovalMask != null) {
                                     Text("REMOVAL BRUSH SIZE  " + removalBrushSize.toInt(), color = SoftText, fontSize = 11.sp)
                                     Slider(value = removalBrushSize, onValueChange = { removalBrushSize = it }, valueRange = 10f..60f)
                                     Text("Paint over the whole object, including its shadow. Red strokes mark the area to remove; the app reconstructs it from surrounding content.", color = SoftText, fontSize = 10.sp, lineHeight = 14.sp)
                                     Button(
                                         onClick = { activePhoto?.let { removeMarkedObject(it) } },
-                                        enabled = activePhoto != null && removalStrokes.isNotEmpty() && !isExporting,
+                                        enabled = activePhoto != null && (removalStrokes.isNotEmpty() || automaticRemovalMask != null) && !isExporting,
                                         modifier = Modifier.fillMaxWidth(),
                                         colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Ink)
                                     ) { Text(if (isExporting) "Removing object…" else "Remove marked area") }
                                 }
                                 }
-                                if (activeAiSubpanel == "Enhance") {
-                                Text("PERSONAL EDIT LEARNING · PRIVATE ON THIS DEVICE", color = Mint, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                Text(
-                                    if (learnedProfile.acceptedEdits == 0) "No accepted edits learned yet. Export an edit you like; the app will remember its settings locally and use them as your personal starting point."
-                                    else "Learned from ${learnedProfile.acceptedEdits} exported edit(s). Your personal starting point updates gradually as you export edits you like. Photos are not stored for learning.",
-                                    color = SoftText, fontSize = 10.sp, lineHeight = 14.sp,
-                                    modifier = Modifier.padding(top = 3.dp, bottom = 8.dp)
-                                )
-                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    Button(
-                                        onClick = {
-                                            if (learnedProfile.acceptedEdits > 0) {
-                                                recordEditChange()
-                                                val learned = learnedProfile.toSettings()
-                                                brightness = learned.brightness
-                                                contrast = learned.contrast
-                                                saturation = learned.saturation
-                                                warmth = learned.warmth
-                                                backgroundBlur = learned.backgroundBlur
-                                                backgroundEnhancement = learned.backgroundEnhancement
-                                                subjectBrightness = learned.subjectBrightness
-                                                darkerAreaLift = learned.darkerAreaLift
-                                                skinSmoothing = learned.skinSmoothing
-                                                makeupIntensity = learned.makeupIntensity
-                                                selectedStyle = "Personal"
-                                                showEnhanced = true
-                                                compareBeforeAfter = false
-                                                statusMessage = "Applied your personal edit suggestion. Review it before exporting."
-                                            } else {
-                                                statusMessage = "Export an edited copy you like first; then your personal suggestion will be available."
-                                            }
-                                        },
-                                        modifier = Modifier.weight(1f),
-                                        enabled = learnedProfile.acceptedEdits > 0,
-                                        colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Ink),
-                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 5.dp)
-                                    ) { Text("Use my style", fontSize = 10.sp) }
-                                    Button(
-                                        onClick = {
-                                            PersonalEditLearning.reset(context)
-                                            learnedProfile = PersonalEditLearning.load(context)
-                                            statusMessage = "Personal editing preferences reset on this device."
-                                        },
-                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = BrightText),
-                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 5.dp)
-                                    ) { Text("Reset learning", fontSize = 10.sp) }
-                                }
-                                Text("Your editing preferences stay on this device. Photos are not stored for learning.", color = SoftText, fontSize = 9.sp, lineHeight = 12.sp)
-                                }
-                            }
+        
+                        }
                         }
                         }
                         if (activeEditorPanel == "AI Edit" && (activeAiSubpanel == "Background" || activeAiSubpanel == "Subject")) {
@@ -1641,74 +2130,95 @@ private fun PhotoEditorHome() {
                         ) {
                             Column(modifier = Modifier.fillMaxWidth().padding(12.dp)) {
                                 if (activeAiSubpanel == "Background") {
-                                Text("BACKGROUND EDITING", color = Mint, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                Text("Use the slider to blur the background while keeping the detected person clearer. Best for portraits and couples.", color = SoftText, fontSize = 10.sp, lineHeight = 14.sp)
-                                Text("BACKGROUND ENHANCE · SCENE-AWARE  " + backgroundEnhancement.toInt(), color = SoftText, fontSize = 11.sp)
-                                Slider(value = backgroundEnhancement, onValueChange = {
-                                    recordEditChange()
-                                    backgroundEnhancement = it
-                                    selectedStyle = if (it > 0f || backgroundBlur > 0f) "AI Portrait" else "Custom"
-                                    showEnhanced = true
-                                }, valueRange = 0f..10f)
-                                Text("Enhances background color separation and local contrast while protecting the detected person.", color = SoftText, fontSize = 10.sp, lineHeight = 14.sp)
-                                Text("BACKGROUND BLUR  " + backgroundBlur.toInt(), color = SoftText, fontSize = 11.sp)
-                                Slider(value = backgroundBlur, onValueChange = {
-                                    recordEditChange()
-                                    backgroundBlur = it
-                                    selectedStyle = if (it > 0f || subjectBrightness > 0f) "AI Portrait" else "Custom"
-                                    showEnhanced = true
-                                }, valueRange = 0f..20f)
+                                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                        listOf("Blur", "Enhance").forEach { tool ->
+                                            Button(onClick = { activeAiTool = tool }, modifier = Modifier.weight(1f).heightIn(min = 36.dp),
+                                                shape = RoundedCornerShape(8.dp),
+                                                colors = ButtonDefaults.buttonColors(containerColor = if (activeAiTool == tool) Mint else Color(0xFF293333), contentColor = if (activeAiTool == tool) Ink else BrightText),
+                                                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp)) { Text(tool, fontSize = 10.sp) }
+                                        }
+                                    }
+                                    if (activeAiTool == "Enhance") {
+                                        Text("Background enhancement  ${backgroundEnhancement.toInt()}", color = SoftText, fontSize = 11.sp)
+                                        Slider(value = backgroundEnhancement, onValueChange = { recordEditChange(); backgroundEnhancement = it; selectedStyle = if (it > 0f || backgroundBlur > 0f) "AI Portrait" else "Custom"; showEnhanced = true }, valueRange = 0f..10f)
+                                    } else {
+                                        Text("Background blur  ${backgroundBlur.toInt()}", color = SoftText, fontSize = 11.sp)
+                                        Slider(value = backgroundBlur, onValueChange = { recordEditChange(); backgroundBlur = it; selectedStyle = if (it > 0f || subjectBrightness > 0f) "AI Portrait" else "Custom"; showEnhanced = true }, valueRange = 0f..20f)
+                                    }
                                 }
                                 if (activeAiSubpanel == "Subject") {
-                                Text("SUBJECT RETOUCH", color = Mint, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                Text("DARKER SKIN AREAS · ADAPTIVE LIFT  " + darkerAreaLift.toInt(), color = SoftText, fontSize = 11.sp)
-                                Slider(value = darkerAreaLift, onValueChange = {
-                                    recordEditChange()
-                                    darkerAreaLift = it
-                                    selectedStyle = if (it > 0f || backgroundBlur > 0f || subjectBrightness > 0f) "AI Portrait" else "Custom"
-                                    showEnhanced = true
-                                }, valueRange = 0f..30f)
-                                Text("Targets darker detected skin pixels more strongly (for example, hands) while applying less lift to already-bright areas like the face.", color = SoftText, fontSize = 10.sp, lineHeight = 14.sp)
-                                Text("OVERALL SKIN LIGHTENING  " + subjectBrightness.toInt(), color = SoftText, fontSize = 11.sp)
-                                Slider(value = subjectBrightness, onValueChange = {
-                                    recordEditChange()
-                                    subjectBrightness = it
-                                    selectedStyle = if (it > 0f || backgroundBlur > 0f || darkerAreaLift > 0f) "AI Portrait" else "Custom"
-                                    showEnhanced = true
-                                }, valueRange = 0f..25f)
-                                Text("Targets detected face and body skin separately from darker-area lift. Your photo stays on this device.", color = SoftText, fontSize = 10.sp, lineHeight = 14.sp)
-                                Text("SKIN SOFTENING · KEEP NATURAL TEXTURE  " + skinSmoothing.toInt(), color = SoftText, fontSize = 11.sp)
-                                Slider(value = skinSmoothing, onValueChange = {
-                                    recordEditChange()
-                                    skinSmoothing = it
-                                    selectedStyle = if (it > 0f || backgroundBlur > 0f || subjectBrightness > 0f || darkerAreaLift > 0f) "AI Portrait" else "Custom"
-                                    showEnhanced = true
-                                }, valueRange = 0f..10f)
-                                Text("Skin-only smoothing is stronger at higher settings. Compare before/after and lower the strength if fine texture looks too soft.", color = SoftText, fontSize = 10.sp, lineHeight = 14.sp)
-                                Text("NATURAL MAKEUP · LIP + CHEEK TINT  " + makeupIntensity.toInt(), color = SoftText, fontSize = 11.sp)
-                                Slider(value = makeupIntensity, onValueChange = {
-                                    recordEditChange()
-                                    makeupIntensity = it
-                                    selectedStyle = if (it > 0f || backgroundBlur > 0f || subjectBrightness > 0f || darkerAreaLift > 0f || skinSmoothing > 0f) "AI Portrait" else "Custom"
-                                    showEnhanced = true
-                                }, valueRange = 0f..10f)
-                                Text("Uses detected face contours for a stronger but still translucent lip tint and softly feathered cheek color. It is optional and remains off at zero.", color = SoftText, fontSize = 10.sp, lineHeight = 14.sp)
+                                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                                        listOf("Retouch", "Skin lightening", "Skin softening", "Natural makeup").forEach { tool ->
+                                            Button(onClick = { activeAiTool = tool }, modifier = Modifier.weight(1f).heightIn(min = 38.dp),
+                                                shape = RoundedCornerShape(8.dp),
+                                                colors = ButtonDefaults.buttonColors(containerColor = if (activeAiTool == tool) Mint else Color(0xFF293333), contentColor = if (activeAiTool == tool) Ink else BrightText),
+                                                contentPadding = PaddingValues(horizontal = 2.dp, vertical = 3.dp)) {
+                                                Text(tool, fontSize = 8.sp, maxLines = 2, lineHeight = 9.sp)
+                                            }
+                                        }
+                                    }
+                                    when (activeAiTool) {
+                                        "Retouch" -> {
+                                            Text("Retouch · adaptive skin lift  ${darkerAreaLift.toInt()}", color = SoftText, fontSize = 11.sp)
+                                            Slider(value = darkerAreaLift, onValueChange = { recordEditChange(); darkerAreaLift = it; selectedStyle = if (it > 0f || backgroundBlur > 0f || subjectBrightness > 0f) "AI Portrait" else "Custom"; showEnhanced = true }, valueRange = 0f..30f)
+                                        }
+                                        "Skin lightening" -> {
+                                            Text("Skin lightening  ${subjectBrightness.toInt()}", color = SoftText, fontSize = 11.sp)
+                                            Slider(value = subjectBrightness, onValueChange = { recordEditChange(); subjectBrightness = it; selectedStyle = if (it > 0f || backgroundBlur > 0f || darkerAreaLift > 0f) "AI Portrait" else "Custom"; showEnhanced = true }, valueRange = 0f..25f)
+                                        }
+                                        "Skin softening" -> {
+                                            Text("Skin softening · natural texture  ${skinSmoothing.toInt()}", color = SoftText, fontSize = 11.sp)
+                                            Slider(value = skinSmoothing, onValueChange = { recordEditChange(); skinSmoothing = it; selectedStyle = if (it > 0f || backgroundBlur > 0f || subjectBrightness > 0f || darkerAreaLift > 0f) "AI Portrait" else "Custom"; showEnhanced = true }, valueRange = 0f..10f)
+                                        }
+                                        "Natural makeup" -> {
+                                            Text("Natural makeup  ${makeupIntensity.toInt()}", color = SoftText, fontSize = 11.sp)
+                                            Slider(value = makeupIntensity, onValueChange = { recordEditChange(); makeupIntensity = it; selectedStyle = if (it > 0f || backgroundBlur > 0f || subjectBrightness > 0f || darkerAreaLift > 0f || skinSmoothing > 0f) "AI Portrait" else "Custom"; showEnhanced = true }, valueRange = 0f..10f)
+                                        }
+                                    }
                                 }
                             }
                         }
                         }
 
                         if (activeEditorPanel == "Crop & Rotate") {
-                            Text("CROP & ROTATE", color = Mint, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                            Text("All framing tools in one place. Edits preview live and remain undoable.", color = SoftText, fontSize = 10.sp, lineHeight = 14.sp)
-                            Text("ROTATE & MIRROR", color = BrightText, fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp))
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                listOf("Auto Level", "Crop", "Rotate", "Straighten", "Perspective").forEach { tool ->
+                                    Button(onClick = {
+                                        activeCropSubpanel = tool
+                                        if (tool == "Auto Level") {
+                                            val bitmap = previewBitmap
+                                            if (bitmap == null || bitmap.isRecycled) statusMessage = "Open a photo preview before auto-leveling."
+                                            else scope.launch {
+                                                val correction = withContext(Dispatchers.Default) { AutoLeveler.estimateCorrectionDegrees(bitmap) }
+                                                if (correction == null) statusMessage = "No reliable horizon found. Adjust Straighten manually."
+                                                else {
+                                                    recordEditChange()
+                                                    straightenDegrees = (straightenDegrees + correction).coerceIn(-15f, 15f)
+                                                    selectedStyle = "Custom"
+                                                    showEnhanced = true
+                                                    statusMessage = if (correction == 0f) "This photo already looks level." else "Level corrected by ${String.format(java.util.Locale.US, "%.1f", correction)}°."
+                                                }
+                                            }
+                                        }
+                                    }, modifier = Modifier.weight(1f).heightIn(min = 36.dp),
+                                        shape = RoundedCornerShape(9.dp),
+                                        colors = ButtonDefaults.buttonColors(containerColor = if (activeCropSubpanel == tool) Mint else Color(0xFF293333), contentColor = if (activeCropSubpanel == tool) Ink else BrightText),
+                                        contentPadding = PaddingValues(horizontal = 2.dp, vertical = 4.dp)) {
+                                        Text(tool, fontSize = 8.sp, maxLines = 1, fontWeight = FontWeight.SemiBold)
+                                    }
+                                }
+                            }
+                            if (activeCropSubpanel == "Rotate") {
+                            Text("ROTATE & MIRROR", color = BrightText, fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 5.dp))
                             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                 Button(onClick = { recordEditChange(); rotationDegrees = (rotationDegrees - 90f).mod(360f); selectedStyle = "Custom"; showEnhanced = true }, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 4.dp, vertical = 5.dp), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = BrightText)) { Text("↶ Rotate", fontSize = 10.sp) }
                                 Button(onClick = { recordEditChange(); rotationDegrees = (rotationDegrees + 90f).mod(360f); selectedStyle = "Custom"; showEnhanced = true }, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 4.dp, vertical = 5.dp), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = BrightText)) { Text("Rotate ↻", fontSize = 10.sp) }
                                 Button(onClick = { recordEditChange(); mirrorHorizontal = !mirrorHorizontal; selectedStyle = "Custom"; showEnhanced = true }, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 4.dp, vertical = 5.dp), colors = ButtonDefaults.buttonColors(containerColor = if (mirrorHorizontal) Mint else Color(0xFF293333), contentColor = if (mirrorHorizontal) Ink else BrightText)) { Text("Mirror H", fontSize = 10.sp) }
                                 Button(onClick = { recordEditChange(); mirrorVertical = !mirrorVertical; selectedStyle = "Custom"; showEnhanced = true }, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 4.dp, vertical = 5.dp), colors = ButtonDefaults.buttonColors(containerColor = if (mirrorVertical) Mint else Color(0xFF293333), contentColor = if (mirrorVertical) Ink else BrightText)) { Text("Mirror V", fontSize = 10.sp) }
                             }
-                            Text("STRAIGHTEN  ${String.format(java.util.Locale.US, "%.1f", straightenDegrees)}°", color = SoftText, fontSize = 10.sp, modifier = Modifier.padding(top = 8.dp))
+                            }
+                            if (activeCropSubpanel == "Straighten") {
+                            Text("STRAIGHTEN  ${String.format(java.util.Locale.US, "%.1f", straightenDegrees)}°", color = SoftText, fontSize = 10.sp, modifier = Modifier.padding(top = 5.dp))
                             Slider(value = straightenDegrees, onValueChange = { straightenDegrees = it; selectedStyle = "Custom"; showEnhanced = true }, onValueChangeFinished = { recordEditChange() }, valueRange = -15f..15f)
                             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                 Button(onClick = {
@@ -1738,42 +2248,97 @@ private fun PhotoEditorHome() {
                                     showPerspectiveControls = false; selectedStyle = "Custom"; showEnhanced = true
                                 }, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 5.dp, vertical = 5.dp), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = BrightText)) { Text("Reset framing", fontSize = 10.sp) }
                             }
-                            Text("CROP RATIO", color = BrightText, fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp))
+                            }
+                            if (activeCropSubpanel == "Crop") {
+                            Text("CROP RATIO", color = BrightText, fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 5.dp))
                             Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                listOf("Original", "Square", "Portrait 4:5", "Story 9:16", "Landscape 16:9").forEach { crop ->
+                                listOf("Original", "Free", "Square", "Portrait 4:5", "Story 9:16", "Landscape 16:9").forEach { crop ->
                                     Button(onClick = { recordEditChange(); cropLabel = crop; cropOffsetX = 0f; cropOffsetY = 0f; selectedStyle = "Custom"; showEnhanced = true; compareBeforeAfter = false },
                                         shape = RoundedCornerShape(10.dp),
                                         colors = ButtonDefaults.buttonColors(containerColor = if (cropLabel == crop) Mint else Color(0xFF293333), contentColor = if (cropLabel == crop) Ink else BrightText),
                                         contentPadding = PaddingValues(horizontal = 9.dp, vertical = 3.dp)) { Text(crop, fontSize = 10.sp) }
                                 }
                             }
-                            Text("PERSPECTIVE CROP", color = BrightText, fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp))
-                            Text("Move each corner inward independently. The selected quadrilateral is corrected into a rectangle—useful for signs, buildings, screens, or angled shots.", color = SoftText, fontSize = 10.sp, lineHeight = 14.sp)
-                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                Button(onClick = { showPerspectiveControls = !showPerspectiveControls }, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 5.dp, vertical = 5.dp), colors = ButtonDefaults.buttonColors(containerColor = if (showPerspectiveControls) Mint else Color(0xFF293333), contentColor = if (showPerspectiveControls) Ink else BrightText)) { Text(if (showPerspectiveControls) "Hide corner controls" else "Adjust four corners", fontSize = 10.sp) }
-                                Button(onClick = { recordEditChange(); perspectiveTopLeftX = 0f; perspectiveTopLeftY = 0f; perspectiveTopRightX = 0f; perspectiveTopRightY = 0f; perspectiveBottomRightX = 0f; perspectiveBottomRightY = 0f; perspectiveBottomLeftX = 0f; perspectiveBottomLeftY = 0f; selectedStyle = "Custom"; showEnhanced = true }, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 5.dp, vertical = 5.dp), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = BrightText)) { Text("Reset corners", fontSize = 10.sp) }
+                            if (cropLabel == "Free") {
+                                Text("CROP WIDTH  ${(freeCropWidth * 100).toInt()}%", color = SoftText, fontSize = 10.sp, modifier = Modifier.padding(top = 5.dp))
+                                Slider(
+                                    value = freeCropWidth,
+                                    onValueChange = { freeCropWidth = it; selectedStyle = "Custom"; showEnhanced = true },
+                                    onValueChangeFinished = { recordEditChange() },
+                                    valueRange = 0.2f..1f
+                                )
+                                Text("CROP HEIGHT  ${(freeCropHeight * 100).toInt()}%", color = SoftText, fontSize = 10.sp)
+                                Slider(
+                                    value = freeCropHeight,
+                                    onValueChange = { freeCropHeight = it; selectedStyle = "Custom"; showEnhanced = true },
+                                    onValueChangeFinished = { recordEditChange() },
+                                    valueRange = 0.2f..1f
+                                )
+                                Text("Adjust width and height independently, then drag the photo to position the crop.", color = SoftText, fontSize = 10.sp)
                             }
-                            if (showPerspectiveControls) {
-                                Text("TOP-LEFT CORNER", color = Mint, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                                Text("Horizontal inset  ${(perspectiveTopLeftX * 100).toInt()}%", color = SoftText, fontSize = 10.sp)
-                                Slider(value = perspectiveTopLeftX, onValueChange = { recordEditChange(); perspectiveTopLeftX = it; selectedStyle = "Custom"; showEnhanced = true }, valueRange = 0f..0.35f)
-                                Text("Vertical inset  ${(perspectiveTopLeftY * 100).toInt()}%", color = SoftText, fontSize = 10.sp)
-                                Slider(value = perspectiveTopLeftY, onValueChange = { recordEditChange(); perspectiveTopLeftY = it; selectedStyle = "Custom"; showEnhanced = true }, valueRange = 0f..0.35f)
-                                Text("TOP-RIGHT CORNER", color = Mint, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                                Text("Horizontal inset  ${(perspectiveTopRightX * 100).toInt()}%", color = SoftText, fontSize = 10.sp)
-                                Slider(value = perspectiveTopRightX, onValueChange = { recordEditChange(); perspectiveTopRightX = it; selectedStyle = "Custom"; showEnhanced = true }, valueRange = 0f..0.35f)
-                                Text("Vertical inset  ${(perspectiveTopRightY * 100).toInt()}%", color = SoftText, fontSize = 10.sp)
-                                Slider(value = perspectiveTopRightY, onValueChange = { recordEditChange(); perspectiveTopRightY = it; selectedStyle = "Custom"; showEnhanced = true }, valueRange = 0f..0.35f)
-                                Text("BOTTOM-RIGHT CORNER", color = Mint, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                                Text("Horizontal inset  ${(perspectiveBottomRightX * 100).toInt()}%", color = SoftText, fontSize = 10.sp)
-                                Slider(value = perspectiveBottomRightX, onValueChange = { recordEditChange(); perspectiveBottomRightX = it; selectedStyle = "Custom"; showEnhanced = true }, valueRange = 0f..0.35f)
-                                Text("Vertical inset  ${(perspectiveBottomRightY * 100).toInt()}%", color = SoftText, fontSize = 10.sp)
-                                Slider(value = perspectiveBottomRightY, onValueChange = { recordEditChange(); perspectiveBottomRightY = it; selectedStyle = "Custom"; showEnhanced = true }, valueRange = 0f..0.35f)
-                                Text("BOTTOM-LEFT CORNER", color = Mint, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                                Text("Horizontal inset  ${(perspectiveBottomLeftX * 100).toInt()}%", color = SoftText, fontSize = 10.sp)
-                                Slider(value = perspectiveBottomLeftX, onValueChange = { recordEditChange(); perspectiveBottomLeftX = it; selectedStyle = "Custom"; showEnhanced = true }, valueRange = 0f..0.35f)
-                                Text("Vertical inset  ${(perspectiveBottomLeftY * 100).toInt()}%", color = SoftText, fontSize = 10.sp)
-                                Slider(value = perspectiveBottomLeftY, onValueChange = { recordEditChange(); perspectiveBottomLeftY = it; selectedStyle = "Custom"; showEnhanced = true }, valueRange = 0f..0.35f)
+                            }
+                            if (activeCropSubpanel == "Perspective") {
+                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    listOf("Top-left", "Top-right", "Bottom-right", "Bottom-left").forEach { corner ->
+                                        Button(onClick = { activePerspectiveCorner = corner; showPerspectiveControls = true },
+                                            modifier = Modifier.weight(1f).heightIn(min = 36.dp), shape = RoundedCornerShape(8.dp),
+                                            colors = ButtonDefaults.buttonColors(containerColor = if (activePerspectiveCorner == corner) Mint else Color(0xFF293333), contentColor = if (activePerspectiveCorner == corner) Ink else BrightText),
+                                            contentPadding = PaddingValues(horizontal = 1.dp, vertical = 3.dp)
+                                        ) { Text(corner, fontSize = 8.sp, maxLines = 1) }
+                                    }
+                                }
+                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    Button(onClick = { showPerspectiveControls = !showPerspectiveControls }, modifier = Modifier.weight(1f),
+                                        contentPadding = PaddingValues(horizontal = 5.dp, vertical = 5.dp),
+                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = BrightText)
+                                    ) { Text(if (showPerspectiveControls) "Hide controls" else "Show controls", fontSize = 10.sp) }
+                                    Button(onClick = {
+                                        recordEditChange()
+                                        perspectiveTopLeftX = 0f; perspectiveTopLeftY = 0f
+                                        perspectiveTopRightX = 0f; perspectiveTopRightY = 0f
+                                        perspectiveBottomRightX = 0f; perspectiveBottomRightY = 0f
+                                        perspectiveBottomLeftX = 0f; perspectiveBottomLeftY = 0f
+                                        selectedStyle = "Custom"; showEnhanced = true
+                                    }, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 5.dp, vertical = 5.dp),
+                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = BrightText)
+                                    ) { Text("Reset corners", fontSize = 10.sp) }
+                                }
+                                if (showPerspectiveControls) {
+                                    val cornerX = when (activePerspectiveCorner) {
+                                        "Top-left" -> perspectiveTopLeftX
+                                        "Top-right" -> perspectiveTopRightX
+                                        "Bottom-right" -> perspectiveBottomRightX
+                                        else -> perspectiveBottomLeftX
+                                    }
+                                    val cornerY = when (activePerspectiveCorner) {
+                                        "Top-left" -> perspectiveTopLeftY
+                                        "Top-right" -> perspectiveTopRightY
+                                        "Bottom-right" -> perspectiveBottomRightY
+                                        else -> perspectiveBottomLeftY
+                                    }
+                                    Text("Horizontal  ${(cornerX * 100).toInt()}%", color = SoftText, fontSize = 10.sp)
+                                    Slider(value = cornerX, onValueChange = { value ->
+                                        recordEditChange()
+                                        when (activePerspectiveCorner) {
+                                            "Top-left" -> perspectiveTopLeftX = value
+                                            "Top-right" -> perspectiveTopRightX = value
+                                            "Bottom-right" -> perspectiveBottomRightX = value
+                                            else -> perspectiveBottomLeftX = value
+                                        }
+                                        selectedStyle = "Custom"; showEnhanced = true
+                                    }, valueRange = 0f..0.35f)
+                                    Text("Vertical  ${(cornerY * 100).toInt()}%", color = SoftText, fontSize = 10.sp)
+                                    Slider(value = cornerY, onValueChange = { value ->
+                                        recordEditChange()
+                                        when (activePerspectiveCorner) {
+                                            "Top-left" -> perspectiveTopLeftY = value
+                                            "Top-right" -> perspectiveTopRightY = value
+                                            "Bottom-right" -> perspectiveBottomRightY = value
+                                            else -> perspectiveBottomLeftY = value
+                                        }
+                                        selectedStyle = "Custom"; showEnhanced = true
+                                    }, valueRange = 0f..0.35f)
+                                }
                             }
                         }
                         if (activeEditorPanel == "Presets") {
@@ -1796,315 +2361,130 @@ private fun PhotoEditorHome() {
                             }
 
                         }
-                        val activeIndex = selectedPhotos.indexOfFirst { it.uri == activePhoto?.uri }
-                        Row(
-                            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Button(
-                                onClick = {
-                                    if (activeIndex > 0) openEditor(selectedPhotos[activeIndex - 1])
-                                },
-                                enabled = activeIndex > 0 && !isExporting,
-                                modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(10.dp),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = Color(0xFF293333), contentColor = BrightText
-                                ),
-                                contentPadding = PaddingValues(horizontal = 5.dp)
-                            ) { Text("← Previous", fontSize = 11.sp) }
-                            Text(
-                                if (activeIndex >= 0) "${activeIndex + 1} / ${selectedPhotos.size}" else "",
-                                color = SoftText, fontSize = 11.sp,
-                                modifier = Modifier.align(Alignment.CenterVertically)
-                            )
-                            Button(
-                                onClick = {
-                                    if (activeIndex >= 0 && activeIndex < selectedPhotos.lastIndex) {
-                                        openEditor(selectedPhotos[activeIndex + 1])
-                                    }
-                                },
-                                enabled = activeIndex >= 0 && activeIndex < selectedPhotos.lastIndex && !isExporting,
-                                modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(10.dp),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = Color(0xFF293333), contentColor = BrightText
-                                ),
-                                contentPadding = PaddingValues(horizontal = 5.dp)
-                            ) { Text("Next →", fontSize = 11.sp) }
-                        }
-                        Spacer(modifier = Modifier.height(9.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                            Button(onClick = { undoEdit() }, enabled = undoHistory.isNotEmpty() && !isExporting,
-                                modifier = Modifier.weight(0.65f), shape = RoundedCornerShape(10.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = BrightText),
-                                contentPadding = PaddingValues(horizontal = 3.dp, vertical = 2.dp)
-                            ) { Text("Undo", fontSize = 10.sp) }
-                            Button(onClick = { redoEdit() }, enabled = redoHistory.isNotEmpty() && !isExporting,
-                                modifier = Modifier.weight(0.65f), shape = RoundedCornerShape(10.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = BrightText),
-                                contentPadding = PaddingValues(horizontal = 3.dp, vertical = 2.dp)
-                            ) { Text("Redo", fontSize = 10.sp) }
-                            Button(onClick = { compareBeforeAfter = !compareBeforeAfter; showEnhanced = true },
-                                enabled = previewBitmap != null && selectedStyle != "Original", modifier = Modifier.weight(0.85f),
-                                shape = RoundedCornerShape(10.dp),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = if (compareBeforeAfter) Mint else Color(0xFF293333),
-                                    contentColor = if (compareBeforeAfter) Ink else BrightText),
-                                contentPadding = PaddingValues(horizontal = 3.dp, vertical = 2.dp)
-                            ) { Text(if (compareBeforeAfter) "Close compare" else "Compare", fontSize = 10.sp) }
-                            Button(
-                                onClick = { showEnhanced = !showEnhanced; compareBeforeAfter = false },
-                                enabled = previewBitmap != null && selectedStyle != "Original",
-                                modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(12.dp),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = Color(0xFF293333), contentColor = BrightText
-                                ),
-                                contentPadding = PaddingValues(horizontal = 6.dp)
-                            ) {
-                                Text(if (showEnhanced) "Show original" else "Show enhanced", fontSize = 12.sp)
-                            }
-                            Button(
-                                onClick = {
-                                    val photo = activePhoto
-                                    if (photo != null) exportOne(photo, currentSettings(), selectedStyle == "AI Portrait" || backgroundBlur > 0f || backgroundEnhancement > 0f || subjectBrightness > 0f || darkerAreaLift > 0f || skinSmoothing > 0f || makeupIntensity > 0f)
-                                },
-                                enabled = previewBitmap != null && !isExporting && selectedStyle != "Original",
-                                modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(12.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Ink),
-                                contentPadding = PaddingValues(horizontal = 6.dp)
-                            ) {
-                                Text("Export copy", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                            }
-                        }
-                        Spacer(modifier = Modifier.height(12.dp))
+                        Spacer(modifier = Modifier.height(4.dp))
                         if (activeEditorPanel == "AI Edit" && activeAiSubpanel == "Enhance") {
-                        Button(
-                            onClick = {
-                                val photo = activePhoto
-                                if (photo != null && !isRunningPhotoAnalysis && !isExporting) {
-                                    isRunningPhotoAnalysis = true
-                                    photoAnalysisResult = null
-                                    statusMessage = "Inspecting subjects, scene labels, and lighting on this device…"
-                                    scope.launch {
-                                        var analysisBitmap: Bitmap? = null
-                                        try {
-                                            analysisBitmap = withContext(Dispatchers.IO) {
-                                                AutoEnhancer.decodeForEditing(
-                                                    context.contentResolver, photo.uri, maxDimension = 1400
-                                                )
-                                            }
-                                            val result = PhotoAnalysisEngine.analyze(analysisBitmap!!)
-                                            photoAnalysisResult = result
-                                            applyAiSuggestedEdit(result)
-                                            statusMessage = "AI edit applied. Review the preview, compare it with the original, and undo or adjust anything that looks unnatural."
-                                        } catch (error: CancellationException) {
-                                            throw error
-                                        } catch (error: Exception) {
-                                            statusMessage = "AI analysis failed: " + (error.message ?: "could not inspect this image")
-                                        } finally {
-                                            analysisBitmap?.let { if (!it.isRecycled) it.recycle() }
-                                            isRunningPhotoAnalysis = false
-                                        }
-                                    }
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(top = 2.dp, bottom = 5.dp),
+                                horizontalArrangement = Arrangement.spacedBy(5.dp)
+                            ) {
+                                listOf("Balanced", "Saturated", "Cool").forEach { look ->
+                                    Button(
+                                        onClick = { aiEditLook = look; runAiEdit() },
+                                        modifier = Modifier.weight(1f).heightIn(min = 36.dp),
+                                        shape = RoundedCornerShape(9.dp),
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = if (aiEditLook == look) Mint else Color(0xFF293333),
+                                            contentColor = if (aiEditLook == look) Ink else BrightText
+                                        ),
+                                        contentPadding = PaddingValues(horizontal = 3.dp, vertical = 4.dp)
+                                    ) { Text(look, fontSize = 10.sp, maxLines = 1) }
                                 }
-                            },
-                            enabled = activePhoto != null && !isRunningPhotoAnalysis && !isExporting,
-                            modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp),
-                            shape = RoundedCornerShape(12.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = if (photoAnalysisResult != null) Color(0xFF293333) else Mint,
-                                contentColor = if (photoAnalysisResult != null) Mint else Ink
-                            )
-                        ) {
-                            if (isRunningPhotoAnalysis) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(16.dp),
-                                    strokeWidth = 2.dp,
-                                    color = Mint
-                                )
-                                Text("  Analysing photo…", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                            } else {
-                                androidx.compose.material3.Icon(Icons.Rounded.ImageSearch, contentDescription = null)
-                                Text(
-                                    "  AI Edit",
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
                             }
-                        }
                         }
                         if (activeEditorPanel == "Universal Edit") {
-                            Text("UNIVERSAL EDIT · STANDARD CONTROLS", color = Mint, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                            Text("Brightness, contrast, saturation, warmth, and crop apply alongside any active AI adjustment.", color = SoftText, fontSize = 10.sp, lineHeight = 14.sp)
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text("MANUAL ADJUSTMENTS", color = BrightText, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                Spacer(modifier = Modifier.weight(1f))
-                                Text(if (showCropGuides) "Guides on" else "Guides off", color = Mint, fontSize = 10.sp,
-                                    modifier = Modifier.clickable { showCropGuides = !showCropGuides }.padding(4.dp))
-                            }
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Text("CAPTION STUDIO", color = BrightText, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                        Text("On-device visual suggestions plus a searchable offline library. Edit before copying or sharing.",
-                            color = SoftText, fontSize = 11.sp, lineHeight = 16.sp,
-                            modifier = Modifier.padding(top = 3.dp, bottom = 8.dp))
-                        OutlinedTextField(
-                            value = captionSearchQuery, onValueChange = { captionSearchQuery = it },
-                            modifier = Modifier.fillMaxWidth(), label = { Text("Search 1,000 offline captions") },
-                            singleLine = true, shape = RoundedCornerShape(14.dp)
-                        )
-                        Text("${CaptionLibrary.all.size} bundled captions · ${remoteCaptionEntries.size} online additions cached · Wi-Fi updates enabled",
-                            color = Mint, fontSize = 10.sp, fontWeight = FontWeight.SemiBold,
-                            modifier = Modifier.padding(top = 4.dp, bottom = 2.dp))
-                        Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                            horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                            CaptionLibrary.categories.forEach { category ->
-                                Button(
-                                    onClick = { captionLibraryCategory = category },
-                                    modifier = Modifier.heightIn(min = 44.dp), shape = RoundedCornerShape(18.dp),
-                                    contentPadding = PaddingValues(horizontal = 11.dp, vertical = 5.dp),
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = if (captionLibraryCategory == category) Mint else Color(0xFF293333),
-                                        contentColor = if (captionLibraryCategory == category) Ink else BrightText
-                                    )
-                                ) { Text(category, fontSize = 10.sp, maxLines = 1) }
-                            }
-                        }
-                        val normalizedCaptionQuery = captionSearchQuery.trim()
-                        val remoteMatches = remoteCaptionEntries.filter { preset ->
-                            (captionLibraryCategory == "All" || preset.category == captionLibraryCategory) &&
-                                (normalizedCaptionQuery.isBlank() ||
-                                    preset.text.contains(normalizedCaptionQuery, ignoreCase = true) ||
-                                    preset.bengali.contains(normalizedCaptionQuery) ||
-                                    preset.category.contains(normalizedCaptionQuery, ignoreCase = true) ||
-                                    preset.keywords.any { it.contains(normalizedCaptionQuery, ignoreCase = true) })
-                        }
-                        val matchingPresets = (remoteMatches + CaptionLibrary.search(captionSearchQuery, captionLibraryCategory, 6))
-                            .distinctBy { it.text }.take(6)
-                            if (matchingPresets.isEmpty()) {
-                                Text("No matches yet. Try a broader word or another category.", color = SoftText, fontSize = 11.sp)
-                            } else {
-                                matchingPresets.forEach { preset ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(5.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                listOf("Brightness", "Saturation", "Contrast", "Warmth").forEach { adjustment ->
                                     Button(
-                                        onClick = {
-                                            captionEnglish = preset.text
-                                            captionBengali = preset.bengali
-                                            captionSuggestions = CaptionSuggestionEngine.Suggestions(
-                                                detectedLabels = captionSuggestions?.detectedLabels.orEmpty(),
-                                                english = listOf(preset.text), bengali = listOf(captionBengali)
-                                            )
-                                            captionIndex = 0
-                                            statusMessage = "Caption selected from the offline ${preset.category} library. You can edit it before copying."
-                                        },
-                                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-                                        shape = RoundedCornerShape(12.dp),
-                                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 9.dp),
+                                        onClick = { activeAdjustment = adjustment },
+                                        modifier = Modifier.weight(1f).heightIn(min = 38.dp),
+                                        shape = RoundedCornerShape(9.dp),
                                         colors = ButtonDefaults.buttonColors(
-                                            containerColor = Color(0xFF202929), contentColor = BrightText
-                                        )
+                                            containerColor = if (activeAdjustment == adjustment) Mint else Color(0xFF293333),
+                                            contentColor = if (activeAdjustment == adjustment) Ink else BrightText
+                                        ),
+                                        contentPadding = PaddingValues(horizontal = 2.dp, vertical = 4.dp)
                                     ) {
-                                        Column(modifier = Modifier.fillMaxWidth()) {
-                                            Text(preset.text, fontSize = 12.sp, lineHeight = 16.sp, maxLines = 3)
-                                            Text(preset.bengali, color = SoftText, fontSize = 11.sp, lineHeight = 15.sp, maxLines = 2, modifier = Modifier.padding(top = 3.dp))
-                                            Text(preset.category.uppercase(), color = Mint, fontSize = 9.sp,
-                                                fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 3.dp))
-                                        }
+                                        Text(adjustment, fontSize = 9.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
                                     }
                                 }
                             }
-                        Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                            listOf("Auto", "Portrait", "Friends", "Festival", "Celebration", "Romantic", "Funny", "Devotional", "Travel", "Family", "Aesthetic").forEach { theme ->
-                                Button(onClick = {
-                                    captionTheme = theme
-                                    val existing = captionSuggestions
-                                    if (existing != null) applyCaptionSuggestions(existing.detectedLabels.map { it to 0.9f }, captionAspectRatio)
-                                }, contentPadding = PaddingValues(horizontal = 9.dp, vertical = 3.dp),
-                                    colors = ButtonDefaults.buttonColors(containerColor = if (captionTheme == theme) Mint else Color(0xFF293333), contentColor = if (captionTheme == theme) Ink else BrightText)) {
-                                    Text(theme, fontSize = 10.sp)
+                            val adjustmentValue = when (activeAdjustment) {
+                                "Brightness" -> brightness
+                                "Saturation" -> saturation
+                                "Contrast" -> contrast
+                                else -> warmth
+                            }
+                            val adjustmentRange = when (activeAdjustment) {
+                                "Brightness" -> -25f..25f
+                                "Saturation" -> 0f..1.65f
+                                "Contrast" -> 0.75f..1.40f
+                                else -> -24f..24f
+                            }
+                            val adjustmentStep = when (activeAdjustment) {
+                                "Brightness", "Warmth" -> 0.5f
+                                else -> 0.01f
+                            }
+                            val adjustmentLabel = when (activeAdjustment) {
+                                "Brightness", "Warmth" -> String.format(java.util.Locale.US, "%.1f", adjustmentValue)
+                                else -> String.format(java.util.Locale.US, "%.2f", adjustmentValue)
+                            }
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Button(
+                                    onClick = {
+                                        recordEditChange()
+                                        val value = (adjustmentValue - adjustmentStep).coerceIn(adjustmentRange.start, adjustmentRange.endInclusive)
+                                        when (activeAdjustment) {
+                                            "Brightness" -> brightness = value
+                                            "Saturation" -> saturation = value
+                                            "Contrast" -> contrast = value
+                                            else -> warmth = value
+                                        }
+                                        selectedStyle = "Custom"
+                                        showEnhanced = true
+                                    },
+                                    enabled = adjustmentValue > adjustmentRange.start && !isExporting,
+                                    modifier = Modifier.size(width = 38.dp, height = 36.dp),
+                                    shape = RoundedCornerShape(9.dp),
+                                    contentPadding = PaddingValues(0.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = BrightText)
+                                ) { Text("−", fontSize = 20.sp) }
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text("$activeAdjustment  ·  $adjustmentLabel", color = SoftText, fontSize = 11.sp)
+                                    Slider(
+                                        value = adjustmentValue,
+                                        onValueChange = { newValue ->
+                                            recordEditChange()
+                                            when (activeAdjustment) {
+                                                "Brightness" -> brightness = newValue
+                                                "Saturation" -> saturation = newValue
+                                                "Contrast" -> contrast = newValue
+                                                else -> warmth = newValue
+                                            }
+                                            selectedStyle = "Custom"
+                                            showEnhanced = true
+                                        },
+                                        valueRange = adjustmentRange,
+                                        enabled = !isExporting
+                                    )
                                 }
+                                Button(
+                                    onClick = {
+                                        recordEditChange()
+                                        val value = (adjustmentValue + adjustmentStep).coerceIn(adjustmentRange.start, adjustmentRange.endInclusive)
+                                        when (activeAdjustment) {
+                                            "Brightness" -> brightness = value
+                                            "Saturation" -> saturation = value
+                                            "Contrast" -> contrast = value
+                                            else -> warmth = value
+                                        }
+                                        selectedStyle = "Custom"
+                                        showEnhanced = true
+                                    },
+                                    enabled = adjustmentValue < adjustmentRange.endInclusive && !isExporting,
+                                    modifier = Modifier.size(width = 38.dp, height = 36.dp),
+                                    shape = RoundedCornerShape(9.dp),
+                                    contentPadding = PaddingValues(0.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = BrightText)
+                                ) { Text("+", fontSize = 20.sp) }
                             }
-                        }
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Button(onClick = { suggestCaptions() }, modifier = Modifier.weight(1f).heightIn(min = 44.dp), enabled = previewBitmap != null && !isGeneratingCaptions,
-                                shape = RoundedCornerShape(12.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Ink),
-                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
-                            ) { Text(if (isGeneratingCaptions) "Analyzing…" else "Analyze photo", fontSize = 11.sp) }
-                            Button(
-                                onClick = {
-                                    val suggestions = captionSuggestions
-                                    if (suggestions != null) {
-                                        captionIndex = (captionIndex + 1) % suggestions.english.size
-                                        captionEnglish = suggestions.english[captionIndex]
-                                        captionBengali = suggestions.bengali[captionIndex]
-                                    } else suggestCaptions()
-                                },
-                                enabled = captionSuggestions != null && !isGeneratingCaptions,
-                                modifier = Modifier.weight(1f).heightIn(min = 44.dp),
-                                shape = RoundedCornerShape(12.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = BrightText),
-                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp)
-                            ) { Text("New suggestions", fontSize = 11.sp) }
-                        }
-                        if (captionSuggestions != null) {
-                            val detected = captionSuggestions?.detectedLabels.orEmpty()
-                            if (detected.isNotEmpty()) {
-                                Text("Visual clues: " + detected.joinToString(" · "),
-                                    color = SoftText, fontSize = 10.sp,
-                                    modifier = Modifier.padding(top = 4.dp, bottom = 3.dp))
-                            }
-                            OutlinedTextField(value = captionEnglish, onValueChange = { captionEnglish = it },
-                                modifier = Modifier.fillMaxWidth().padding(top = 5.dp),
-                                label = { Text("English caption") }, minLines = 2, maxLines = 4)
-                            OutlinedTextField(value = captionBengali, onValueChange = { captionBengali = it },
-                                modifier = Modifier.fillMaxWidth().padding(top = 5.dp),
-                                label = { Text("বাংলা ক্যাপশন") }, minLines = 2, maxLines = 4)
-                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                Button(onClick = { clipboardManager.setText(AnnotatedString(captionEnglish)) },
-                                    shape = RoundedCornerShape(10.dp),
-                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = BrightText),
-                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
-                                ) { Text("Copy English", fontSize = 10.sp) }
-                                Button(onClick = { clipboardManager.setText(AnnotatedString(captionBengali)) },
-                                    shape = RoundedCornerShape(10.dp),
-                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = BrightText),
-                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
-                                ) { Text("Copy বাংলা", fontSize = 10.sp) }
-                            }
-                        }
-                        Spacer(modifier = Modifier.height(10.dp))
-                        Text("BRIGHTNESS  " + brightness.toInt(), color = SoftText, fontSize = 11.sp)
-                        Slider(value = brightness, onValueChange = {
-                            recordEditChange()
-                            brightness = it
-                            selectedStyle = "Custom"
-                            showEnhanced = true
-                        }, valueRange = -25f..25f)
-                        Text("CONTRAST  " + String.format(java.util.Locale.US, "%.2f", contrast),
-                            color = SoftText, fontSize = 11.sp)
-                        Slider(value = contrast, onValueChange = {
-                            recordEditChange()
-                            contrast = it
-                            selectedStyle = "Custom"
-                            showEnhanced = true
-                        }, valueRange = 0.75f..1.40f)
-                        Text("SATURATION  " + String.format(java.util.Locale.US, "%.2f", saturation),
-                            color = SoftText, fontSize = 11.sp)
-                        Slider(value = saturation, onValueChange = {
-                            recordEditChange()
-                            saturation = it
-                            selectedStyle = "Custom"
-                            showEnhanced = true
-                        }, valueRange = 0f..1.65f)
-                        Text("WARMTH  " + warmth.toInt(), color = SoftText, fontSize = 11.sp)
-                        Slider(value = warmth, onValueChange = {
-                            recordEditChange()
-                            warmth = it
-                            selectedStyle = "Custom"
-                            showEnhanced = true
-                        }, valueRange = -24f..24f)
                         Spacer(modifier = Modifier.height(4.dp))
                         if (cropLabel != "Original") {
                             Text("CROP HORIZONTAL  " + (cropOffsetX * 100).toInt() + "%", color = SoftText, fontSize = 11.sp)
@@ -2124,25 +2504,6 @@ private fun PhotoEditorHome() {
                             Text("Choose a crop ratio to reposition the crop window.", color = SoftText, fontSize = 10.sp)
                         }
                         Spacer(modifier = Modifier.height(8.dp))
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.End
-                        ) {
-                            Button(
-                                onClick = {
-                                    recordEditChange()
-                                    setStyle("Auto")
-                                    cropLabel = "Original"
-                                    cropOffsetX = 0f
-                                    cropOffsetY = 0f
-                                },
-                                shape = RoundedCornerShape(10.dp),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = Color(0xFF293333), contentColor = BrightText
-                                ),
-                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 2.dp)
-                            ) { Text("Reset edits", fontSize = 11.sp) }
-                        }
                         }
                         }
                     }
@@ -2179,10 +2540,6 @@ private fun PhotoEditorHome() {
                             exportProgress = 0
                             statusMessage = "Enhancing and exporting the batch…"
                             val settingsForBatch = if (batchPreset == "Current edits") currentSettings() else BatchExportPolicy.settingsForPreset(batchPreset)
-                            val useAiPortrait = batchPreset == "AI Edit" || batchPreset == "AI Portrait" ||
-                                settingsForBatch.backgroundBlur > 0f || settingsForBatch.backgroundEnhancement > 0f ||
-                                settingsForBatch.subjectBrightness > 0f || settingsForBatch.darkerAreaLift > 0f ||
-                                settingsForBatch.skinSmoothing > 0f || settingsForBatch.makeupIntensity > 0f
                             scope.launch {
                                 var succeeded = 0
                                 var failed = 0
@@ -2201,12 +2558,23 @@ private fun PhotoEditorHome() {
                                                     context.contentResolver, photo.uri, maxDimension = Int.MAX_VALUE
                                                 )
                                             }
-                                            val photoSettings = if (batchPreset == "AI Edit") {
-                                                aiSettingsFor(PhotoAnalysisEngine.analyze(original!!))
+                                            val photoSettings = if (photo.uri in batchManualOverrides) {
+                                                batchEditedSettingsByUri[photo.uri] ?: settingsForBatch
+                                            } else if (batchPreset == "AI Edit") {
+                                                applyAiLook(aiSettingsFor(PhotoAnalysisEngine.analyze(original!!)), batchAiLook)
+                                            } else if (batchPreset == "Auto Level") {
+                                                EditSettings(straightenDegrees = AutoLeveler.estimateCorrectionDegrees(original!!) ?: 0f)
+                                            } else if (batchPreset == "Current edits") {
+                                                batchEditedSettingsByUri[photo.uri] ?: EditSettings(contrast = 1f, saturation = 1f)
                                             } else {
                                                 settingsForBatch
                                             }
-                                            if (useAiPortrait) {
+                                            val useAiPortraitForPhoto = (batchPreset == "AI Edit" && photo.uri !in batchManualOverrides) ||
+                                                batchPreset == "AI Portrait" ||
+                                                photoSettings.backgroundBlur > 0f || photoSettings.backgroundEnhancement > 0f ||
+                                                photoSettings.subjectBrightness > 0f || photoSettings.darkerAreaLift > 0f ||
+                                                photoSettings.skinSmoothing > 0f || photoSettings.makeupIntensity > 0f
+                                            if (useAiPortraitForPhoto) {
                                                 val aiResult = SubjectAwareEnhancer.enhance(original!!, photoSettings, context)
                                                 enhanced = aiResult.bitmap
                                                 if (!aiResult.usedAi) aiFallbacks++
@@ -2260,19 +2628,228 @@ private fun PhotoEditorHome() {
             }
 
             if (activePhoto == null && selectedPhotos.isNotEmpty()) {
-                Row(modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically) {
-                    Text("BATCH PRESET", color = BrightText, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                    Spacer(modifier = Modifier.weight(1f))
+                // Keep numerous batch controls in a compact, independently scrollable area.
+                Column(
+                    modifier = Modifier.fillMaxWidth().heightIn(max = 190.dp)
+                        .verticalScroll(rememberScrollState())
+                ) {
+                Text("CAPTION CATEGORY", color = BrightText, fontSize = 10.sp, fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(top = 6.dp, bottom = 3.dp))
+                Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                    listOf("Auto", "Portrait", "Friends", "Festival", "Celebration", "Romantic", "Funny", "Devotional", "Travel", "Family", "Aesthetic", "Nature", "Food").forEach { theme ->
+                        Button(
+                            onClick = {
+                                batchCaptionTheme = theme
+                                if (batchCaptionResults.isNotEmpty()) {
+                                    batchCaptionRound += 1
+                                    generateBatchCaptions(selectedPhotos.toList(), theme, batchCaptionRound)
+                                }
+                            },
+                            enabled = !isGeneratingBatchCaptions,
+                            contentPadding = PaddingValues(horizontal = 9.dp, vertical = 3.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (batchCaptionTheme == theme) Mint else Color(0xFF293333),
+                                contentColor = if (batchCaptionTheme == theme) Ink else BrightText
+                            )
+                        ) { Text(theme, fontSize = 10.sp, maxLines = 1) }
+                    }
+                }
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Button(
+                        onClick = { showBatchCaptionChoice = true },
+                        enabled = !isExporting && !isAnalyzing && !isGeneratingBatchCaptions,
+                        modifier = Modifier.weight(1f).padding(vertical = 4.dp).heightIn(min = 40.dp),
+                        shape = RoundedCornerShape(10.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = Mint)
+                    ) { Text("✎ Caption", fontSize = 11.sp, fontWeight = FontWeight.SemiBold) }
                     Button(
                         onClick = {
-                            previewBatchPreset("AI Edit")
+                            batchCaptionRound += 1
+                            generateBatchCaptions(selectedPhotos.toList(), batchCaptionTheme, batchCaptionRound)
                         },
-                        enabled = !isExporting && !isAnalyzing && selectedPhotos.any { it.decision != "Reject" },
+                        enabled = selectedPhotos.any { it.decision != "Reject" } && !isGeneratingBatchCaptions,
+                        modifier = Modifier.weight(1f).padding(vertical = 4.dp).heightIn(min = 40.dp),
                         shape = RoundedCornerShape(10.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Ink),
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 3.dp)
-                    ) { Text("✦ AI Edit all", fontSize = 11.sp, fontWeight = FontWeight.Bold) }
+                        colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Ink)
+                    ) { Text(if (isGeneratingBatchCaptions) "Generating…" else "Generate more", fontSize = 11.sp, fontWeight = FontWeight.SemiBold) }
+                }
+                if (isGeneratingBatchCaptions) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+                        CircularProgressIndicator(modifier = Modifier.size(16.dp), color = Mint, strokeWidth = 2.dp)
+                        Text("Analysing each photo for its own captions…", color = SoftText, fontSize = 10.sp)
+                    }
+                }
+                Column(modifier = Modifier.fillMaxWidth().heightIn(max = 260.dp).verticalScroll(rememberScrollState())) {
+                    batchCaptionResults.forEach { (uri, options) ->
+                        val photoNumber = selectedPhotos.indexOfFirst { it.uri == uri } + 1
+                        val primary = options.firstOrNull()
+                        Column(modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text("Photo " + photoNumber, color = Mint, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            if (primary != null) {
+                                Button(
+                                    onClick = {
+                                        captionEnglish = primary.first
+                                        captionBengali = primary.second
+                                        statusMessage = "Caption selected for Photo " + photoNumber + "."
+                                    },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(9.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF202626), contentColor = BrightText),
+                                    contentPadding = PaddingValues(horizontal = 9.dp, vertical = 7.dp)
+                                ) {
+                                    Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                                        if (captionShareLanguage == "English" || captionShareLanguage == "Both") {
+                                            Text(primary.first, fontSize = 11.sp, lineHeight = 14.sp)
+                                        }
+                                        if (captionShareLanguage == "বাংলা" || captionShareLanguage == "Both") {
+                                            Text(primary.second, color = SoftText, fontSize = 11.sp, lineHeight = 14.sp)
+                                        }
+                                    }
+                                }
+                            }
+                            if (options.size > 1) {
+                                TextButton(onClick = {
+                                    expandedBatchCaptionOptions = if (uri in expandedBatchCaptionOptions) {
+                                        expandedBatchCaptionOptions - uri
+                                    } else {
+                                        expandedBatchCaptionOptions + uri
+                                    }
+                                }, contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)) {
+                                    Text(
+                                        if (uri in expandedBatchCaptionOptions) "Hide alternatives"
+                                        else "More options (" + (options.size - 1) + ")",
+                                        color = SoftText, fontSize = 10.sp
+                                    )
+                                }
+                                if (uri in expandedBatchCaptionOptions) {
+                                    options.drop(1).forEachIndexed { optionIndex, pair ->
+                                        Button(
+                                            onClick = {
+                                                captionEnglish = pair.first
+                                                captionBengali = pair.second
+                                                statusMessage = "Caption option " + (optionIndex + 2) +
+                                                    " selected for Photo " + photoNumber + "."
+                                            },
+                                            modifier = Modifier.fillMaxWidth(),
+                                            shape = RoundedCornerShape(9.dp),
+                                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF202626), contentColor = BrightText),
+                                            contentPadding = PaddingValues(horizontal = 9.dp, vertical = 7.dp)
+                                        ) {
+                                            Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                                                if (captionShareLanguage == "English" || captionShareLanguage == "Both") {
+                                                    Text(pair.first, fontSize = 11.sp, lineHeight = 14.sp)
+                                                }
+                                                if (captionShareLanguage == "বাংলা" || captionShareLanguage == "Both") {
+                                                    Text(pair.second, color = SoftText, fontSize = 11.sp, lineHeight = 14.sp)
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                Button(
+                    onClick = { showBatchAiOptions = !showBatchAiOptions },
+                    enabled = !isExporting && !isAnalyzing && selectedPhotos.any { it.decision != "Reject" },
+                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 3.dp).heightIn(min = 42.dp),
+                    shape = RoundedCornerShape(10.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Ink),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 5.dp)
+                ) { Text("✦ AI Edit all", fontSize = 12.sp, fontWeight = FontWeight.Bold) }
+                if (showBatchAiOptions) {
+                    Row(modifier = Modifier.fillMaxWidth().padding(bottom = 5.dp),
+                        horizontalArrangement = Arrangement.spacedBy(5.dp),
+                        verticalAlignment = Alignment.CenterVertically) {
+                        listOf("Saturated", "Cool", "Natural").forEach { look ->
+                            Button(
+                                onClick = { batchAiLook = look },
+                                modifier = Modifier.weight(1f).heightIn(min = 36.dp),
+                                shape = RoundedCornerShape(9.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = if (batchAiLook == look) Mint else Color(0xFF293333),
+                                    contentColor = if (batchAiLook == look) Ink else BrightText
+                                ),
+                                contentPadding = PaddingValues(horizontal = 3.dp, vertical = 4.dp)
+                            ) { Text(look, fontSize = 10.sp, maxLines = 1) }
+                        }
+                        Button(
+                            onClick = {
+                                previewBatchPreset("AI Edit", batchAiLook)
+                                showBatchAiOptions = false
+                            },
+                            enabled = !isPreparingBatchPreview && !isExporting,
+                            modifier = Modifier.weight(0.8f).heightIn(min = 36.dp),
+                            shape = RoundedCornerShape(9.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF9CC8FF), contentColor = Ink),
+                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp)
+                        ) { Text("Edit", fontSize = 11.sp, fontWeight = FontWeight.Bold) }
+                    }
+                }
+                if (showBatchCaptionChoice) {
+                    AlertDialog(
+                        onDismissRequest = { showBatchCaptionChoice = false },
+                        title = { Text("Generate captions") },
+                        text = { Text("Choose one photo or generate English and Bengali captions for all selected photos.") },
+                        confirmButton = { Button(onClick = { showBatchCaptionChoice = false; showIndividualBatchCaptionPicker = true }) { Text("Individual photo") } },
+                        dismissButton = {
+                            Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                                Button(onClick = {
+                                    showBatchCaptionChoice = false
+                                    batchCaptionRound = 0
+                                    batchCaptionResults = emptyMap()
+                                    generateBatchCaptions(selectedPhotos.toList(), batchCaptionTheme, 0)
+                                }, enabled = !isGeneratingBatchCaptions) { Text("All selected") }
+                                Button(onClick = { showBatchCaptionChoice = false }) { Text("Cancel") }
+                            }
+                        }
+                    )
+                }
+                if (showIndividualBatchCaptionPicker) {
+                    AlertDialog(
+                        onDismissRequest = { showIndividualBatchCaptionPicker = false },
+                        title = { Text("Choose a photo") },
+                        text = {
+                            Column(modifier = Modifier.heightIn(max = 300.dp).verticalScroll(rememberScrollState())) {
+                                selectedPhotos.filter { it.decision != "Reject" }.forEach { photo ->
+                                    Button(onClick = {
+                                        batchCaptionRound = 0
+                                        batchCaptionResults = batchCaptionResults - photo.uri
+                                        generateBatchCaptions(listOf(photo), batchCaptionTheme, 0)
+                                        showIndividualBatchCaptionPicker = false
+                                    }, enabled = !isGeneratingBatchCaptions,
+                                        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
+                                        Text("Photo " + (selectedPhotos.indexOf(photo) + 1))
+                                    }
+                                }
+                            }
+                        },
+                        confirmButton = { Button(onClick = { showIndividualBatchCaptionPicker = false }) { Text("Close") } }
+                    )
+                }
+                Row(modifier = Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                    listOf("Balanced", "Saturated", "Cool").forEach { look ->
+                        Button(
+                            onClick = {
+                                batchAiLook = look
+                                previewBatchPreset("AI Edit", look)
+                            },
+                            enabled = !isExporting && !isAnalyzing && !isPreparingBatchPreview &&
+                                selectedPhotos.any { it.decision != "Reject" },
+                            modifier = Modifier.weight(1f).heightIn(min = 38.dp),
+                            shape = RoundedCornerShape(10.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (batchAiLook == look && batchPreset == "AI Edit") Mint else Color(0xFF293333),
+                                contentColor = if (batchAiLook == look && batchPreset == "AI Edit") Ink else BrightText
+                            ),
+                            contentPadding = PaddingValues(horizontal = 3.dp, vertical = 3.dp)
+                        ) { Text(look, fontSize = 10.sp, maxLines = 1) }
+                    }
                 }
                 Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -2292,9 +2869,12 @@ private fun PhotoEditorHome() {
                     Text(selectedPhotos.count { it.decision != "Reject" }.toString() + " photos to export · " +
                         selectedPhotos.count { it.decision == "Reject" } + " rejected will be skipped",
                         color = SoftText, fontSize = 10.sp)
-                    Text(if (batchPreset == "Current edits") "Uses the settings currently open in the editor." else
-                        "Applies " + batchPreset + " consistently to every eligible photo.",
-                        color = SoftText, fontSize = 10.sp)
+                    Text(
+                        if (batchPreset == "Current edits") "Uses the settings currently open in the editor."
+                        else if (batchPreset == "AI Edit") "AI Edit · $batchAiLook · adapts to each photo."
+                        else "Applies " + batchPreset + " consistently to every eligible photo.",
+                        color = SoftText, fontSize = 10.sp
+                    )
                 }
                 if (isPreparingBatchPreview) {
                     LinearProgressIndicator(
@@ -2311,6 +2891,7 @@ private fun PhotoEditorHome() {
                 if (batchSummary != null) {
                     Text(batchSummary!!, color = Mint, fontSize = 10.sp, lineHeight = 14.sp,
                         modifier = Modifier.fillMaxWidth().padding(top = 5.dp))
+                }
                 }
             }
 
@@ -2654,7 +3235,19 @@ private fun PhotoEditorHome() {
                         Column(
                             modifier = Modifier.clip(RoundedCornerShape(13.dp))
                                 .background(if (activePhoto?.uri == photo.uri) Color(0xFF263B38) else Panel)
-                                .clickable { openEditor(photo) }
+                                .pointerInput(photo.uri) {
+                                    detectTapGestures(
+                                        onTap = { openEditor(photo) },
+                                        onLongPress = { originalHoldPhoto = photo },
+                                        onPress = {
+                                            try {
+                                                awaitRelease()
+                                            } finally {
+                                                originalHoldPhoto = null
+                                            }
+                                        }
+                                    )
+                                }
                                 .padding(5.dp)
                         ) {
                             Box {
@@ -2668,13 +3261,18 @@ private fun PhotoEditorHome() {
                                         modifier = Modifier.align(Alignment.TopStart).padding(4.dp)
                                             .background(Mint, RoundedCornerShape(5.dp)).padding(horizontal = 5.dp, vertical = 3.dp))
                                 }
-                                if (activePhoto?.uri == photo.uri) {
-                                    androidx.compose.material3.Icon(
-                                        imageVector = Icons.Rounded.CheckCircle,
-                                        contentDescription = "Editing this photo",
-                                        tint = Mint,
-                                        modifier = Modifier.align(Alignment.TopEnd).padding(4.dp).size(18.dp)
-                                    )
+                                Box(
+                                    modifier = Modifier.align(Alignment.TopEnd).padding(3.dp)
+                                        .size(21.dp).clip(RoundedCornerShape(50))
+                                        .background(Color(0xD9101313))
+                                        .clickable {
+                                            selectedPhotos.removeAll { it.uri == photo.uri }
+                                            statusMessage = "Photo removed from selection. The original file was not deleted."
+                                        },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text("×", color = BrightText, fontSize = 16.sp,
+                                        fontWeight = FontWeight.Bold, lineHeight = 18.sp)
                                 }
                             }
                             val photoRank = rankByUri[photo.uri] ?: 0
@@ -2751,6 +3349,48 @@ private fun PhotoEditorHome() {
                 }) {
                 Text("No photos in the " + gridFilter + " filter yet.", color = SoftText,
                     fontSize = 11.sp, modifier = Modifier.padding(top = 8.dp))
+            }
+
+            if (originalHoldPhoto != null) {
+                AlertDialog(
+                    onDismissRequest = { originalHoldPhoto = null },
+                    title = { Text("Original photo · hold preview") },
+                    text = {
+                        AsyncImage(
+                            model = originalHoldPhoto!!.uri,
+                            contentDescription = "Untouched original photo",
+                            modifier = Modifier.fillMaxWidth().heightIn(min = 220.dp, max = 420.dp),
+                            contentScale = ContentScale.Fit
+                        )
+                    },
+                    confirmButton = { Button(onClick = { originalHoldPhoto = null }) { Text("Close") } }
+                )
+            }
+
+            if (showDeleteLearningConfirmation) {
+                AlertDialog(
+                    onDismissRequest = {
+                        showDeleteLearningConfirmation = false
+                        showResetLearning = false
+                    },
+                    title = { Text("Delete learned style?") },
+                    text = { Text("This removes your saved editing preferences from this device. Photos are not deleted.") },
+                    confirmButton = {
+                        Button(onClick = {
+                            PersonalEditLearning.reset(context)
+                            learnedProfile = PersonalEditLearning.load(context)
+                            showDeleteLearningConfirmation = false
+                            showResetLearning = false
+                            statusMessage = "Personal editing learning deleted from this device."
+                        }) { Text("Delete learning") }
+                    },
+                    dismissButton = {
+                        Button(onClick = {
+                            showDeleteLearningConfirmation = false
+                            showResetLearning = false
+                        }) { Text("Cancel") }
+                    }
+                )
             }
 
             Text(

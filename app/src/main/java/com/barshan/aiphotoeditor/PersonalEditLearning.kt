@@ -9,6 +9,7 @@ import kotlin.math.roundToInt
  */
 data class PersonalEditProfile(
     val acceptedEdits: Int,
+    val preferredEditType: String,
     val brightness: Float,
     val contrast: Float,
     val saturation: Float,
@@ -43,6 +44,7 @@ object PersonalEditLearning {
         val p = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         return PersonalEditProfile(
             acceptedEdits = p.getInt(COUNT, 0),
+            preferredEditType = p.getString("preferred_edit_type", "Natural").orEmpty(),
             brightness = p.getFloat("brightness", 0f),
             contrast = p.getFloat("contrast", 1.07f),
             saturation = p.getFloat("saturation", 1.06f),
@@ -57,7 +59,7 @@ object PersonalEditLearning {
     }
 
     /** Call only after the user successfully exports an edited copy. */
-    fun recordAccepted(context: Context, settings: EditSettings): PersonalEditProfile {
+    fun recordAccepted(context: Context, settings: EditSettings, editType: String = "Custom"): PersonalEditProfile {
         val old = load(context)
         val n = old.acceptedEdits
         fun blend(previous: Float, next: Float): Float =
@@ -65,6 +67,7 @@ object PersonalEditLearning {
 
         val next = PersonalEditProfile(
             acceptedEdits = n + 1,
+            preferredEditType = editType,
             brightness = blend(old.brightness, settings.brightness),
             contrast = blend(old.contrast, settings.contrast),
             saturation = blend(old.saturation, settings.saturation),
@@ -78,6 +81,7 @@ object PersonalEditLearning {
         )
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
             .putInt(COUNT, next.acceptedEdits)
+            .putString("preferred_edit_type", next.preferredEditType)
             .putFloat("brightness", next.brightness)
             .putFloat("contrast", next.contrast)
             .putFloat("saturation", next.saturation)

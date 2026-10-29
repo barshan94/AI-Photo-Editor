@@ -1,6 +1,6 @@
 {
-  "version": 1,
-  "updated": "2026-10-28",
+  "version": 2,
+  "updated": "2026-10-29",
   "captions": [
     {
       "category": "Portrait",
@@ -157,6 +157,86 @@
     {
       "category": "Celebration",
       "text": "A good day made better by the people in it."
+    },
+    {
+      "category": "Bijoya Dashami",
+      "text": "Shubho Bijoya. The goodbye is hard, but Ma will return. ❤️",
+      "bengali": "শুভ বিজয়া। বিদায়টা কঠিন, তবু মা আবার আসবেন। ❤️"
+    },
+    {
+      "category": "Bijoya Dashami",
+      "text": "Sindoor, smiles, teary eyes, and one promise: asche bochor abar hobe.",
+      "bengali": "সিঁদুর, হাসি, ভেজা চোখ আর একটাই কথা—আসছে বছর আবার হবে।"
+    },
+    {
+      "category": "Bijoya Dashami",
+      "text": "The puja ends today; the feeling stays with us all year.",
+      "bengali": "আজ পুজো শেষ, কিন্তু অনুভূতিটা সারা বছর থেকে যাবে।"
+    },
+    {
+      "category": "Bijoya Dashami",
+      "text": "One last pranam to Ma, carrying a heart full of memories. 🙏",
+      "bengali": "মাকে শেষ প্রণাম, হৃদয়ভরা স্মৃতি নিয়ে। 🙏"
+    },
+    {
+      "category": "Bijoya Dashami",
+      "text": "Dashami is a little celebration and a little heartbreak.",
+      "bengali": "দশমী মানে একটু আনন্দ, আর একটু মনখারাপ।"
+    },
+    {
+      "category": "Bijoya Dashami",
+      "text": "Until next year, Ma. Keep everyone safe until we meet again. ❤️",
+      "bengali": "আবার দেখা হবে আগামী বছর, মা। ততদিন সবাইকে ভালো রেখো। ❤️"
+    },
+    {
+      "category": "Bijoya Dashami",
+      "text": "The lights will fade, the photos will stay, and the memories will return every autumn.",
+      "bengali": "আলো নিভে যাবে, ছবি থেকে যাবে, আর প্রতি শরতে স্মৃতিগুলো ফিরে আসবে।"
+    },
+    {
+      "category": "Bijoya Dashami",
+      "text": "A final day of puja, a thousand feelings, and countless memories.",
+      "bengali": "পুজোর শেষ দিন, হাজার অনুভূতি আর অসংখ্য স্মৃতি।"
+    },
+    {
+      "category": "Durga Puja",
+      "text": "Four days of colour, devotion, friends, and memories I wish I could pause.",
+      "bengali": "চার দিনের রং, ভক্তি, বন্ধুত্ব আর থামিয়ে রাখতে ইচ্ছে করা স্মৃতি।"
+    },
+    {
+      "category": "Durga Puja",
+      "text": "From pandal hopping to the last dhak beat, every moment felt special.",
+      "bengali": "প্যান্ডেল ঘোরা থেকে ঢাকের শেষ তালে—প্রতিটি মুহূর্তই ছিল বিশেষ।"
+    },
+    {
+      "category": "Durga Puja",
+      "text": "New outfits, familiar faces, and the magic of coming together.",
+      "bengali": "নতুন পোশাক, চেনা মুখ আর একসঙ্গে হওয়ার আনন্দ।"
+    },
+    {
+      "category": "Durga Puja",
+      "text": "Dhak in the air, lights all around, and Ma in every heart. ❤️",
+      "bengali": "চারদিকে ঢাকের সুর, আলো আর সবার হৃদয়ে মা। ❤️"
+    },
+    {
+      "category": "Durga Puja",
+      "text": "A little tired from the crowds, a lot happier because of the memories.",
+      "bengali": "ভিড়ে একটু ক্লান্ত, স্মৃতিগুলোর জন্য অনেক বেশি খুশি।"
+    },
+    {
+      "category": "Durga Puja",
+      "text": "The best part of Puja is finding your people in the crowd.",
+      "bengali": "পুজোর সেরা মুহূর্ত হলো ভিড়ের মাঝে নিজের মানুষদের খুঁজে পাওয়া।"
+    },
+    {
+      "category": "Durga Puja",
+      "text": "Every pandal tells a story; every photo keeps a little piece of Puja.",
+      "bengali": "প্রতিটি প্যান্ডেলের নিজস্ব গল্প, প্রতিটি ছবিতে পুজোর একটুকরো স্মৃতি।"
+    },
+    {
+      "category": "Durga Puja",
+      "text": "Ma's home for a few days, memories for a lifetime.",
+      "bengali": "কয়েক দিনের জন্য মায়ের ঘর, সারাজীবনের জন্য স্মৃতি।"
     }
   ]
 }

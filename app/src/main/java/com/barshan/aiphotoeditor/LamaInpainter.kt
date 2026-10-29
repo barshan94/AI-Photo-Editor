@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.Path
+import android.graphics.Rect
 import android.graphics.Color as AndroidColor
 import androidx.compose.ui.geometry.Offset
 import ai.onnxruntime.OnnxTensor
@@ -26,9 +27,12 @@ internal object LamaInpainter {
         context: Context,
         source: Bitmap,
         normalizedStrokes: List<List<Offset>>,
-        brushRadius: Float
+        brushRadius: Float,
+        selectionMask: Bitmap? = null
     ): Result = withContext(Dispatchers.Default) {
-        require(normalizedStrokes.any { it.isNotEmpty() }) { "Paint over the object or person you want to remove first." }
+        require(normalizedStrokes.any { it.isNotEmpty() } || selectionMask != null) {
+            "Select a person or paint over the object you want to remove first."
+        }
         require(!source.isRecycled && source.width > 0 && source.height > 0) { "Choose a valid photo first." }
 
         val modelSize = 512
@@ -41,6 +45,14 @@ internal object LamaInpainter {
             strokeWidth = max(2f, brushRadius * 2f * source.width / modelSize)
         }
         val maskCanvas = Canvas(fullMask)
+        if (selectionMask != null && !selectionMask.isRecycled) {
+            maskCanvas.drawBitmap(
+                selectionMask,
+                null,
+                Rect(0, 0, source.width, source.height),
+                Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+            )
+        }
         for (stroke in normalizedStrokes) {
             if (stroke.isEmpty()) continue
             if (stroke.size == 1) {

@@ -12,8 +12,8 @@ import kotlin.math.min
 /**
  * Runs the official TensorFlow Lite ESRGAN model locally.
  *
- * The published model expects 50x50 RGB tiles with channel values in 0..255 and returns 200x200
- * tiles. Input is bounded to 1024px on the long edge to keep the 4x output within phone memory.
+ * The published model expects RGB float values in the 0..255 range and returns RGB values in
+ * that same range. Overlapping tiles reduce seams; the input is bounded to keep 4x output safe.
  */
 internal object AiUpscaler {
     data class Result(val bitmap: Bitmap, val inputWasResizedForMemory: Boolean)
@@ -99,20 +99,21 @@ internal object AiUpscaler {
                     }
                     input.clear()
                     for (pixel in inputPixels) {
-                        // ESRGAN's float model expects RGB values normalized to 0..1.
-                        input.putFloat(((pixel shr 16) and 0xFF) / 255f)
-                        input.putFloat(((pixel shr 8) and 0xFF) / 255f)
-                        input.putFloat((pixel and 0xFF) / 255f)
+                        // The official model expects RGB values in the 0..255 range.
+                        input.putFloat(((pixel shr 16) and 0xFF).toFloat())
+                        input.putFloat(((pixel shr 8) and 0xFF).toFloat())
+                        input.putFloat((pixel and 0xFF).toFloat())
                     }
                     input.rewind()
                     output.clear()
                     interpreter.run(input, output)
                     output.rewind()
                     for (i in tileOutput.indices) {
-                        // ESRGAN returns normalized float RGB values. Convert back to 8-bit channels.
-                        val red = (output.float * 255f).toInt().coerceIn(0, 255)
-                        val green = (output.float * 255f).toInt().coerceIn(0, 255)
-                        val blue = (output.float * 255f).toInt().coerceIn(0, 255)
+                        // Model output is also in the 0..255 range; multiplying by 255
+                        // clips nearly every pixel and destroys the reconstructed detail.
+                        val red = output.float.toInt().coerceIn(0, 255)
+                        val green = output.float.toInt().coerceIn(0, 255)
+                        val blue = output.float.toInt().coerceIn(0, 255)
                         tileOutput[i] = (0xFF shl 24) or (red shl 16) or (green shl 8) or blue
                     }
                     for (oy in 0 until outputTileHeight) {
@@ -151,8 +152,8 @@ internal object AiUpscaler {
                 }
                 top += stepY
             }
-            // Reduce hard tile-boundary lines left by independent ESRGAN tile inference.
-            softenTileSeams(outputPixels, outWidth, outHeight, outputTileWidth, outputTileHeight)
+            // Feather only the actual 50%-overlap tile joins.
+            softenTileSeams(outputPixels, outWidth, outHeight, outputTileWidth / 2, outputTileHeight / 2)
             onProgress(93, "Rebuilding the high-resolution image")
             val result = Bitmap.createBitmap(outWidth, outHeight, Bitmap.Config.ARGB_8888)
             result.setPixels(outputPixels, 0, outWidth, 0, 0, outWidth, outHeight)

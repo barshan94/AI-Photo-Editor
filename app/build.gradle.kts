@@ -37,26 +37,10 @@ android {
     kotlinOptions { jvmTarget = "17" }
     buildFeatures { compose = true }
 }
-// The official Apache-2.0 MediaPipe multiclass segmentation model is fetched during builds.
-// It is not committed as a binary asset; the same pinned model is used by CI and local builds.
-val segmentationModelFile = layout.projectDirectory.file("src/main/assets/selfie_multiclass_256x256.tflite")
+// Large AI models are downloaded on first use into private app storage.
+// Keeping these two optional engines out of the APK reduces install size without removing their features.
+// ESRGAN remains bundled because it is relatively small and is used directly by the upscaler.
 val esrganModelFile = layout.projectDirectory.file("src/main/assets/ESRGAN.tflite")
-val lamaModelFile = layout.projectDirectory.file("src/main/assets/lama_512_int8.onnx")
-tasks.register("downloadMulticlassSegmentationModel") {
-    outputs.file(segmentationModelFile)
-    doLast {
-        val model = segmentationModelFile.asFile
-        if (!model.exists() || model.length() < 100_000L) {
-            model.parentFile.mkdirs()
-            val temp = File(model.parentFile, model.name + ".download")
-            URL("https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_multiclass_256x256/float32/1/selfie_multiclass_256x256.tflite").openStream().use { input ->
-                temp.outputStream().use { output -> input.copyTo(output) }
-            }
-            check(temp.length() > 100_000L) { "MediaPipe segmentation model download was incomplete." }
-            check(temp.renameTo(model)) { "Could not place the MediaPipe segmentation model in app/src/main/assets." }
-        }
-    }
-}
 tasks.register("downloadEsrganSuperResolutionModel") {
     outputs.file(esrganModelFile)
     doLast {
@@ -72,25 +56,8 @@ tasks.register("downloadEsrganSuperResolutionModel") {
         }
     }
 }
-tasks.register("downloadLamaInpaintingModel") {
-    outputs.file(lamaModelFile)
-    doLast {
-        val model = lamaModelFile.asFile
-        if (!model.exists() || model.length() < 20_000_000L) {
-            model.parentFile.mkdirs()
-            val temp = File(model.parentFile, model.name + ".download")
-            URL("https://huggingface.co/g-ronimo/lama/resolve/main/lama_512_int8.onnx").openStream().use { input ->
-                temp.outputStream().use { output -> input.copyTo(output) }
-            }
-            check(temp.length() > 20_000_000L) { "LaMa inpainting model download was incomplete." }
-            check(temp.renameTo(model)) { "Could not place the LaMa model in app/src/main/assets." }
-        }
-    }
-}
 tasks.named("preBuild").configure {
-    dependsOn("downloadMulticlassSegmentationModel")
     dependsOn("downloadEsrganSuperResolutionModel")
-    dependsOn("downloadLamaInpaintingModel")
 }
 
 dependencies {

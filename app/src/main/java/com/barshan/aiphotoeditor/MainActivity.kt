@@ -1807,10 +1807,32 @@ EditorImageAction("⇩", "Export", previewBitmap != null && !isExporting && sele
                                             fontWeight = FontWeight.SemiBold,
                                             textAlign = androidx.compose.ui.text.style.TextAlign.Center
                                         )
-                                        LinearProgressIndicator(
-                                            progress = { operationProgress.coerceIn(0, 100) / 100f },
-                                            modifier = Modifier.fillMaxWidth(), color = Mint
-                                        )
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            LinearProgressIndicator(
+                                                progress = { operationProgress.coerceIn(0, 100) / 100f },
+                                                modifier = Modifier.weight(1f), color = Mint
+                                            )
+                                            if (isUpscalingOperation) {
+                                                IconButton(
+                                                    onClick = {
+                                                        statusMessage = "Cancelling AI upscale…"
+                                                        activeExportJob?.cancel()
+                                                    },
+                                                    modifier = Modifier.size(30.dp)
+                                                ) {
+                                                    Icon(
+                                                        imageVector = Icons.Rounded.Close,
+                                                        contentDescription = "Cancel AI upscaling",
+                                                        tint = Color(0xFFFF8B8B),
+                                                        modifier = Modifier.size(20.dp)
+                                                    )
+                                                }
+                                            }
+                                        }
                                         Text("${operationProgress.coerceIn(0, 100)}% · Original photo remains untouched",
                                             color = SoftText, fontSize = 10.sp,
                                             textAlign = androidx.compose.ui.text.style.TextAlign.Center)

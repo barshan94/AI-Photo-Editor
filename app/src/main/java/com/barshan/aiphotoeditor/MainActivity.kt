@@ -763,10 +763,11 @@ private fun PhotoEditorHome() {
         contract = ActivityResultContracts.OpenMultipleDocuments()
     ) { uris ->
         if (uris.isNotEmpty()) {
-            selectedPhotos.clear()
-            activePhoto = null
-            previewBitmap = null
-            uris.forEach { uri ->
+            // Add to the existing selection rather than replacing it.
+            val newlyAddedUris = uris.distinct().filter { uri ->
+                selectedPhotos.none { it.uri == uri }
+            }
+            newlyAddedUris.forEach { uri ->
                 try {
                     context.contentResolver.takePersistableUriPermission(
                         uri, Intent.FLAG_GRANT_READ_URI_PERMISSION
@@ -776,11 +777,15 @@ private fun PhotoEditorHome() {
                 }
                 selectedPhotos.add(PhotoItem(uri = uri))
             }
-            isAnalyzing = true
-            analysisProgress = 0
-            statusMessage = "Analysing photo quality…"
+            if (newlyAddedUris.isNotEmpty()) {
+                isAnalyzing = true
+                analysisProgress = 0
+                statusMessage = "Adding and analysing " + newlyAddedUris.size + " new photo(s)…"
+            } else {
+                statusMessage = "Those photos are already selected."
+            }
             scope.launch {
-                val urisToAnalyze = selectedPhotos.map { it.uri }
+                val urisToAnalyze = newlyAddedUris
                 for ((index, uri) in urisToAnalyze.withIndex()) {
                     try {
                         val result = withContext(Dispatchers.Default) {

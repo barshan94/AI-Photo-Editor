@@ -1443,7 +1443,7 @@ private fun PhotoEditorHome() {
         isExporting = true
         operationProgress = 3
         operationStage = "Preparing object removal"
-        statusMessage = "Removing the marked object on this device…"
+        statusMessage = "Removing the marked object on this device… First use may download the AI model.
         activeExportJob = scope.launch {
             var original: Bitmap? = null
             var repaired: Bitmap? = null

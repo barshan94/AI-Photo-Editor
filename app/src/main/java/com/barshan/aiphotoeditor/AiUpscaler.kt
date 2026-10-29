@@ -93,7 +93,7 @@ internal object AiUpscaler {
             val stepY = maxOf(1, tileSize / 2)
             val totalTiles = ((inputBitmap.width + stepX - 1) / stepX) *
                 ((inputBitmap.height + stepY - 1) / stepY)
-            val outputWeights = FloatArray(outWidth * outHeight)
+            val outputWeights = ShortArray(outWidth * outHeight)
             var completedTiles = 0
             var top = 0
             while (top < inputBitmap.height) {
@@ -168,20 +168,21 @@ internal object AiUpscaler {
                                     hasTileRight && ox >= outputTileWidth - overlapX -> (outputTileWidth - ox).toFloat() / (overlapX + 1f)
                                     else -> 1f
                                 }.coerceIn(0.02f, 1f)
-                                val weight = wx * wy
+                                // 13-bit fixed-point weights retain feathering while using half the memory of FloatArray.
+                                val weightUnit = (wx * wy * 8192f).toInt().coerceIn(1, 8192)
                                 val nextPixel = tileOutput[sourceOffset + ox]
-                                val previousWeight = outputWeights[destinationIndex]
-                                if (previousWeight <= 0f) {
+                                val previousWeight = outputWeights[destinationIndex].toInt() and 0xFFFF
+                                if (previousWeight == 0) {
                                     outputPixels[destinationIndex] = nextPixel
-                                    outputWeights[destinationIndex] = weight
+                                    outputWeights[destinationIndex] = weightUnit.toShort()
                                 } else {
                                     val previousPixel = outputPixels[destinationIndex]
-                                    val combinedWeight = previousWeight + weight
-                                    val red = (((((previousPixel shr 16) and 255) * previousWeight) + (((nextPixel shr 16) and 255) * weight)) / combinedWeight).toInt().coerceIn(0, 255)
-                                    val green = (((((previousPixel shr 8) and 255) * previousWeight) + (((nextPixel shr 8) and 255) * weight)) / combinedWeight).toInt().coerceIn(0, 255)
-                                    val blue = ((((previousPixel and 255) * previousWeight) + ((nextPixel and 255) * weight)) / combinedWeight).toInt().coerceIn(0, 255)
+                                    val combinedWeight = previousWeight + weightUnit
+                                    val red = (((((previousPixel shr 16) and 255) * previousWeight) + (((nextPixel shr 16) and 255) * weightUnit)) / combinedWeight).coerceIn(0, 255)
+                                    val green = (((((previousPixel shr 8) and 255) * previousWeight) + (((nextPixel shr 8) and 255) * weightUnit)) / combinedWeight).coerceIn(0, 255)
+                                    val blue = ((((previousPixel and 255) * previousWeight) + ((nextPixel and 255) * weightUnit)) / combinedWeight).coerceIn(0, 255)
                                     outputPixels[destinationIndex] = (0xFF shl 24) or (red shl 16) or (green shl 8) or blue
-                                    outputWeights[destinationIndex] = combinedWeight
+                                    outputWeights[destinationIndex] = combinedWeight.toShort()
                                 }
                             }
                         }

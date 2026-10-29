@@ -92,7 +92,7 @@ internal object LamaInpainter {
         val featherHeight = (source.height / 8).coerceAtLeast(1)
         val lowResolutionMask = Bitmap.createScaledBitmap(fullMask, featherWidth, featherHeight, true)
         val compositeMask = Bitmap.createScaledBitmap(lowResolutionMask, source.width, source.height, true)
-        lowResolutionMask.recycle()
+        if (lowResolutionMask !== compositeMask) lowResolutionMask.recycle()
         var session: OrtSession? = null
         var imageTensor: OnnxTensor? = null
         try {

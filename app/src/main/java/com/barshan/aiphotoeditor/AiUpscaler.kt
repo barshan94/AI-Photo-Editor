@@ -126,6 +126,8 @@ internal object AiUpscaler {
                 }
                 top += tileSize
             }
+            // Reduce hard tile-boundary lines left by independent ESRGAN tile inference.
+            softenTileSeams(outputPixels, outWidth, outHeight, outputTileWidth, outputTileHeight)
             onProgress(93, "Rebuilding the high-resolution image")
             val result = Bitmap.createBitmap(outWidth, outHeight, Bitmap.Config.ARGB_8888)
             result.setPixels(outputPixels, 0, outWidth, 0, 0, outWidth, outHeight)
@@ -135,5 +137,54 @@ internal object AiUpscaler {
             interpreter?.close()
             if (resized && !inputBitmap.isRecycled) inputBitmap.recycle()
         }
+    }
+
+    /**
+     * Tile inference can create visible grid lines. Feather a narrow band across each join
+     * rather than altering the rest of the reconstructed image.
+     */
+    private fun softenTileSeams(pixels: IntArray, width: Int, height: Int, tileWidth: Int, tileHeight: Int) {
+        val radius = 4
+        var seamX = tileWidth
+        while (seamX < width) {
+            for (y in 0 until height) {
+                val left = pixels[y * width + (seamX - radius - 1).coerceAtLeast(0)]
+                val right = pixels[y * width + (seamX + radius).coerceAtMost(width - 1)]
+                val start = (seamX - radius).coerceAtLeast(0)
+                val end = (seamX + radius).coerceAtMost(width)
+                for (x in start until end) {
+                    val t = (x - start).toFloat() / (end - start).coerceAtLeast(1)
+                    val index = y * width + x
+                    pixels[index] = blendToward(pixels[index], left, right, t)
+                }
+            }
+            seamX += tileWidth
+        }
+        var seamY = tileHeight
+        while (seamY < height) {
+            for (x in 0 until width) {
+                val top = pixels[(seamY - radius - 1).coerceAtLeast(0) * width + x]
+                val bottom = pixels[(seamY + radius).coerceAtMost(height - 1) * width + x]
+                val start = (seamY - radius).coerceAtLeast(0)
+                val end = (seamY + radius).coerceAtMost(height)
+                for (y in start until end) {
+                    val t = (y - start).toFloat() / (end - start).coerceAtLeast(1)
+                    val index = y * width + x
+                    pixels[index] = blendToward(pixels[index], top, bottom, t)
+                }
+            }
+            seamY += tileHeight
+        }
+    }
+
+    private fun blendToward(pixel: Int, first: Int, second: Int, fraction: Float): Int {
+        val amount = 0.22f
+        val targetR = (((first shr 16) and 255) * (1f - fraction) + ((second shr 16) and 255) * fraction).toInt()
+        val targetG = (((first shr 8) and 255) * (1f - fraction) + ((second shr 8) and 255) * fraction).toInt()
+        val targetB = ((first and 255) * (1f - fraction) + (second and 255) * fraction).toInt()
+        val red = (((pixel shr 16) and 255) * (1f - amount) + targetR * amount).toInt().coerceIn(0, 255)
+        val green = (((pixel shr 8) and 255) * (1f - amount) + targetG * amount).toInt().coerceIn(0, 255)
+        val blue = ((pixel and 255) * (1f - amount) + targetB * amount).toInt().coerceIn(0, 255)
+        return (0xFF shl 24) or (red shl 16) or (green shl 8) or blue
     }
 }

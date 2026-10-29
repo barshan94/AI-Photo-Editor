@@ -2103,7 +2103,7 @@ EditorImageAction("⇩", "Export", previewBitmap != null && !isExporting && sele
                                     Text("Paint over the whole object, including its shadow. Red strokes mark the area to remove; the app reconstructs it from surrounding content.", color = SoftText, fontSize = 10.sp, lineHeight = 14.sp)
                                     Button(
                                         onClick = { activePhoto?.let { removeMarkedObject(it) } },
-                                        enabled = activePhoto != null && removalStrokes.isNotEmpty() && !isExporting,
+                                        enabled = activePhoto != null && (removalStrokes.isNotEmpty() || automaticRemovalMask != null) && !isExporting,
                                         modifier = Modifier.fillMaxWidth(),
                                         colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Ink)
                                     ) { Text(if (isExporting) "Removing object…" else "Remove marked area") }

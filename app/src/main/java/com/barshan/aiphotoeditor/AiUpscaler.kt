@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.Bitmap
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.tensorflow.lite.DataType
 import org.tensorflow.lite.Interpreter
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -49,12 +50,18 @@ internal object AiUpscaler {
             interpreter = Interpreter(modelBuffer, Interpreter.Options().setNumThreads(4))
             onProgress(8, "Preparing image tiles")
 
-            val inputShape = interpreter.getInputTensor(0).shape()
-            val outputShape = interpreter.getOutputTensor(0).shape()
+            val inputTensor = interpreter.getInputTensor(0)
+            val outputTensor = interpreter.getOutputTensor(0)
+            val inputShape = inputTensor.shape()
+            val outputShape = outputTensor.shape()
             require(inputShape.size == 4 && outputShape.size == 4 &&
                 inputShape[0] == 1 && inputShape[3] == 3 &&
                 outputShape[0] == 1 && outputShape[3] == 3) {
                 "The upscaling engine has an unsupported input/output shape."
+            }
+            require(inputTensor.dataType() in setOf(DataType.FLOAT32, DataType.UINT8) &&
+                outputTensor.dataType() in setOf(DataType.FLOAT32, DataType.UINT8)) {
+                "The installed upscaling model uses an unsupported pixel format."
             }
             val tileSize = inputShape[1]
             val tileWidth = inputShape[2]
@@ -73,8 +80,10 @@ internal object AiUpscaler {
             }
 
             val inputPixels = IntArray(tileSize * tileWidth)
-            val input = ByteBuffer.allocateDirect(tileSize * tileWidth * 3 * 4).order(ByteOrder.nativeOrder())
-            val output = ByteBuffer.allocateDirect(outputTileHeight * outputTileWidth * 3 * 4).order(ByteOrder.nativeOrder())
+            val inputBytesPerChannel = if (inputTensor.dataType() == DataType.FLOAT32) 4 else 1
+            val outputBytesPerChannel = if (outputTensor.dataType() == DataType.FLOAT32) 4 else 1
+            val input = ByteBuffer.allocateDirect(tileSize * tileWidth * 3 * inputBytesPerChannel).order(ByteOrder.nativeOrder())
+            val output = ByteBuffer.allocateDirect(outputTileHeight * outputTileWidth * 3 * outputBytesPerChannel).order(ByteOrder.nativeOrder())
             val tileOutput = IntArray(outputTileHeight * outputTileWidth)
             val outputPixels = IntArray(outWidth * outHeight)
 
@@ -99,20 +108,39 @@ internal object AiUpscaler {
                     }
                     input.clear()
                     for (pixel in inputPixels) {
-                        // The official TFLite model expects normalized RGB values in 0..1.
-                        input.putFloat(((pixel shr 16) and 0xFF) / 255f)
-                        input.putFloat(((pixel shr 8) and 0xFF) / 255f)
-                        input.putFloat((pixel and 0xFF) / 255f)
+                        val red = (pixel shr 16) and 0xFF
+                        val green = (pixel shr 8) and 0xFF
+                        val blue = pixel and 0xFF
+                        if (inputTensor.dataType() == DataType.FLOAT32) {
+                            // The published float model expects normalized RGB values in 0..1.
+                            input.putFloat(red / 255f)
+                            input.putFloat(green / 255f)
+                            input.putFloat(blue / 255f)
+                        } else {
+                            // Also support byte-encoded exports of the same RGB model.
+                            input.put(red.toByte())
+                            input.put(green.toByte())
+                            input.put(blue.toByte())
+                        }
                     }
                     input.rewind()
                     output.clear()
                     interpreter.run(input, output)
                     output.rewind()
                     for (i in tileOutput.indices) {
-                        // ESRGAN returns normalized float RGB values. Convert back to 8-bit channels.
-                        val red = (output.float * 255f).toInt().coerceIn(0, 255)
-                        val green = (output.float * 255f).toInt().coerceIn(0, 255)
-                        val blue = (output.float * 255f).toInt().coerceIn(0, 255)
+                        val red: Int
+                        val green: Int
+                        val blue: Int
+                        if (outputTensor.dataType() == DataType.FLOAT32) {
+                            // Float ESRGAN output is normalized RGB; convert back to 8-bit.
+                            red = (output.float * 255f).toInt().coerceIn(0, 255)
+                            green = (output.float * 255f).toInt().coerceIn(0, 255)
+                            blue = (output.float * 255f).toInt().coerceIn(0, 255)
+                        } else {
+                            red = output.get().toInt() and 0xFF
+                            green = output.get().toInt() and 0xFF
+                            blue = output.get().toInt() and 0xFF
+                        }
                         tileOutput[i] = (0xFF shl 24) or (red shl 16) or (green shl 8) or blue
                     }
                     for (oy in 0 until outputTileHeight) {

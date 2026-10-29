@@ -122,9 +122,10 @@ internal object AiUpscaler {
                     output.clear()
                     interpreter.run(input, output)
                     output.rewind()
+                    // TensorFlow Lite ESRGAN emits NHWC RGB: R,G,B,R,G,B...
+                    // Reading this buffer as three planar channels shifts colour data across
+                    // pixels and creates severe block/grid artefacts even when scaling is right.
                     for (i in tileOutput.indices) {
-                        // ESRGAN already returns RGB in 0..255; multiplying by 255 creates
-                        // clipping, blocky colors, and severe artifacts.
                         val red = output.float.roundToInt().coerceIn(0, 255)
                         val green = output.float.roundToInt().coerceIn(0, 255)
                         val blue = output.float.roundToInt().coerceIn(0, 255)

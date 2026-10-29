@@ -25,7 +25,7 @@ object AiEditRulesRepository {
     private const val PREFS = "frame_ai_recovery"
     private const val CACHE_KEY = "ai_edit_rules_json"
     private const val RULES_URL =
-        "https://raw.githubusercontent.com/barshan94/AI-Photo-Editor/fix/editor-image-toolbar/ai-edit-rules.json"
+        "https://raw.githubusercontent.com/barshan94/AI-Photo-Editor/main/ai-edit-rules.json"
 
     fun readCachedRules(context: Context): Rules {
         val raw = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -50,7 +50,7 @@ object AiEditRulesRepository {
             val body = connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
             if (body.length > 16_000) return@withContext cached
             val parsed = parse(body) ?: return@withContext cached
-            if (parsed.version < cached.version) return@withContext cached
+            if (parsed.version <= cached.version) return@withContext cached
             appContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
                 .putString(CACHE_KEY, body)
                 .putLong("ai_edit_rules_updated_ms", System.currentTimeMillis())

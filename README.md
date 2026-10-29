@@ -2,6 +2,11 @@
 
 A native Android photo editor focused on batch workflows. It runs locally on the device; no website, account, backend, or Vercel deployment is required.
 
+> **Recommended Android download:** [Optimized APK — Build #446 (57.2 MB)](https://github.com/barshan94/AI-Photo-Editor/actions/runs/40954732292)  
+> This is the version tested on a physical phone, with all features confirmed working. Download the `ai-photo-editor-debug-apk` artifact and install `app-debug.apk`.  
+> **Temporary artifact:** available until November 12, 2026; a permanent release asset is still needed.
+
+
 ## Current milestone: on-device AI photo analysis (Beta 2.2.0)
 
 - Add an **Analyse this photo with AI** panel inside the existing editor; it is optional and does not replace ordinary editing.

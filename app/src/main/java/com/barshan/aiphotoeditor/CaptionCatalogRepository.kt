@@ -33,6 +33,20 @@ object CaptionCatalogRepository {
         }.toList()
     }
 
+    private fun readBoundedText(input: java.io.InputStream, maxChars: Int): String? {
+        input.bufferedReader(Charsets.UTF_8).use { reader ->
+            val output = StringBuilder()
+            val buffer = CharArray(4096)
+            while (true) {
+                val count = reader.read(buffer)
+                if (count < 0) break
+                if (output.length + count > maxChars) return null
+                output.append(buffer, 0, count)
+            }
+            return output.toString()
+        }
+    }
+
     suspend fun refresh(context: Context): List<CaptionLibrary.Entry> = withContext(Dispatchers.IO) {
         val appContext = context.applicationContext
         val cached = readCachedEntries(appContext)
@@ -46,8 +60,8 @@ object CaptionCatalogRepository {
                 setRequestProperty("User-Agent", "AI-Photo-Editor-Android")
             }
             if (connection.responseCode !in 200..299) return@withContext cached
-            val body = connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
-            if (body.length > MAX_CATALOG_CHARS) return@withContext cached
+            val body = readBoundedText(connection.inputStream, MAX_CATALOG_CHARS)
+                ?: return@withContext cached
             val root = JSONObject(body)
             val version = root.optInt("version", 0)
             val captions = root.optJSONArray("captions") ?: JSONArray()
@@ -66,7 +80,7 @@ object CaptionCatalogRepository {
 
             val prefs = appContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             val previousVersion = prefs.getInt("remote_caption_version", 0)
-            if (version >= previousVersion && cleaned.isNotEmpty()) {
+            if (version > previousVersion && cleaned.isNotEmpty()) {
                 val saved = prefs.edit()
                     .putInt("remote_caption_version", version)
                     .putString("remote_caption_entries", cleaned.joinToString("\n"))

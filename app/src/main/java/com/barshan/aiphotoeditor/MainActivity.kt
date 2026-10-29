@@ -2347,21 +2347,22 @@ EditorImageAction("⇩", "Export", previewBitmap != null && !isExporting && sele
                         }
                         Spacer(modifier = Modifier.height(4.dp))
                         if (activeEditorPanel == "AI Edit" && activeAiSubpanel == "Enhance") {
-                            Row(modifier = Modifier.fillMaxWidth().padding(top = 2.dp, bottom = 5.dp),
-                                horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(top = 2.dp, bottom = 5.dp),
+                                horizontalArrangement = Arrangement.spacedBy(5.dp)
+                            ) {
                                 listOf("Balanced", "Saturated", "Cool").forEach { look ->
-                                                                        Button(
-                                                                            onClick = { aiEditLook = look; runAiEdit() },
-                                                                            modifier = Modifier.weight(1f).heightIn(min = 36.dp),
-                                                                            shape = RoundedCornerShape(9.dp),
-                                                                            colors = ButtonDefaults.buttonColors(
-                                                                                containerColor = if (aiEditLook == look) Mint else Color(0xFF293333),
-                                                                                contentColor = if (aiEditLook == look) Ink else BrightText
-                                                                            ),
-                                                                            contentPadding = PaddingValues(horizontal = 3.dp, vertical = 4.dp)
-                                                                        ) { Text(look, fontSize = 10.sp, maxLines = 1) }
-                                                                    }
-                                                                }
+                                    Button(
+                                        onClick = { aiEditLook = look; runAiEdit() },
+                                        modifier = Modifier.weight(1f).heightIn(min = 36.dp),
+                                        shape = RoundedCornerShape(9.dp),
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = if (aiEditLook == look) Mint else Color(0xFF293333),
+                                            contentColor = if (aiEditLook == look) Ink else BrightText
+                                        ),
+                                        contentPadding = PaddingValues(horizontal = 3.dp, vertical = 4.dp)
+                                    ) { Text(look, fontSize = 10.sp, maxLines = 1) }
+                                }
                             }
                         }
                         if (activeEditorPanel == "Universal Edit") {

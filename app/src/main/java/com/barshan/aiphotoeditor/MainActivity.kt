@@ -1058,11 +1058,11 @@ private fun PhotoEditorHome() {
                         val originalScore = scoreEditedBitmap(original!!)
                         batchOriginalScores = batchOriginalScores + (photo.uri to originalScore)
                         val settings = if (photo.uri in batchManualOverrides) {
-                            batchEditedSettingsByUri[photo.uri] ?: currentSettings()
+                            batchEditedSettingsByUri[photo.uri] ?: EditSettings(contrast = 1f, saturation = 1f)
                         } else if (preset == "AI Edit") {
                             applyAiLook(aiSettingsFor(PhotoAnalysisEngine.analyze(original!!)), aiLook)
                         } else if (preset == "Current edits") {
-                            batchEditedSettingsByUri[photo.uri] ?: currentSettings()
+                            batchEditedSettingsByUri[photo.uri] ?: EditSettings(contrast = 1f, saturation = 1f)
                         } else if (preset == "Auto Level") {
                             EditSettings(straightenDegrees = AutoLeveler.estimateCorrectionDegrees(original!!) ?: 0f)
                         } else {
@@ -2519,7 +2519,7 @@ private fun PhotoEditorHome() {
                                             } else if (batchPreset == "Auto Level") {
                                                 EditSettings(straightenDegrees = AutoLeveler.estimateCorrectionDegrees(original!!) ?: 0f)
                                             } else if (batchPreset == "Current edits") {
-                                                batchEditedSettingsByUri[photo.uri] ?: currentSettings()
+                                                batchEditedSettingsByUri[photo.uri] ?: EditSettings(contrast = 1f, saturation = 1f)
                                             } else {
                                                 settingsForBatch
                                             }

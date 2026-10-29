@@ -100,12 +100,12 @@ internal object LamaInpainter {
         }
         val scaledMask = Bitmap.createBitmap(modelSize, modelSize, Bitmap.Config.ARGB_8888)
         Canvas(scaledMask).drawBitmap(fullMask, null, contentRect, Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG))
-        // Keep the inference mask crisp, but feather the final composite edge so the repaired
-        // region does not look like a pasted rectangle or leave a hard brush outline.
-        // A very small downsample (1/8) spreads mask opacity too far and causes a
-        // washed-out/burnt halo. Keep feathering narrow so only the repair boundary blends.
-        val featherWidth = (source.width / 32).coerceAtLeast(3)
-        val featherHeight = (source.height / 32).coerceAtLeast(3)
+        // Feather only a few source pixels around the boundary. Downsampling to 1/32
+        // creates a broad transition (about 32 source pixels), which mixes reconstructed
+        // colours into untouched surroundings and looks like a dark/burnt halo. A 1/4 mask
+        // gives a narrow ~4-pixel transition while keeping the model's inference mask crisp.
+        val featherWidth = (source.width / 4).coerceAtLeast(3)
+        val featherHeight = (source.height / 4).coerceAtLeast(3)
         val lowResolutionMask = Bitmap.createScaledBitmap(fullMask, featherWidth, featherHeight, true)
         val compositeMask = Bitmap.createScaledBitmap(lowResolutionMask, source.width, source.height, true)
         if (lowResolutionMask !== compositeMask) lowResolutionMask.recycle()

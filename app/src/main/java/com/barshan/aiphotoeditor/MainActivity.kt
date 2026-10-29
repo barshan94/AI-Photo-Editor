@@ -259,6 +259,7 @@ private fun PhotoEditorHome() {
     var skinSmoothing by remember { mutableFloatStateOf(recoveryPrefs.getFloat("skin_smoothing", 0f)) }
     var makeupIntensity by remember { mutableFloatStateOf(recoveryPrefs.getFloat("makeup_intensity", 0f)) }
     var removalBrushMode by remember { mutableStateOf(recoveryPrefs.getBoolean("removal_brush_mode", false)) }
+    var removalEraserMode by remember { mutableStateOf(false) }
     var removalBrushSize by remember { mutableFloatStateOf(recoveryPrefs.getFloat("removal_brush_size", 24f)) }
     val removalStrokes = remember {
         mutableStateListOf<List<Offset>>().apply {
@@ -1677,12 +1678,28 @@ EditorImageAction("⇩", "Export", previewBitmap != null && !isExporting && sele
                                                     } else if (!multiTouch && pressed.isNotEmpty()) {
                                                         val change = pressed.first()
                                                         previewNormalizedPosition(change.position)?.let { point ->
-                                                            currentRemovalStroke = if (currentRemovalStroke.isEmpty()) listOf(point) else currentRemovalStroke + point
+                                                            if (removalEraserMode) {
+                                                                // Erase existing mask samples locally; never paint the eraser into the AI mask.
+                                                                val radius = (removalBrushSize / 512f).coerceIn(0.015f, 0.12f)
+                                                                val kept = removalStrokes.mapNotNull { stroke ->
+                                                                    val remaining = stroke.filterNot { sample ->
+                                                                        val dx = sample.x - point.x
+                                                                        val dy = sample.y - point.y
+                                                                        dx * dx + dy * dy <= radius * radius
+                                                                    }
+                                                                    remaining.takeIf { it.isNotEmpty() }
+                                                                }
+                                                                removalStrokes.clear()
+                                                                removalStrokes.addAll(kept)
+                                                                currentRemovalStroke = emptyList()
+                                                            } else {
+                                                                currentRemovalStroke = if (currentRemovalStroke.isEmpty()) listOf(point) else currentRemovalStroke + point
+                                                            }
                                                         }
                                                         change.consume()
                                                     }
                                                 } while (event.changes.any { it.pressed })
-                                                if (!multiTouch && currentRemovalStroke.isNotEmpty()) removalStrokes.add(currentRemovalStroke)
+                                                if (!multiTouch && !removalEraserMode && currentRemovalStroke.isNotEmpty()) removalStrokes.add(currentRemovalStroke)
                                                 currentRemovalStroke = emptyList()
                                             }
                                         }
@@ -2217,6 +2234,7 @@ EditorImageAction("⇩", "Export", previewBitmap != null && !isExporting && sele
                                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                     Button(
                                         onClick = {
+                                            removalEraserMode = false
                                             removalBrushMode = !removalBrushMode
                                             compareBeforeAfter = false
                                             if (removalBrushMode) {
@@ -2239,10 +2257,35 @@ EditorImageAction("⇩", "Export", previewBitmap != null && !isExporting && sele
                                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = BrightText)
                                     ) { Text("Clear mask") }
                                 }
+                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Button(
+                                        onClick = {
+                                            removalBrushMode = true
+                                            removalEraserMode = false
+                                            resetPreviewZoom()
+                                            statusMessage = "Brush selected. Paint over the object to regenerate that area from surrounding details."
+                                        },
+                                        enabled = activePhoto != null && !isExporting,
+                                        modifier = Modifier.weight(1f),
+                                        colors = ButtonDefaults.buttonColors(containerColor = if (removalBrushMode && !removalEraserMode) Mint else Color(0xFF293333), contentColor = if (removalBrushMode && !removalEraserMode) Ink else BrightText)
+                                    ) { Text("Brush") }
+                                    Button(
+                                        onClick = {
+                                            removalBrushMode = true
+                                            removalEraserMode = true
+                                            resetPreviewZoom()
+                                            currentRemovalStroke = emptyList()
+                                            statusMessage = "Eraser selected. Drag over unwanted red mask marks to remove them before AI reconstruction."
+                                        },
+                                        enabled = activePhoto != null && removalStrokes.isNotEmpty() && !isExporting,
+                                        modifier = Modifier.weight(1f),
+                                        colors = ButtonDefaults.buttonColors(containerColor = if (removalEraserMode) Color(0xFFFFC66D) else Color(0xFF293333), contentColor = if (removalEraserMode) Ink else BrightText)
+                                    ) { Text("Eraser") }
+                                }
                                 if (removalBrushMode || removalStrokes.isNotEmpty()) {
                                     Text("REMOVAL BRUSH SIZE  " + removalBrushSize.toInt(), color = SoftText, fontSize = 11.sp)
                                     Slider(value = removalBrushSize, onValueChange = { removalBrushSize = it }, valueRange = 10f..60f)
-                                    Text("Paint over the whole object, including its shadow. Red strokes mark the area to remove; the app reconstructs it from surrounding content.", color = SoftText, fontSize = 10.sp, lineHeight = 14.sp)
+                                    Text(if (removalEraserMode) "Erase unwanted red mask marks with your finger. Switch back to Brush before running AI reconstruction." else "Paint over the full object and shadow. AI inpainting regenerates the masked region using surrounding image details; include a little margin around the object.", color = SoftText, fontSize = 10.sp, lineHeight = 14.sp)
                                     Button(
                                         onClick = { activePhoto?.let { removeMarkedObject(it) } },
                                         enabled = activePhoto != null && removalStrokes.isNotEmpty() && !isExporting,

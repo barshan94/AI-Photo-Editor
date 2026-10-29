@@ -46,10 +46,13 @@ internal object MulticlassSegmentationEngine {
                 "Choose a valid photo before running segmentation."
             }
 
+            // Download once into app-private storage, then memory-map the model for MediaPipe.
+            val modelFile = AiModelStore.ensureModelFile(context, AiModelStore.Model.MULTICLASS_SEGMENTATION)
+            val modelBuffer = AiModelStore.mapReadOnly(modelFile)
             val options = ImageSegmenter.ImageSegmenterOptions.builder()
                 .setBaseOptions(
                     BaseOptions.builder()
-                        .setModelAssetPath("selfie_multiclass_256x256.tflite")
+                        .setModelAssetBuffer(modelBuffer)
                         .build()
                 )
                 .setRunningMode(RunningMode.IMAGE)

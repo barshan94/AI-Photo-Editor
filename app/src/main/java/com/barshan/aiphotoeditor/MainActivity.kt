@@ -304,6 +304,7 @@ private fun PhotoEditorHome() {
     var aiEditLook by remember { mutableStateOf("Balanced") }
     var showSingleAiLookOptions by remember { mutableStateOf(false) }
     var showResetLearning by remember { mutableStateOf(false) }
+    var showDeleteLearningConfirmation by remember { mutableStateOf(false) }
     var showBatchAiOptions by remember { mutableStateOf(false) }
     var batchEditedSettingsByUri by remember { mutableStateOf<Map<Uri, EditSettings>>(emptyMap()) }
     var batchManualOverrides by remember { mutableStateOf<Set<Uri>>(emptySet()) }
@@ -1457,11 +1458,8 @@ private fun PhotoEditorHome() {
                 Column(modifier = Modifier.padding(start = 11.dp)) {
                     Text("FRAME / AI", color = BrightText, fontSize = 18.sp,
                         fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
-                    Text("YOUR PERSONAL PHOTO EDITOR", color = SoftText,
-                        fontSize = 9.sp, letterSpacing = 1.1.sp)
                 }
                 Spacer(modifier = Modifier.weight(1f))
-                Text("BETA 2.2", color = Mint, fontSize = 10.sp, fontWeight = FontWeight.Bold)
             }
             }
 
@@ -1485,7 +1483,7 @@ private fun PhotoEditorHome() {
                                 horizontalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
                                 Column(
-                                    modifier = Modifier.weight(1f).clip(RoundedCornerShape(10.dp))
+                                    modifier = Modifier.weight(1.25f).clip(RoundedCornerShape(10.dp))
                                         .background(Color(0xFF111818)).padding(9.dp)
                                 ) {
                                     Text(
@@ -1500,16 +1498,16 @@ private fun PhotoEditorHome() {
                                             "Sharpness ${displayed.sharpness} · Exposure ${displayed.exposure} · Contrast ${displayed.contrast}",
                                         color = SoftText, fontSize = 9.sp, modifier = Modifier.padding(top = 3.dp), lineHeight = 12.sp
                                     )
-                                    Text(
-                                        if (displayed == null) scorePhoto.note else "Reason: ${displayed.note}",
-                                        color = SoftText, fontSize = 9.sp, lineHeight = 12.sp,
-                                        modifier = Modifier.padding(top = 2.dp)
-                                    )
                                 }
-                                Row(
-                                    horizontalArrangement = Arrangement.spacedBy(3.dp),
-                                    verticalAlignment = Alignment.CenterVertically
+                                Column(
+                                    modifier = Modifier.weight(0.9f),
+                                    verticalArrangement = Arrangement.spacedBy(3.dp)
                                 ) {
+                                    Row(
+                                        horizontalArrangement = Arrangement.spacedBy(3.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+
                                     EditorImageAction("↶", "Undo", undoHistory.isNotEmpty() && !isExporting) { undoEdit() }
                                     EditorImageAction("↷", "Redo", redoHistory.isNotEmpty() && !isExporting) { redoEdit() }
                                     EditorImageAction("⟲", "Reset", activePhoto != null && !isExporting) {
@@ -1529,7 +1527,12 @@ private fun PhotoEditorHome() {
                                         selectedStyle = "Auto"; showEnhanced = true; compareBeforeAfter = false
                                         statusMessage = "All edits reset. Original photo remains unchanged."
                                     }
-                                    EditorImageAction("⇩", "Export", previewBitmap != null && !isExporting && selectedStyle != "Original") {
+                                    }
+                                    Row(
+                                        horizontalArrangement = Arrangement.spacedBy(3.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+EditorImageAction("⇩", "Export", previewBitmap != null && !isExporting && selectedStyle != "Original") {
                                         val photo = activePhoto
                                         if (photo != null) exportOne(photo, currentSettings(),
                                             selectedStyle == "AI Portrait" || backgroundBlur > 0f ||
@@ -1556,11 +1559,12 @@ private fun PhotoEditorHome() {
                                             statusMessage = "Export an edited copy first, then tap Share."
                                         }
                                     }
+                                    }
                                 }
                             }
                         }
 
-                        Spacer(modifier = Modifier.height(8.dp))
+                        Spacer(modifier = Modifier.height(4.dp))
                         val previewAspectRatio = previewBitmap?.let {
                             it.width.toFloat() / it.height.coerceAtLeast(1).toFloat()
                         } ?: activePhoto?.let {
@@ -1971,13 +1975,22 @@ private fun PhotoEditorHome() {
                                             onClick = {},
                                             modifier = Modifier.weight(1f).heightIn(min = 38.dp)
                                                 .combinedClickable(
-                                                    onClick = { applyMyStyle() },
-                                                    onLongClick = { activeAiTool = "My style"; showResetLearning = true }
+                                                    onClick = {
+                                                        if (showResetLearning) {
+                                                            showDeleteLearningConfirmation = true
+                                                        } else {
+                                                            applyMyStyle()
+                                                        }
+                                                    },
+                                                    onLongClick = {
+                                                        activeAiTool = "My style"
+                                                        showResetLearning = true
+                                                    }
                                                 ),
                                             shape = RoundedCornerShape(8.dp),
                                             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = BrightText),
                                             contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp)
-                                        ) { Text("My style", fontSize = 11.sp) }
+                                        ) { Text(if (showResetLearning) "Delete learning" else "My style", fontSize = 11.sp, maxLines = 1) }
                                     }
                                 }
                                 if (isExporting && activePhoto != null && activeAiSubpanel == "Enhance") {
@@ -2026,19 +2039,7 @@ private fun PhotoEditorHome() {
                                     ) { Text(if (isExporting) "Removing object…" else "Remove marked area") }
                                 }
                                 }
-                                if (activeAiSubpanel == "Enhance" && showResetLearning) {
-                            Button(
-                                onClick = {
-                                    PersonalEditLearning.reset(context)
-                                    learnedProfile = PersonalEditLearning.load(context)
-                                    showResetLearning = false
-                                    statusMessage = "Personal editing preferences reset on this device."
-                                },
-                                modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = BrightText),
-                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 5.dp)
-                            ) { Text("Reset learning", fontSize = 10.sp) }
-                        }
+        
                         }
                         }
                         }
@@ -2269,7 +2270,7 @@ private fun PhotoEditorHome() {
                             Button(
                                 onClick = { showSingleAiLookOptions = !showSingleAiLookOptions },
                                 enabled = activePhoto != null && !isRunningPhotoAnalysis && !isExporting,
-                                modifier = Modifier.width(150.dp).padding(bottom = 5.dp),
+                                modifier = Modifier.fillMaxWidth().padding(bottom = 5.dp),
                                 shape = RoundedCornerShape(10.dp),
                                 colors = ButtonDefaults.buttonColors(
                                     containerColor = if (showSingleAiLookOptions) Color(0xFF293333) else Mint,
@@ -2550,43 +2551,6 @@ private fun PhotoEditorHome() {
                     modifier = Modifier.fillMaxWidth().heightIn(max = 190.dp)
                         .verticalScroll(rememberScrollState())
                 ) {
-                Button(
-                    onClick = { showBatchAiOptions = !showBatchAiOptions },
-                    enabled = !isExporting && !isAnalyzing && selectedPhotos.any { it.decision != "Reject" },
-                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 3.dp).heightIn(min = 42.dp),
-                    shape = RoundedCornerShape(10.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Ink),
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 5.dp)
-                ) { Text("✦ AI Edit all", fontSize = 12.sp, fontWeight = FontWeight.Bold) }
-                if (showBatchAiOptions) {
-                    Row(modifier = Modifier.fillMaxWidth().padding(bottom = 5.dp),
-                        horizontalArrangement = Arrangement.spacedBy(5.dp),
-                        verticalAlignment = Alignment.CenterVertically) {
-                        listOf("Saturated", "Cool", "Natural").forEach { look ->
-                            Button(
-                                onClick = { batchAiLook = look },
-                                modifier = Modifier.weight(1f).heightIn(min = 36.dp),
-                                shape = RoundedCornerShape(9.dp),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = if (batchAiLook == look) Mint else Color(0xFF293333),
-                                    contentColor = if (batchAiLook == look) Ink else BrightText
-                                ),
-                                contentPadding = PaddingValues(horizontal = 3.dp, vertical = 4.dp)
-                            ) { Text(look, fontSize = 10.sp, maxLines = 1) }
-                        }
-                        Button(
-                            onClick = {
-                                previewBatchPreset("AI Edit", batchAiLook)
-                                showBatchAiOptions = false
-                            },
-                            enabled = !isPreparingBatchPreview && !isExporting,
-                            modifier = Modifier.weight(0.8f).heightIn(min = 36.dp),
-                            shape = RoundedCornerShape(9.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF9CC8FF), contentColor = Ink),
-                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp)
-                        ) { Text("Edit", fontSize = 11.sp, fontWeight = FontWeight.Bold) }
-                    }
-                }
                 Text("CAPTION CATEGORY", color = BrightText, fontSize = 10.sp, fontWeight = FontWeight.Bold,
                     modifier = Modifier.padding(top = 6.dp, bottom = 3.dp))
                 Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
@@ -2705,6 +2669,43 @@ private fun PhotoEditorHome() {
                                 }
                             }
                         }
+                    }
+                }
+                Button(
+                    onClick = { showBatchAiOptions = !showBatchAiOptions },
+                    enabled = !isExporting && !isAnalyzing && selectedPhotos.any { it.decision != "Reject" },
+                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 3.dp).heightIn(min = 42.dp),
+                    shape = RoundedCornerShape(10.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Ink),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 5.dp)
+                ) { Text("✦ AI Edit all", fontSize = 12.sp, fontWeight = FontWeight.Bold) }
+                if (showBatchAiOptions) {
+                    Row(modifier = Modifier.fillMaxWidth().padding(bottom = 5.dp),
+                        horizontalArrangement = Arrangement.spacedBy(5.dp),
+                        verticalAlignment = Alignment.CenterVertically) {
+                        listOf("Saturated", "Cool", "Natural").forEach { look ->
+                            Button(
+                                onClick = { batchAiLook = look },
+                                modifier = Modifier.weight(1f).heightIn(min = 36.dp),
+                                shape = RoundedCornerShape(9.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = if (batchAiLook == look) Mint else Color(0xFF293333),
+                                    contentColor = if (batchAiLook == look) Ink else BrightText
+                                ),
+                                contentPadding = PaddingValues(horizontal = 3.dp, vertical = 4.dp)
+                            ) { Text(look, fontSize = 10.sp, maxLines = 1) }
+                        }
+                        Button(
+                            onClick = {
+                                previewBatchPreset("AI Edit", batchAiLook)
+                                showBatchAiOptions = false
+                            },
+                            enabled = !isPreparingBatchPreview && !isExporting,
+                            modifier = Modifier.weight(0.8f).heightIn(min = 36.dp),
+                            shape = RoundedCornerShape(9.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF9CC8FF), contentColor = Ink),
+                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp)
+                        ) { Text("Edit", fontSize = 11.sp, fontWeight = FontWeight.Bold) }
                     }
                 }
                 if (showBatchCaptionChoice) {
@@ -3281,6 +3282,32 @@ private fun PhotoEditorHome() {
                         )
                     },
                     confirmButton = { Button(onClick = { originalHoldPhoto = null }) { Text("Close") } }
+                )
+            }
+
+            if (showDeleteLearningConfirmation) {
+                AlertDialog(
+                    onDismissRequest = {
+                        showDeleteLearningConfirmation = false
+                        showResetLearning = false
+                    },
+                    title = { Text("Delete learned style?") },
+                    text = { Text("This removes your saved editing preferences from this device. Photos are not deleted.") },
+                    confirmButton = {
+                        Button(onClick = {
+                            PersonalEditLearning.reset(context)
+                            learnedProfile = PersonalEditLearning.load(context)
+                            showDeleteLearningConfirmation = false
+                            showResetLearning = false
+                            statusMessage = "Personal editing learning deleted from this device."
+                        }) { Text("Delete learning") }
+                    },
+                    dismissButton = {
+                        Button(onClick = {
+                            showDeleteLearningConfirmation = false
+                            showResetLearning = false
+                        }) { Text("Cancel") }
+                    }
                 )
             }
 

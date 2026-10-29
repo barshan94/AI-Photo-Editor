@@ -380,7 +380,8 @@ private fun PhotoEditorHome() {
         val captionPairs = (generated.english.zip(generated.bengali) +
             libraryMatches.map { it.text to it.bengali } +
             remoteMatches.mapIndexed { index, entry ->
-                entry.text to (libraryMatches.getOrNull(index)?.bengali
+                entry.text to (entry.bengali.takeIf { it.isNotBlank() }
+                    ?: libraryMatches.getOrNull(index)?.bengali
                     ?: generated.bengali.getOrNull(index % generated.bengali.size)
                     ?: "মনে রাখার মতো একটি মুহূর্ত।")
             }).distinctBy { it.first }

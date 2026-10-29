@@ -1268,13 +1268,23 @@ private fun PhotoEditorHome() {
     }
 
     // Debounced live preview: controls update the image without an Apply button.
-    LaunchedEffect(activePhoto?.uri, brightness, contrast, saturation, warmth, backgroundBlur, backgroundEnhancement, subjectBrightness, darkerAreaLift, skinSmoothing, makeupIntensity, cropLabel, cropOffsetX, cropOffsetY, freeCropWidth, freeCropHeight, rotationDegrees, straightenDegrees, mirrorHorizontal, mirrorVertical, perspectiveTopLeftX, perspectiveTopLeftY, perspectiveTopRightX, perspectiveTopRightY, perspectiveBottomRightX, perspectiveBottomRightY, perspectiveBottomLeftX, perspectiveBottomLeftY, selectedStyle) {
+    LaunchedEffect(activePhoto?.uri, brightness, contrast, saturation, warmth, backgroundBlur, backgroundEnhancement, subjectBrightness, darkerAreaLift, skinSmoothing, makeupIntensity, cropLabel, cropOffsetX, cropOffsetY, freeCropWidth, freeCropHeight, rotationDegrees, straightenDegrees, mirrorHorizontal, mirrorVertical, perspectiveTopLeftX, perspectiveTopLeftY, perspectiveTopRightX, perspectiveTopRightY, perspectiveBottomRightX, perspectiveBottomRightY, perspectiveBottomLeftX, perspectiveBottomLeftY, selectedStyle, activeEditorPanel, activeCropSubpanel) {
         if (selectedStyle == "Object Removal") return@LaunchedEffect
         val photo = activePhoto
         if (photo != null) {
             delay(220)
             isPreparingPreview = true
             val settings = currentSettings()
+            // In Crop mode render the full edited photo beneath the draggable frame.
+            // Other tools show the crop applied to the preview, using the same saved settings.
+            val cropToolActive = activeEditorPanel == "Crop & Rotate" && activeCropSubpanel == "Crop"
+            val previewSettings = if (cropToolActive) settings.copy(
+                cropRatio = null,
+                freeCropWidthFraction = null,
+                freeCropHeightFraction = null,
+                cropOffsetX = 0f,
+                cropOffsetY = 0f
+            ) else settings
             var original: Bitmap? = null
             var adjusted: Bitmap? = null
             var aiNotice: String? = null
@@ -1287,12 +1297,12 @@ private fun PhotoEditorHome() {
                 if (selectedStyle == "Original") {
                     adjusted = Bitmap.createBitmap(original!!)
                 } else if (selectedStyle == "AI Portrait" || backgroundBlur > 0f || backgroundEnhancement > 0f || subjectBrightness > 0f || darkerAreaLift > 0f || skinSmoothing > 0f || makeupIntensity > 0f) {
-                    val aiResult = SubjectAwareEnhancer.enhance(original!!, settings, context)
+                    val aiResult = SubjectAwareEnhancer.enhance(original!!, previewSettings, context)
                     adjusted = aiResult.bitmap
                     aiNotice = aiResult.message
                 } else {
                     adjusted = withContext(Dispatchers.Default) {
-                        AutoEnhancer.enhance(original!!, settings)
+                        AutoEnhancer.enhance(original!!, previewSettings)
                     }
                 }
                 val scoredBitmap = adjusted!!
@@ -1705,11 +1715,17 @@ EditorImageAction("⇩", "Export", previewBitmap != null && !isExporting && sele
                                                 currentRemovalStroke = emptyList()
                                             }
                                         }
-                                    } else if (cropLabel != "Original") {
-                                        Modifier.pointerInput(cropLabel, previewWidthPx, previewHeightPx) {
+                                    } else if (activeEditorPanel == "Crop & Rotate" && activeCropSubpanel == "Crop" && cropLabel != "Original") {
+                                        Modifier.pointerInput(activeEditorPanel, activeCropSubpanel, cropLabel, previewWidthPx, previewHeightPx, previewBitmap?.width, previewBitmap?.height) {
                                             var edge = ""
                                             var resizedFrame = false
-                                            var fixedLeft = 0f; var fixedTop = 0f; var fixedRight = 1f; var fixedBottom = 1f
+                                            var fixedLeft = 0f
+                                            var fixedTop = 0f
+                                            var fixedRight = 1f
+                                            var fixedBottom = 1f
+                                            var startPoint = Offset.Zero
+                                            var startLeft = 0f
+                                            var startTop = 0f
                                             detectDragGestures(
                                                 onDragStart = { position ->
                                                     resizedFrame = false
@@ -1720,36 +1736,63 @@ EditorImageAction("⇩", "Export", previewBitmap != null && !isExporting && sele
                                                         fixedTop = ((1f - freeCropHeight) * ((cropOffsetY + 1f) / 2f)).coerceIn(0f, 1f)
                                                         fixedRight = (fixedLeft + freeCropWidth).coerceIn(0f, 1f)
                                                         fixedBottom = (fixedTop + freeCropHeight).coerceIn(0f, 1f)
-                                                        edge = listOf("left" to kotlin.math.abs(point.x - fixedLeft), "right" to kotlin.math.abs(point.x - fixedRight),
-                                                            "top" to kotlin.math.abs(point.y - fixedTop), "bottom" to kotlin.math.abs(point.y - fixedBottom))
-                                                            .filter { it.second <= 0.12f }.minByOrNull { it.second }?.first.orEmpty()
-                                                    }
+                                                        startPoint = point
+                                                        startLeft = fixedLeft
+                                                        startTop = fixedTop
+                                                        val insideFrame = point.x in fixedLeft..fixedRight && point.y in fixedTop..fixedBottom
+                                                        val nearestEdge = listOf(
+                                                            "left" to kotlin.math.abs(point.x - fixedLeft),
+                                                            "right" to kotlin.math.abs(point.x - fixedRight),
+                                                            "top" to kotlin.math.abs(point.y - fixedTop),
+                                                            "bottom" to kotlin.math.abs(point.y - fixedBottom)
+                                                        ).filter { it.second <= 0.12f }.minByOrNull { it.second }?.first
+                                                        edge = nearestEdge ?: if (insideFrame) "move" else ""
+                                                    } else edge = ""
                                                 },
                                                 onDragEnd = {
                                                     if (resizedFrame && cropLabel != "Free") cropLabel = "Free"
                                                     edge = ""
-                                                }, onDragCancel = { edge = "" }
+                                                },
+                                                onDragCancel = { edge = "" }
                                             ) { change, _ ->
                                                 change.consume()
                                                 val point = previewNormalizedPosition(change.position) ?: return@detectDragGestures
-                                                if (edge.isNotEmpty()) resizedFrame = true
                                                 when (edge) {
-                                                    "left" -> { val left = point.x.coerceIn(0f, fixedRight - 0.2f); freeCropWidth = (fixedRight - left).coerceIn(0.2f, 1f); cropOffsetX = if (freeCropWidth >= 0.999f) 0f else (2f * left / (1f - freeCropWidth) - 1f).coerceIn(-1f, 1f) }
-                                                    "right" -> { val right = point.x.coerceIn(fixedLeft + 0.2f, 1f); freeCropWidth = (right - fixedLeft).coerceIn(0.2f, 1f); cropOffsetX = if (freeCropWidth >= 0.999f) 0f else (2f * fixedLeft / (1f - freeCropWidth) - 1f).coerceIn(-1f, 1f) }
-                                                    "top" -> { val top = point.y.coerceIn(0f, fixedBottom - 0.2f); freeCropHeight = (fixedBottom - top).coerceIn(0.2f, 1f); cropOffsetY = if (freeCropHeight >= 0.999f) 0f else (2f * top / (1f - freeCropHeight) - 1f).coerceIn(-1f, 1f) }
-                                                    "bottom" -> { val bottom = point.y.coerceIn(fixedTop + 0.2f, 1f); freeCropHeight = (bottom - fixedTop).coerceIn(0.2f, 1f); cropOffsetY = if (freeCropHeight >= 0.999f) 0f else (2f * fixedTop / (1f - freeCropHeight) - 1f).coerceIn(-1f, 1f) }
+                                                    "move" -> {
+                                                        val left = (startLeft + point.x - startPoint.x).coerceIn(0f, (1f - freeCropWidth).coerceAtLeast(0f))
+                                                        val top = (startTop + point.y - startPoint.y).coerceIn(0f, (1f - freeCropHeight).coerceAtLeast(0f))
+                                                        cropOffsetX = if (freeCropWidth >= 0.999f) 0f else (2f * left / (1f - freeCropWidth) - 1f).coerceIn(-1f, 1f)
+                                                        cropOffsetY = if (freeCropHeight >= 0.999f) 0f else (2f * top / (1f - freeCropHeight) - 1f).coerceIn(-1f, 1f)
+                                                    }
+                                                    "left" -> {
+                                                        resizedFrame = true
+                                                        val left = point.x.coerceIn(0f, fixedRight - 0.2f)
+                                                        freeCropWidth = (fixedRight - left).coerceIn(0.2f, 1f)
+                                                        cropOffsetX = if (freeCropWidth >= 0.999f) 0f else (2f * left / (1f - freeCropWidth) - 1f).coerceIn(-1f, 1f)
+                                                    }
+                                                    "right" -> {
+                                                        resizedFrame = true
+                                                        val right = point.x.coerceIn(fixedLeft + 0.2f, 1f)
+                                                        freeCropWidth = (right - fixedLeft).coerceIn(0.2f, 1f)
+                                                        cropOffsetX = if (freeCropWidth >= 0.999f) 0f else (2f * fixedLeft / (1f - freeCropWidth) - 1f).coerceIn(-1f, 1f)
+                                                    }
+                                                    "top" -> {
+                                                        resizedFrame = true
+                                                        val top = point.y.coerceIn(0f, fixedBottom - 0.2f)
+                                                        freeCropHeight = (fixedBottom - top).coerceIn(0.2f, 1f)
+                                                        cropOffsetY = if (freeCropHeight >= 0.999f) 0f else (2f * top / (1f - freeCropHeight) - 1f).coerceIn(-1f, 1f)
+                                                    }
+                                                    "bottom" -> {
+                                                        resizedFrame = true
+                                                        val bottom = point.y.coerceIn(fixedTop + 0.2f, 1f)
+                                                        freeCropHeight = (bottom - fixedTop).coerceIn(0.2f, 1f)
+                                                        cropOffsetY = if (freeCropHeight >= 0.999f) 0f else (2f * fixedTop / (1f - freeCropHeight) - 1f).coerceIn(-1f, 1f)
+                                                    }
                                                 }
-                                                selectedStyle = "Custom"; showEnhanced = true
-                                            }
-                                        }
-                                    } else if (cropLabel != "Original") {
-                                        Modifier.pointerInput(cropLabel, previewWidthPx, previewHeightPx) {
-                                            detectDragGestures { change, dragAmount ->
-                                                change.consume()
-                                                val width = previewWidthPx.coerceAtLeast(1).toFloat()
-                                                val height = previewHeightPx.coerceAtLeast(1).toFloat()
-                                                cropOffsetX = (cropOffsetX + dragAmount.x / width * 2f).coerceIn(-1f, 1f)
-                                                cropOffsetY = (cropOffsetY + dragAmount.y / height * 2f).coerceIn(-1f, 1f)
+                                                if (edge.isNotEmpty()) {
+                                                    selectedStyle = "Custom"
+                                                    showEnhanced = true
+                                                }
                                             }
                                         }
                                     } else {
@@ -1854,7 +1897,7 @@ EditorImageAction("⇩", "Export", previewBitmap != null && !isExporting && sele
                                     }
                                 }
                             }
-                            if (cropLabel != "Original" && !compareBeforeAfter) {
+                            if (activeEditorPanel == "Crop & Rotate" && activeCropSubpanel == "Crop" && cropLabel != "Original" && !compareBeforeAfter) {
                                 androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxSize()) {
                                     val image = previewBitmap
                                     if (image != null && image.width > 0 && image.height > 0) {
@@ -1883,7 +1926,7 @@ EditorImageAction("⇩", "Export", previewBitmap != null && !isExporting && sele
                                     }
                                 }
                             }
-                            if (showCropGuides && cropLabel != "Original" && !compareBeforeAfter) {
+                            if (showCropGuides && activeEditorPanel == "Crop & Rotate" && activeCropSubpanel == "Crop" && cropLabel != "Original" && !compareBeforeAfter) {
                                 androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxSize()) {
                                     val thirdW = size.width / 3f
                                     val thirdH = size.height / 3f

@@ -37,12 +37,22 @@ jobs:
         run: curl --fail --location --retry 3 --output /dev/null https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_multiclass_256x256/float32/1/selfie_multiclass_256x256.tflite
       - name: Run unit regression tests
         run: gradle --no-daemon testDebugUnitTest
-      - name: Build debug APK
-        run: gradle --no-daemon assembleDebug
+      - name: Build debug and optimized release APKs
+        run: gradle --no-daemon assembleDebug assembleRelease
+      - name: Report APK sizes
+        run: |
+          du -h app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/release/app-release-unsigned.apk
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
           name: ai-photo-editor-debug-apk
           path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
+      - name: Upload optimized release APK for size inspection
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-photo-editor-release-unsigned-apk
+          path: app/build/outputs/apk/release/app-release-unsigned.apk
           if-no-files-found: error
           retention-days: 14

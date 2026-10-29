@@ -3,6 +3,8 @@ package com.barshan.aiphotoeditor
 import android.content.Context
 import android.graphics.Bitmap
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import org.tensorflow.lite.DataType
 import org.tensorflow.lite.Interpreter
@@ -101,6 +103,7 @@ internal object AiUpscaler {
             while (top < inputBitmap.height) {
                 var left = 0
                 while (left < inputBitmap.width) {
+                    currentCoroutineContext().ensureActive()
                     for (ty in 0 until tileSize) {
                         val sy = min(top + ty, inputBitmap.height - 1)
                         for (tx in 0 until tileWidth) {

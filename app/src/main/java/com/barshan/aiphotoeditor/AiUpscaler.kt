@@ -28,7 +28,7 @@ internal object AiUpscaler {
         }
         val maxEdge = maxOf(original.width, original.height)
         val maxPixels = 1024 * 1024
-        val scale = minOf(1f, 1024f / maxEdge, kotlin.math.sqrt(maxPixels.toDouble() / (original.width.toDouble() * original.height)).toFloat())
+        val scale = minOf(1f, 1536f / maxEdge, kotlin.math.sqrt(maxPixels.toDouble() / (original.width.toDouble() * original.height)).toFloat())
         val resized = scale < 0.999f
         val inputBitmap = if (resized) {
             Bitmap.createScaledBitmap(

@@ -304,7 +304,13 @@ private fun PhotoEditorHome() {
     var activeAiSubpanel by remember { mutableStateOf(recoveryPrefs.getString("active_ai_subpanel", "Subject") ?: "Subject") }
     var activeCropSubpanel by remember { mutableStateOf("Crop") }
     var activeAiTool by remember { mutableStateOf("Retouch") }
-    var aiEditLook by remember { mutableStateOf("Balanced") }
+    var aiEditLook by remember { mutableStateOf("Natural") }
+    var showSingleAiLookOptions by remember { mutableStateOf(false) }
+    var showResetLearning by remember { mutableStateOf(false) }
+    var showBatchAiOptions by remember { mutableStateOf(false) }
+    var batchEditedSettingsByUri by remember { mutableStateOf<Map<Uri, EditSettings>>(emptyMap()) }
+    var batchManualOverrides by remember { mutableStateOf<Set<Uri>>(emptySet()) }
+    var editorOpeningSettings by remember { mutableStateOf<EditSettings?>(null) }
     var activePerspectiveCorner by remember { mutableStateOf("Top-left") }
     var editedScore by remember { mutableStateOf<PhotoQualityScoring.Score?>(null) }
     var originalPreviewScore by remember { mutableStateOf<PhotoQualityScoring.Score?>(null) }
@@ -947,6 +953,10 @@ private fun PhotoEditorHome() {
         showEnhanced = true
         undoHistory.clear()
         redoHistory.clear()
+        batchEditedSettingsByUri[photo.uri]?.let { applyEditSnapshot(it) }
+        editorOpeningSettings = currentSettings()
+        showSingleAiLookOptions = false
+        showResetLearning = false
         isPreparingPreview = true
         statusMessage = "Opening original photo… Choose an edit when you're ready."
     }
@@ -1047,16 +1057,22 @@ private fun PhotoEditorHome() {
                         batchPreviewFormats = batchPreviewFormats + (photo.uri to recommendedFormats(original!!.width, original!!.height))
                         val originalScore = scoreEditedBitmap(original!!)
                         batchOriginalScores = batchOriginalScores + (photo.uri to originalScore)
-                        val settings = if (preset == "AI Edit") {
+                        val settings = if (photo.uri in batchManualOverrides) {
+                            batchEditedSettingsByUri[photo.uri] ?: currentSettings()
+                        } else if (preset == "AI Edit") {
                             applyAiLook(aiSettingsFor(PhotoAnalysisEngine.analyze(original!!)), aiLook)
                         } else if (preset == "Current edits") {
-                            currentSettings()
+                            batchEditedSettingsByUri[photo.uri] ?: currentSettings()
                         } else if (preset == "Auto Level") {
                             EditSettings(straightenDegrees = AutoLeveler.estimateCorrectionDegrees(original!!) ?: 0f)
                         } else {
                             BatchExportPolicy.settingsForPreset(preset)
                         }
-                        val useSubjectAware = preset == "AI Edit" || preset == "AI Portrait" ||
+                        if (photo.uri !in batchManualOverrides) {
+                            batchEditedSettingsByUri = batchEditedSettingsByUri + (photo.uri to settings)
+                        }
+                        val useSubjectAware = (preset == "AI Edit" && photo.uri !in batchManualOverrides) ||
+                            preset == "AI Portrait" ||
                             settings.backgroundBlur > 0f || settings.backgroundEnhancement > 0f ||
                             settings.subjectBrightness > 0f || settings.darkerAreaLift > 0f ||
                             settings.skinSmoothing > 0f || settings.makeupIntensity > 0f
@@ -1158,8 +1174,16 @@ private fun PhotoEditorHome() {
     // Android system Back returns to the current batch instead of exiting the editor.
     BackHandler(enabled = activePhoto != null || showBurstComparison || showBurstGroupPicker) {
         if (activePhoto != null) {
+            val editedPhoto = activePhoto!!
+            val editedSettings = currentSettings()
+            batchEditedSettingsByUri = batchEditedSettingsByUri + (editedPhoto.uri to editedSettings)
+            if (editorOpeningSettings != editedSettings) {
+                batchManualOverrides = batchManualOverrides + editedPhoto.uri
+            }
+            editorOpeningSettings = null
             activePhoto = null
             resetPreviewZoom()
+            previewBatchPreset("Current edits")
         } else if (showBurstComparison) {
             showBurstComparison = false
             comparisonGroupId = null
@@ -2450,10 +2474,6 @@ private fun PhotoEditorHome() {
                             exportProgress = 0
                             statusMessage = "Enhancing and exporting the batch…"
                             val settingsForBatch = if (batchPreset == "Current edits") currentSettings() else BatchExportPolicy.settingsForPreset(batchPreset)
-                            val useAiPortrait = batchPreset == "AI Edit" || batchPreset == "AI Portrait" ||
-                                settingsForBatch.backgroundBlur > 0f || settingsForBatch.backgroundEnhancement > 0f ||
-                                settingsForBatch.subjectBrightness > 0f || settingsForBatch.darkerAreaLift > 0f ||
-                                settingsForBatch.skinSmoothing > 0f || settingsForBatch.makeupIntensity > 0f
                             scope.launch {
                                 var succeeded = 0
                                 var failed = 0
@@ -2472,14 +2492,23 @@ private fun PhotoEditorHome() {
                                                     context.contentResolver, photo.uri, maxDimension = Int.MAX_VALUE
                                                 )
                                             }
-                                            val photoSettings = if (batchPreset == "AI Edit") {
-                                                 applyAiLook(aiSettingsFor(PhotoAnalysisEngine.analyze(original!!)), batchAiLook)
-                                             } else if (batchPreset == "Auto Level") {
-                                                 EditSettings(straightenDegrees = AutoLeveler.estimateCorrectionDegrees(original!!) ?: 0f)
-                                             } else {
-                                                 settingsForBatch
-                                             }
-                                            if (useAiPortrait) {
+                                            val photoSettings = if (photo.uri in batchManualOverrides) {
+                                                batchEditedSettingsByUri[photo.uri] ?: settingsForBatch
+                                            } else if (batchPreset == "AI Edit") {
+                                                applyAiLook(aiSettingsFor(PhotoAnalysisEngine.analyze(original!!)), batchAiLook)
+                                            } else if (batchPreset == "Auto Level") {
+                                                EditSettings(straightenDegrees = AutoLeveler.estimateCorrectionDegrees(original!!) ?: 0f)
+                                            } else if (batchPreset == "Current edits") {
+                                                batchEditedSettingsByUri[photo.uri] ?: currentSettings()
+                                            } else {
+                                                settingsForBatch
+                                            }
+                                            val useAiPortraitForPhoto = (batchPreset == "AI Edit" && photo.uri !in batchManualOverrides) ||
+                                                batchPreset == "AI Portrait" ||
+                                                photoSettings.backgroundBlur > 0f || photoSettings.backgroundEnhancement > 0f ||
+                                                photoSettings.subjectBrightness > 0f || photoSettings.darkerAreaLift > 0f ||
+                                                photoSettings.skinSmoothing > 0f || photoSettings.makeupIntensity > 0f
+                                            if (useAiPortraitForPhoto) {
                                                 val aiResult = SubjectAwareEnhancer.enhance(original!!, photoSettings, context)
                                                 enhanced = aiResult.bitmap
                                                 if (!aiResult.usedAi) aiFallbacks++

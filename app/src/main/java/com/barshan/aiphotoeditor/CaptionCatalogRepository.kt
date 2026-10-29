@@ -23,12 +23,13 @@ object CaptionCatalogRepository {
         val raw = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             .getString("remote_caption_entries", "").orEmpty()
         return raw.lineSequence().mapIndexedNotNull { index, line ->
-            val split = line.split('\t', limit = 2)
-            if (split.size != 2 || split[0].isBlank() || split[1].isBlank()) null
+            val split = line.split('\t', limit = 3)
+            if (split.size < 2 || split[0].isBlank() || split[1].isBlank()) null
             else {
-                val words = Regex("[^\\p{L}\\p{N}]+").split(split[1].lowercase())
-                    .filter { it.length > 1 }.toSet() + split[0].lowercase()
-                CaptionLibrary.Entry("remote-$index", split[0], split[1], "বাংলা অনুবাদ উপলভ্য নয়।", words)
+                val bengali = split.getOrNull(2)?.takeIf { it.isNotBlank() } ?: "মনে রাখার মতো একটি মুহূর্ত।"
+                val words = (Regex("[^\\p{L}\\p{N}]+").split((split[1] + " " + bengali).lowercase())
+                    .filter { it.length > 1 }.toSet() + split[0].lowercase())
+                CaptionLibrary.Entry("remote-$index", split[0], split[1], bengali, words)
             }
         }.toList()
     }
@@ -72,8 +73,9 @@ object CaptionCatalogRepository {
                     val item = captions.optJSONObject(i) ?: continue
                     val category = item.optString("category").trim().take(32)
                     val text = item.optString("text").replace('\n', ' ').replace('\r', ' ').trim().take(240)
-                    if (category.isNotBlank() && text.length >= 4 && !text.contains('\t')) {
-                        add("$category\t$text")
+                    val bengali = item.optString("bengali", "").replace('\n', ' ').replace('\r', ' ').trim().take(240)
+                    if (category.isNotBlank() && text.length >= 4 && !text.contains('\t') && !bengali.contains('\t')) {
+                        add(category + "\t" + text + "\t" + bengali.ifBlank { "মনে রাখার মতো একটি মুহূর্ত।" })
                     }
                 }
             }.distinct().take(MAX_CAPTIONS)

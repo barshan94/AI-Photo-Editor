@@ -52,9 +52,10 @@ jobs:
           Final tested Android APK for AI Photo Editor.
 
           - Build: GitHub Actions #446
-          - Tested APK: debug build, approximately 57.2 MiB
+          - Tested APK: debug build, 111,939,082 bytes (about 106.8 MiB)
           - Source commit: ba411f86888aa0c2df0982beda459f56061efb4a
-          - SHA-256 (artifact metadata): 4a79a22b7e392a109073ad80d46909d905701cb115afaa3b938dcc963597d28a
+          - SHA-256 of the uploaded APK: d72105d74f8d14094cce4e6bc39224911944d321ee7afc9feff4659f5c73032e
+          - Note: the original Actions artifact ZIP was about 57.2 MiB; the extracted APK itself is larger than 100 MB.
 
           This release preserves the exact debug APK artifact the project owner tested on their phone. The source project is archived; no further development is planned.
           EOF

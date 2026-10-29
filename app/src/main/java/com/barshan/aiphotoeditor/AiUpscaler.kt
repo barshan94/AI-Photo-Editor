@@ -78,8 +78,13 @@ internal object AiUpscaler {
             val tileOutput = IntArray(outputTileHeight * outputTileWidth)
             val outputPixels = IntArray(outWidth * outHeight)
 
-            val totalTiles = ((inputBitmap.width + tileWidth - 1) / tileWidth) *
-                ((inputBitmap.height + tileSize - 1) / tileSize)
+            // Overlap adjacent tiles by 50% and average the shared pixels. Directly
+            // placing non-overlapping ESRGAN tiles creates visible square seams.
+            val stepX = maxOf(1, tileWidth / 2)
+            val stepY = maxOf(1, tileSize / 2)
+            val totalTiles = ((inputBitmap.width + stepX - 1) / stepX) *
+                ((inputBitmap.height + stepY - 1) / stepY)
+            val outputWeights = ByteArray(outWidth * outHeight)
             var completedTiles = 0
             var top = 0
             while (top < inputBitmap.height) {
@@ -116,15 +121,35 @@ internal object AiUpscaler {
                         val dstX = left * scaleX
                         val count = min(outputTileWidth, outWidth - dstX)
                         if (count > 0) {
-                            System.arraycopy(tileOutput, oy * outputTileWidth, outputPixels, dstY * outWidth + dstX, count)
+                            val sourceOffset = oy * outputTileWidth
+                            for (ox in 0 until count) {
+                                val destinationIndex = dstY * outWidth + dstX + ox
+                                val nextPixel = tileOutput[sourceOffset + ox]
+                                val previousWeight = outputWeights[destinationIndex].toInt() and 0xFF
+                                if (previousWeight == 0) {
+                                    outputPixels[destinationIndex] = nextPixel
+                                } else {
+                                    val previousPixel = outputPixels[destinationIndex]
+                                    val combinedWeight = previousWeight + 1
+                                    val red = ((((previousPixel shr 16) and 0xFF) * previousWeight) +
+                                        ((nextPixel shr 16) and 0xFF)) / combinedWeight
+                                    val green = ((((previousPixel shr 8) and 0xFF) * previousWeight) +
+                                        ((nextPixel shr 8) and 0xFF)) / combinedWeight
+                                    val blue = (((previousPixel and 0xFF) * previousWeight) +
+                                        (nextPixel and 0xFF)) / combinedWeight
+                                    outputPixels[destinationIndex] = (0xFF shl 24) or
+                                        (red shl 16) or (green shl 8) or blue
+                                }
+                                outputWeights[destinationIndex] = (previousWeight + 1).coerceAtMost(255).toByte()
+                            }
                         }
                     }
                     completedTiles++
                     val percent = 8 + (completedTiles * 82 / totalTiles.coerceAtLeast(1))
                     onProgress(percent, "AI upscaling · tile $completedTiles of $totalTiles")
-                    left += tileWidth
+                    left += stepX
                 }
-                top += tileSize
+                top += stepY
             }
             // Reduce hard tile-boundary lines left by independent ESRGAN tile inference.
             softenTileSeams(outputPixels, outWidth, outHeight, outputTileWidth, outputTileHeight)

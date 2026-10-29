@@ -11,6 +11,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.rememberTransformableState
@@ -298,7 +299,7 @@ private fun PhotoEditorHome() {
     var activeAiSubpanel by remember { mutableStateOf(recoveryPrefs.getString("active_ai_subpanel", "Subject") ?: "Subject") }
     var activeCropSubpanel by remember { mutableStateOf("Crop") }
     var activeAiTool by remember { mutableStateOf("Retouch") }
-    var aiEditLook by remember { mutableStateOf("Natural") }
+    var aiEditLook by remember { mutableStateOf("Balanced") }
     var showSingleAiLookOptions by remember { mutableStateOf(false) }
     var showResetLearning by remember { mutableStateOf(false) }
     var showBatchAiOptions by remember { mutableStateOf(false) }
@@ -1965,14 +1966,12 @@ private fun PhotoEditorHome() {
                                             contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp)
                                         ) { Text(if (isExporting && activePhoto != null) "Upscaling…" else "AI Upscale", fontSize = 11.sp) }
                                         Button(
-                                            onClick = { applyMyStyle() },
+                                            onClick = {},
                                             modifier = Modifier.weight(1f).heightIn(min = 38.dp)
-                                                .pointerInput(Unit) {
-                                                    detectTapGestures(
-                                                        onTap = { applyMyStyle() },
-                                                        onLongPress = { activeAiTool = "My style"; showResetLearning = true }
-                                                    )
-                                                },
+                                                .combinedClickable(
+                                                    onClick = { applyMyStyle() },
+                                                    onLongClick = { activeAiTool = "My style"; showResetLearning = true }
+                                                ),
                                             shape = RoundedCornerShape(8.dp),
                                             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = BrightText),
                                             contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp)
@@ -2268,7 +2267,7 @@ private fun PhotoEditorHome() {
                             Button(
                                 onClick = { showSingleAiLookOptions = !showSingleAiLookOptions },
                                 enabled = activePhoto != null && !isRunningPhotoAnalysis && !isExporting,
-                                modifier = Modifier.fillMaxWidth().padding(bottom = 5.dp),
+                                modifier = Modifier.width(150.dp).padding(bottom = 5.dp),
                                 shape = RoundedCornerShape(10.dp),
                                 colors = ButtonDefaults.buttonColors(
                                     containerColor = if (showSingleAiLookOptions) Color(0xFF293333) else Mint,
@@ -2282,9 +2281,9 @@ private fun PhotoEditorHome() {
                             if (showSingleAiLookOptions) {
                                 Row(modifier = Modifier.fillMaxWidth().padding(bottom = 5.dp),
                                     horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                                    listOf("Saturated", "Cool", "Natural").forEach { look ->
+                                    listOf("Balanced", "Saturated", "Cool").forEach { look ->
                                         Button(
-                                            onClick = { aiEditLook = look },
+                                            onClick = { aiEditLook = look; showSingleAiLookOptions = false; runAiEdit() },
                                             modifier = Modifier.weight(1f).heightIn(min = 36.dp),
                                             shape = RoundedCornerShape(9.dp),
                                             colors = ButtonDefaults.buttonColors(
@@ -2295,13 +2294,6 @@ private fun PhotoEditorHome() {
                                         ) { Text(look, fontSize = 10.sp, maxLines = 1) }
                                     }
                                 }
-                                Button(
-                                    onClick = { runAiEdit(); showSingleAiLookOptions = false },
-                                    enabled = activePhoto != null && !isRunningPhotoAnalysis && !isExporting,
-                                    modifier = Modifier.fillMaxWidth().padding(bottom = 5.dp),
-                                    shape = RoundedCornerShape(10.dp),
-                                    colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Ink)
-                                ) { Text("Edit", fontSize = 12.sp, fontWeight = FontWeight.Bold) }
                             }
                         }
                         if (activeEditorPanel == "Universal Edit") {

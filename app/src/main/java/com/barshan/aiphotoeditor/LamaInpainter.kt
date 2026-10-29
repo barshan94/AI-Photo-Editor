@@ -2,6 +2,7 @@ package com.barshan.aiphotoeditor
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.BlurMaskFilter
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.Path
@@ -72,6 +73,17 @@ internal object LamaInpainter {
         }
         val scaledMask = Bitmap.createScaledBitmap(fullMask, modelSize, modelSize, true)
         val image512 = Bitmap.createScaledBitmap(source, modelSize, modelSize, true)
+        // Keep the inference mask crisp, but feather the final composite edge so the repaired
+        // region does not look like a pasted rectangle or leave a hard brush outline.
+        val compositeMask = Bitmap.createBitmap(source.width, source.height, Bitmap.Config.ARGB_8888)
+        Canvas(compositeMask).drawBitmap(
+            fullMask,
+            0f,
+            0f,
+            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                maskFilter = BlurMaskFilter((min(source.width, source.height) * 0.004f).coerceIn(3f, 18f), BlurMaskFilter.Blur.NORMAL)
+            }
+        )
         var session: OrtSession? = null
         var imageTensor: OnnxTensor? = null
         try {
@@ -124,13 +136,14 @@ internal object LamaInpainter {
                 }
                 val repaired512 = Bitmap.createBitmap(modelSize, modelSize, Bitmap.Config.ARGB_8888)
                 repaired512.setPixels(repairedPixels, 0, modelSize, 0, 0, modelSize, modelSize)
+                val repairedFull = Bitmap.createScaledBitmap(repaired512, source.width, source.height, true)
                 val result = source.copy(Bitmap.Config.ARGB_8888, true)
                 val sourceRow = IntArray(source.width)
                 val maskRow = IntArray(source.width)
                 val resultRow = IntArray(source.width)
                 for (y in 0 until source.height) {
                     source.getPixels(sourceRow, 0, source.width, 0, y, source.width, 1)
-                    fullMask.getPixels(maskRow, 0, source.width, 0, y, source.width, 1)
+                    compositeMask.getPixels(maskRow, 0, source.width, 0, y, source.width, 1)
                     val my = min(modelSize - 1, y * modelSize / source.height)
                     for (x in 0 until source.width) {
                         val alpha = AndroidColor.alpha(maskRow[x]) / 255f
@@ -138,7 +151,7 @@ internal object LamaInpainter {
                             resultRow[x] = sourceRow[x]
                         } else {
                             val mx = min(modelSize - 1, x * modelSize / source.width)
-                            val repaired = repaired512.getPixel(mx, my)
+                            val repaired = repairedFull.getPixel(x, y)
                             val original = sourceRow[x]
                             val r = (AndroidColor.red(original) * (1f - alpha) + AndroidColor.red(repaired) * alpha).toInt().coerceIn(0, 255)
                             val g = (AndroidColor.green(original) * (1f - alpha) + AndroidColor.green(repaired) * alpha).toInt().coerceIn(0, 255)
@@ -149,6 +162,7 @@ internal object LamaInpainter {
                     result.setPixels(resultRow, 0, source.width, 0, y, source.width, 1)
                 }
                 repaired512.recycle()
+                repairedFull.recycle()
                 Result(result, marked)
             } finally {
                 outputs.close()
@@ -157,6 +171,7 @@ internal object LamaInpainter {
             imageTensor?.close()
             session?.close()
             fullMask.recycle()
+            compositeMask.recycle()
             scaledMask.recycle()
             image512.recycle()
         }

@@ -544,7 +544,7 @@ private fun PhotoEditorHome() {
         selectedPhotos.map { it.uri.toString() }, activePhoto?.uri?.toString(),
         brightness, contrast, saturation, warmth, backgroundBlur, backgroundEnhancement,
         subjectBrightness, darkerAreaLift, skinSmoothing, makeupIntensity,
-        cropLabel, cropOffsetX, cropOffsetY, rotationDegrees, straightenDegrees,
+        cropLabel, cropOffsetX, cropOffsetY, freeCropRatio, rotationDegrees, straightenDegrees,
         mirrorHorizontal, mirrorVertical, selectedStyle, showEnhanced, showCropGuides,
         showPerspectiveControls, removalBrushMode, removalBrushSize,
         perspectiveTopLeftX, perspectiveTopLeftY, perspectiveTopRightX, perspectiveTopRightY,
@@ -1433,9 +1433,9 @@ private fun PhotoEditorHome() {
                 showEnhanced = true
                 compareBeforeAfter = false
                 removalBrushMode = false
-                removalStrokes.clear()
-                currentRemovalStroke = emptyList()
-                statusMessage = "Object removal finished locally. Saved the edited copy to Pictures/PixelCraft; original untouched."
+                // Keep the mask so the user can run another repair pass on the same area.
+                // The next pass uses the repaired preview as its source instead of the original.
+                statusMessage = "Object updated. You can refine the same area again without repainting."
             } catch (error: CancellationException) {
                 statusMessage = "Object removal cancelled. Original photo remains untouched."
                 throw error

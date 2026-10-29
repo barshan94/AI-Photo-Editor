@@ -1163,6 +1163,37 @@ private fun PhotoEditorHome() {
         photoAnalysisResult = result
         statusMessage = "AI Edit applied using scene and lighting analysis."
     }
+    // Run AI scene analysis only after the user chooses a look and taps Edit.
+    fun runAiEdit() {
+        val photo = activePhoto ?: return
+        if (isRunningPhotoAnalysis || isExporting) return
+        isRunningPhotoAnalysis = true
+        photoAnalysisResult = null
+        statusMessage = "Inspecting subjects, scene labels, and lighting on this device…"
+        scope.launch {
+            var analysisBitmap: Bitmap? = null
+            try {
+                analysisBitmap = withContext(Dispatchers.IO) {
+                    AutoEnhancer.decodeForEditing(context.contentResolver, photo.uri, maxDimension = 1400)
+                }
+                val result = PhotoAnalysisEngine.analyze(analysisBitmap!!)
+                photoAnalysisResult = result
+                applyAiSuggestedEdit(result)
+                applyEditSnapshot(applyAiLook(currentSettings(), aiEditLook))
+                selectedStyle = "Custom"
+                showEnhanced = true
+                statusMessage = "$aiEditLook AI edit applied. Review it before exporting."
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                statusMessage = "AI analysis failed: " + (error.message ?: "could not inspect this image")
+            } finally {
+                analysisBitmap?.let { if (!it.isRecycled) it.recycle() }
+                isRunningPhotoAnalysis = false
+            }
+        }
+    }
+
     LaunchedEffect(activePhoto?.uri) {
         resetPreviewZoom()
         isShowingOriginal = false
@@ -1913,12 +1944,26 @@ private fun PhotoEditorHome() {
                             Column(modifier = Modifier.fillMaxWidth().padding(12.dp)) {
                                 if (activeAiSubpanel == "Enhance") {
                                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                        listOf("Upscale", "My style").forEach { tool ->
-                                            Button(onClick = { activeAiTool = tool }, modifier = Modifier.weight(1f).heightIn(min = 36.dp),
-                                                shape = RoundedCornerShape(8.dp),
-                                                colors = ButtonDefaults.buttonColors(containerColor = if (activeAiTool == tool) Mint else Color(0xFF293333), contentColor = if (activeAiTool == tool) Ink else BrightText),
-                                                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp)) { Text(tool, fontSize = 10.sp) }
-                                        }
+                                        Button(
+                                            onClick = { activeAiTool = "Upscale" },
+                                            modifier = Modifier.weight(1f).heightIn(min = 38.dp),
+                                            shape = RoundedCornerShape(8.dp),
+                                            colors = ButtonDefaults.buttonColors(containerColor = if (activeAiTool == "Upscale") Mint else Color(0xFF293333), contentColor = if (activeAiTool == "Upscale") Ink else BrightText),
+                                            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp)
+                                        ) { Text("AI Upscale", fontSize = 11.sp) }
+                                        Button(
+                                            onClick = { activeAiTool = "My style" },
+                                            modifier = Modifier.weight(1f).heightIn(min = 38.dp)
+                                                .pointerInput(Unit) {
+                                                    detectTapGestures(
+                                                        onTap = { activeAiTool = "My style" },
+                                                        onLongPress = { activeAiTool = "My style"; showResetLearning = true }
+                                                    )
+                                                },
+                                            shape = RoundedCornerShape(8.dp),
+                                            colors = ButtonDefaults.buttonColors(containerColor = if (activeAiTool == "My style") Mint else Color(0xFF293333), contentColor = if (activeAiTool == "My style") Ink else BrightText),
+                                            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp)
+                                        ) { Text("My style", fontSize = 11.sp) }
                                     }
                                 }
                                 if (activeAiSubpanel == "Enhance" && activeAiTool == "Upscale") {
@@ -2010,15 +2055,18 @@ private fun PhotoEditorHome() {
                                         colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Ink),
                                         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 5.dp)
                                     ) { Text("Use my style", fontSize = 10.sp) }
-                                    Button(
-                                        onClick = {
-                                            PersonalEditLearning.reset(context)
-                                            learnedProfile = PersonalEditLearning.load(context)
-                                            statusMessage = "Personal editing preferences reset on this device."
-                                        },
-                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = BrightText),
-                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 5.dp)
-                                    ) { Text("Reset learning", fontSize = 10.sp) }
+                                    if (showResetLearning) {
+                                        Button(
+                                            onClick = {
+                                                PersonalEditLearning.reset(context)
+                                                learnedProfile = PersonalEditLearning.load(context)
+                                                showResetLearning = false
+                                                statusMessage = "Personal editing preferences reset on this device."
+                                            },
+                                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = BrightText),
+                                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 5.dp)
+                                        ) { Text("Reset learning", fontSize = 10.sp) }
+                                    }
                                 }
                                 }
                             }
@@ -2246,73 +2294,45 @@ private fun PhotoEditorHome() {
                             }
 
                         }
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Spacer(modifier = Modifier.height(12.dp))
+                        Spacer(modifier = Modifier.height(4.dp))
                         if (activeEditorPanel == "AI Edit" && activeAiSubpanel == "Enhance") {
-                        Button(
-                            onClick = {
-                                val photo = activePhoto
-                                if (photo != null && !isRunningPhotoAnalysis && !isExporting) {
-                                    isRunningPhotoAnalysis = true
-                                    photoAnalysisResult = null
-                                    statusMessage = "Inspecting subjects, scene labels, and lighting on this device…"
-                                    scope.launch {
-                                        var analysisBitmap: Bitmap? = null
-                                        try {
-                                            analysisBitmap = withContext(Dispatchers.IO) {
-                                                AutoEnhancer.decodeForEditing(
-                                                    context.contentResolver, photo.uri, maxDimension = 1400
-                                                )
-                                            }
-                                            val result = PhotoAnalysisEngine.analyze(analysisBitmap!!)
-                                            photoAnalysisResult = result
-                                            applyAiSuggestedEdit(result)
-                                            statusMessage = "AI edit applied. Review the preview, compare it with the original, and undo or adjust anything that looks unnatural."
-                                        } catch (error: CancellationException) {
-                                            throw error
-                                        } catch (error: Exception) {
-                                            statusMessage = "AI analysis failed: " + (error.message ?: "could not inspect this image")
-                                        } finally {
-                                            analysisBitmap?.let { if (!it.isRecycled) it.recycle() }
-                                            isRunningPhotoAnalysis = false
-                                        }
+                            Button(
+                                onClick = { showSingleAiLookOptions = !showSingleAiLookOptions },
+                                enabled = activePhoto != null && !isRunningPhotoAnalysis && !isExporting,
+                                modifier = Modifier.fillMaxWidth().padding(bottom = 5.dp),
+                                shape = RoundedCornerShape(10.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = if (showSingleAiLookOptions) Color(0xFF293333) else Mint,
+                                    contentColor = if (showSingleAiLookOptions) Mint else Ink
+                                ),
+                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 5.dp)
+                            ) {
+                                androidx.compose.material3.Icon(Icons.Rounded.ImageSearch, contentDescription = null)
+                                Text(if (isRunningPhotoAnalysis) "  Analysing photo…" else "  AI Edit", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            }
+                            if (showSingleAiLookOptions) {
+                                Row(modifier = Modifier.fillMaxWidth().padding(bottom = 5.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                                    listOf("Saturated", "Cool", "Natural").forEach { look ->
+                                        Button(
+                                            onClick = { aiEditLook = look },
+                                            modifier = Modifier.weight(1f).heightIn(min = 36.dp),
+                                            shape = RoundedCornerShape(9.dp),
+                                            colors = ButtonDefaults.buttonColors(
+                                                containerColor = if (aiEditLook == look) Mint else Color(0xFF293333),
+                                                contentColor = if (aiEditLook == look) Ink else BrightText
+                                            ),
+                                            contentPadding = PaddingValues(horizontal = 3.dp, vertical = 4.dp)
+                                        ) { Text(look, fontSize = 10.sp, maxLines = 1) }
                                     }
                                 }
-                            },
-                            enabled = activePhoto != null && !isRunningPhotoAnalysis && !isExporting,
-                            modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp),
-                            shape = RoundedCornerShape(12.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = if (photoAnalysisResult != null) Color(0xFF293333) else Mint,
-                                contentColor = if (photoAnalysisResult != null) Mint else Ink
-                            )
-                        ) {
-                            if (isRunningPhotoAnalysis) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(16.dp),
-                                    strokeWidth = 2.dp,
-                                    color = Mint
-                                )
-                                Text("  Analysing photo…", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                            } else {
-                                androidx.compose.material3.Icon(Icons.Rounded.ImageSearch, contentDescription = null)
-                                Text(
-                                    "  AI Edit",
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                        }
-                        }
-                        if (activeEditorPanel == "AI Edit" && activeAiSubpanel == "Enhance") {
-                            Row(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                listOf("Balanced", "Saturated", "Cool").forEach { look ->
-                                    Button(onClick = { aiEditLook = look }, modifier = Modifier.weight(1f).heightIn(min = 36.dp),
-                                        shape = RoundedCornerShape(9.dp),
-                                        colors = ButtonDefaults.buttonColors(containerColor = if (aiEditLook == look) Mint else Color(0xFF293333), contentColor = if (aiEditLook == look) Ink else BrightText),
-                                        contentPadding = PaddingValues(horizontal = 3.dp, vertical = 4.dp)
-                                    ) { Text(look, fontSize = 10.sp, maxLines = 1) }
-                                }
+                                Button(
+                                    onClick = { runAiEdit(); showSingleAiLookOptions = false },
+                                    enabled = activePhoto != null && !isRunningPhotoAnalysis && !isExporting,
+                                    modifier = Modifier.fillMaxWidth().padding(bottom = 5.dp),
+                                    shape = RoundedCornerShape(10.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Ink)
+                                ) { Text("Edit", fontSize = 12.sp, fontWeight = FontWeight.Bold) }
                             }
                         }
                         if (activeEditorPanel == "Universal Edit") {
@@ -2567,20 +2587,42 @@ private fun PhotoEditorHome() {
                     modifier = Modifier.fillMaxWidth().heightIn(max = 190.dp)
                         .verticalScroll(rememberScrollState())
                 ) {
-                Row(modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically) {
-                    Text("BATCH PRESET", color = BrightText, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                    Spacer(modifier = Modifier.weight(1f))
-                    Button(
-                        onClick = {
-                            batchAiLook = "Balanced"
-                            previewBatchPreset("AI Edit", "Balanced")
-                        },
-                        enabled = !isExporting && !isAnalyzing && selectedPhotos.any { it.decision != "Reject" },
-                        shape = RoundedCornerShape(10.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Ink),
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 3.dp)
-                    ) { Text("✦ AI Edit all", fontSize = 11.sp, fontWeight = FontWeight.Bold) }
+                Button(
+                    onClick = { showBatchAiOptions = !showBatchAiOptions },
+                    enabled = !isExporting && !isAnalyzing && selectedPhotos.any { it.decision != "Reject" },
+                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 3.dp).heightIn(min = 42.dp),
+                    shape = RoundedCornerShape(10.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Ink),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 5.dp)
+                ) { Text("✦ AI Edit all", fontSize = 12.sp, fontWeight = FontWeight.Bold) }
+                if (showBatchAiOptions) {
+                    Row(modifier = Modifier.fillMaxWidth().padding(bottom = 5.dp),
+                        horizontalArrangement = Arrangement.spacedBy(5.dp),
+                        verticalAlignment = Alignment.CenterVertically) {
+                        listOf("Saturated", "Cool", "Natural").forEach { look ->
+                            Button(
+                                onClick = { batchAiLook = look },
+                                modifier = Modifier.weight(1f).heightIn(min = 36.dp),
+                                shape = RoundedCornerShape(9.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = if (batchAiLook == look) Mint else Color(0xFF293333),
+                                    contentColor = if (batchAiLook == look) Ink else BrightText
+                                ),
+                                contentPadding = PaddingValues(horizontal = 3.dp, vertical = 4.dp)
+                            ) { Text(look, fontSize = 10.sp, maxLines = 1) }
+                        }
+                        Button(
+                            onClick = {
+                                previewBatchPreset("AI Edit", batchAiLook)
+                                showBatchAiOptions = false
+                            },
+                            enabled = !isPreparingBatchPreview && !isExporting,
+                            modifier = Modifier.weight(0.8f).heightIn(min = 36.dp),
+                            shape = RoundedCornerShape(9.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF9CC8FF), contentColor = Ink),
+                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp)
+                        ) { Text("Edit", fontSize = 11.sp, fontWeight = FontWeight.Bold) }
+                    }
                 }
                 Text("CAPTION CATEGORY", color = BrightText, fontSize = 10.sp, fontWeight = FontWeight.Bold,
                     modifier = Modifier.padding(top = 6.dp, bottom = 3.dp))

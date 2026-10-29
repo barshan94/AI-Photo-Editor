@@ -83,7 +83,7 @@ A native Android photo editor focused on batch workflows. It runs locally on the
 - Apply style presets: Auto, Natural, Vivid, Warm, Cool, and Mono; the preview updates automatically after a short debounce.
 - Adjust brightness, contrast, saturation, and warmth using sliders; changes appear live without tapping Apply.
 - Crop to Original, Square (1:1), Portrait (4:5), Story (9:16), or Landscape (16:9), then drag the preview to reposition the crop window; horizontal and vertical sliders remain available for fine adjustment.
-- Pinch to zoom the preview up to 5×, drag to inspect details, and reset zoom with one tap.
+- Pinch to zoom the preview up to 5× and drag to inspect details. AI object removal supports two-finger pinch/pan while a single finger paints the mask.
 - Keep the preview image and main actions fixed while only the editing controls scroll; Reset edits restores Auto and Original crop.
 - Preview enhanced output, switch to the original, and export one edited copy.
 - Apply the chosen controls to the whole selected batch with **Enhance all**.
@@ -113,11 +113,11 @@ Every advanced tool must have a real inference path, clear progress/error states
 ## Important limitations
 
 - AI photo analysis uses on-device ML Kit image labels and face detection plus a simple average-brightness estimate. It is not a multimodal reasoning model, cannot reliably infer relationships, intentions, or which person is unwanted, and may miss faces or mislabel scenes.
-- AI analysis gives recommendations only. It does not yet implement generative object removal, unwanted-person removal, makeup/skin retouching, super-resolution, or automatic background replacement; these remain separate future editing capabilities.
+- AI analysis gives recommendations only. Manual-mask object removal is separately implemented with the on-device LaMa inpainting model; reconstruction quality varies by image and may be softer than surrounding full-resolution details. Makeup/skin retouching, super-resolution, and automatic background replacement remain separate capabilities with their own limitations.
 - Ranking scores remain technical heuristics, not a semantic understanding of photo meaning. Intentional blur and artistic lighting may score poorly. The AI Portrait preset uses a separate on-device person-segmentation model.
 - Burst candidates are inferred from recorded capture timestamps, not definitive camera burst metadata. The whole group is limited to a two-second timestamp span, but photos taken close together may still not belong to the same camera burst; photos without readable capture time cannot be grouped.
 - Style presets and sliders are conventional on-device pixel adjustments, not generative editing.
-- When a crop ratio is active, dragging the preview adjusts crop position and disables pinch-zoom gestures for that preview. Switch to Original to use pinch-to-zoom and pan.
+- Fixed crop ratios can be repositioned by dragging the preview. Free crop shows a frame whose four edges can be dragged independently. AI object removal supports natural two-finger pinch-to-zoom and pan while one finger paints.
 - The on-screen live preview uses a working size of up to about 1800 pixels for responsiveness; pinch-to-zoom magnifies this preview, not the exported source. Exports are rendered from the full-resolution source. Crop ratios intentionally reduce dimensions to the chosen framing.
 - Full-resolution processing uses more memory. Very large photos may take longer or exceed device memory.
 - Very large batches can take time and use battery. Keep the app open until batch export finishes.

@@ -1,6 +1,6 @@
 {
-  "version": 1,
-  "updated": "2026-10-28",
+  "version": 2,
+  "updated": "2026-10-29",
   "captions": [
     {
       "category": "Portrait",
@@ -157,6 +157,250 @@
     {
       "category": "Celebration",
       "text": "A good day made better by the people in it."
+    },
+    {
+      "category": "Portrait",
+      "text": "Soft light, no rush, and a version of me I’m learning to love."
+    },
+    {
+      "category": "Portrait",
+      "text": "A little less perfection, a little more presence."
+    },
+    {
+      "category": "Portrait",
+      "text": "Not chasing a look—finding my own."
+    },
+    {
+      "category": "Portrait",
+      "text": "The kind of confidence that doesn’t need an announcement."
+    },
+    {
+      "category": "Portrait",
+      "text": "One frame, a hundred little things I’m grateful for."
+    },
+    {
+      "category": "Portrait",
+      "text": "Romanticising the ordinary, starting with myself."
+    },
+    {
+      "category": "Portrait",
+      "text": "A quiet glow-up is still a glow-up."
+    },
+    {
+      "category": "Portrait",
+      "text": "Proof that showing up as yourself is enough."
+    },
+    {
+      "category": "Aesthetic",
+      "text": "A soft moment in a very loud world."
+    },
+    {
+      "category": "Aesthetic",
+      "text": "Low-key plans, high-quality memories."
+    },
+    {
+      "category": "Aesthetic",
+      "text": "Keeping the mood, not just the photo."
+    },
+    {
+      "category": "Aesthetic",
+      "text": "A little blur, a lot of feeling."
+    },
+    {
+      "category": "Aesthetic",
+      "text": "The vibe made the frame."
+    },
+    {
+      "category": "Aesthetic",
+      "text": "Nothing dramatic. Just a moment that felt right."
+    },
+    {
+      "category": "Aesthetic",
+      "text": "Somewhere between candid and carefully remembered."
+    },
+    {
+      "category": "Aesthetic",
+      "text": "A tiny pause worth saving."
+    },
+    {
+      "category": "Friends",
+      "text": "No plan survives the group chat—and that’s the fun."
+    },
+    {
+      "category": "Friends",
+      "text": "The camera roll is 90% chaos and 10% evidence."
+    },
+    {
+      "category": "Friends",
+      "text": "Same energy, different day."
+    },
+    {
+      "category": "Friends",
+      "text": "The best people make ordinary plans feel iconic."
+    },
+    {
+      "category": "Friends",
+      "text": "One more photo before we pretend we’re leaving."
+    },
+    {
+      "category": "Friends",
+      "text": "A friendship held together by jokes and food."
+    },
+    {
+      "category": "Family",
+      "text": "The everyday moments are becoming the memories."
+    },
+    {
+      "category": "Family",
+      "text": "Nothing fancy, just my favourite people in one place."
+    },
+    {
+      "category": "Family",
+      "text": "A little noise, a lot of love."
+    },
+    {
+      "category": "Family",
+      "text": "The kind of togetherness you don’t need to caption."
+    },
+    {
+      "category": "Travel",
+      "text": "New place, familiar feeling of being glad I came."
+    },
+    {
+      "category": "Travel",
+      "text": "Collecting small moments, not just destinations."
+    },
+    {
+      "category": "Travel",
+      "text": "The detour ended up being the highlight."
+    },
+    {
+      "category": "Travel",
+      "text": "A change of scenery and a clearer head."
+    },
+    {
+      "category": "Travel",
+      "text": "Somewhere new, moving at my own pace."
+    },
+    {
+      "category": "Travel",
+      "text": "The view was good; the pause was better."
+    },
+    {
+      "category": "Nature",
+      "text": "Outside for a while, back with a better mood."
+    },
+    {
+      "category": "Nature",
+      "text": "Letting the sky set the pace today."
+    },
+    {
+      "category": "Nature",
+      "text": "No big plan—just fresh air and this view."
+    },
+    {
+      "category": "Nature",
+      "text": "The world feels softer when you slow down."
+    },
+    {
+      "category": "Festival",
+      "text": "A little tradition, a lot of feeling."
+    },
+    {
+      "category": "Festival",
+      "text": "The lights fade; the memories stay bright."
+    },
+    {
+      "category": "Festival",
+      "text": "Outfits planned, photos taken, heart full."
+    },
+    {
+      "category": "Festival",
+      "text": "One season, so many reasons to come together."
+    },
+    {
+      "category": "Festival",
+      "text": "Already saving this feeling for next year."
+    },
+    {
+      "category": "Wedding",
+      "text": "A new chapter, written in little everyday moments."
+    },
+    {
+      "category": "Wedding",
+      "text": "Today was the celebration; every day is the promise."
+    },
+    {
+      "category": "Wedding",
+      "text": "A lifetime of ordinary days with my favourite person."
+    },
+    {
+      "category": "Wedding",
+      "text": "The best part of the picture is who’s beside me."
+    },
+    {
+      "category": "Wedding",
+      "text": "One promise, many beautiful tomorrows."
+    },
+    {
+      "category": "Food",
+      "text": "Came for a bite, stayed for the whole experience."
+    },
+    {
+      "category": "Food",
+      "text": "A good meal deserves a place in the memories."
+    },
+    {
+      "category": "Food",
+      "text": "The first bite was worth the wait."
+    },
+    {
+      "category": "Food",
+      "text": "Current personality: thinking about this meal."
+    },
+    {
+      "category": "Pets",
+      "text": "No thoughts, just paws and main-character energy."
+    },
+    {
+      "category": "Pets",
+      "text": "My camera roll belongs to this tiny legend now."
+    },
+    {
+      "category": "Pets",
+      "text": "A face that instantly improves the day."
+    },
+    {
+      "category": "Celebration",
+      "text": "A little spontaneous joy never hurt anyone."
+    },
+    {
+      "category": "Celebration",
+      "text": "The plan was simple: show up and enjoy it."
+    },
+    {
+      "category": "Celebration",
+      "text": "A day that deserves more than one photo."
+    },
+    {
+      "category": "Celebration",
+      "text": "Good company is still the best upgrade."
+    },
+    {
+      "category": "Romantic",
+      "text": "Still my favourite person to do nothing with."
+    },
+    {
+      "category": "Romantic",
+      "text": "Love looks a lot like laughing between the poses."
+    },
+    {
+      "category": "Romantic",
+      "text": "No perfect words, just a very good us."
+    },
+    {
+      "category": "Romantic",
+      "text": "My favourite place is wherever we’re both okay."
     }
   ]
 }

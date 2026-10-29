@@ -1169,7 +1169,7 @@ private fun PhotoEditorHome() {
             selectedStyle = "Personal"
             showEnhanced = true
             compareBeforeAfter = false
-            statusMessage = "Applied your personal edit suggestion. Review it before exporting."
+            statusMessage = "Applied your personal edit suggestion based on ${learnedProfile.preferredEditType}. Review it before exporting."
         } else {
             statusMessage = "Export an edited copy you like first; then your personal suggestion will be available."
         }
@@ -1360,7 +1360,12 @@ private fun PhotoEditorHome() {
                     AutoEnhancer.saveJpeg(context.contentResolver, enhanced!!)
                 }
                 lastExportedUri = savedUri
-                learnedProfile = PersonalEditLearning.recordAccepted(context, settings)
+                val learnedEditType = when {
+                    selectedStyle == "Personal" -> learnedProfile.preferredEditType
+                    selectedStyle == "Custom" -> "AI Edit · $aiEditLook"
+                    else -> selectedStyle
+                }
+                learnedProfile = PersonalEditLearning.recordAccepted(context, settings, learnedEditType)
                 operationProgress = 100
                 operationStage = "Finished · original photo preserved"
                 statusMessage = (aiNotice?.let { "$it " } ?: if (useAiPortrait) {

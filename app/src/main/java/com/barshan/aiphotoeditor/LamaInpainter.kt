@@ -124,7 +124,8 @@ internal object LamaInpainter {
         try {
             val env = OrtEnvironment.getEnvironment()
             val sessionOptions = OrtSession.SessionOptions()
-            val modelBytes = context.assets.open("lama_512_int8.onnx").use { it.readBytes() }
+            val modelFile = AiModelStore.ensureModelFile(context, AiModelStore.Model.LAMA_INPAINTING)
+            val modelBytes = modelFile.readBytes()
             try {
                 sessionOptions.setIntraOpNumThreads(2)
                 session = env.createSession(modelBytes, sessionOptions)

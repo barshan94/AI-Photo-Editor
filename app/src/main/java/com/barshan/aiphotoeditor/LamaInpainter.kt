@@ -85,29 +85,60 @@ internal object LamaInpainter {
                 maskCanvas.drawPath(path, paint)
             }
         }
-        // Preserve the source aspect ratio. Stretching every portrait/landscape photo into
+        // Run LaMa on a crop around the marked area, not the entire photograph. The model
+        // only accepts 512x512 input; shrinking a full 12MP photo to that canvas makes
+        // small objects lose their shape and often produces a flat, blurry patch.
+        val maskBounds = android.graphics.Rect(source.width, source.height, 0, 0)
+        val boundsPixels = IntArray(source.width)
+        var boundsFound = false
+        for (y in 0 until source.height) {
+            fullMask.getPixels(boundsPixels, 0, source.width, 0, y, source.width, 1)
+            for (x in boundsPixels.indices) {
+                if (AndroidColor.alpha(boundsPixels[x]) >= 24) {
+                    boundsFound = true
+                    if (x < maskBounds.left) maskBounds.left = x
+                    if (y < maskBounds.top) maskBounds.top = y
+                    if (x + 1 > maskBounds.right) maskBounds.right = x + 1
+                    if (y + 1 > maskBounds.bottom) maskBounds.bottom = y + 1
+                }
+            }
+        }
+        require(boundsFound) { "No object area was marked. Paint over the object first." }
+        val markedWidth = maskBounds.width().coerceAtLeast(1)
+        val markedHeight = maskBounds.height().coerceAtLeast(1)
+        val contextPadding = max(max(markedWidth, markedHeight) / 2, max(source.width, source.height) / 20)
+        val cropLeft = (maskBounds.left - contextPadding).coerceAtLeast(0)
+        val cropTop = (maskBounds.top - contextPadding).coerceAtLeast(0)
+        val cropRight = (maskBounds.right + contextPadding).coerceAtMost(source.width)
+        val cropBottom = (maskBounds.bottom + contextPadding).coerceAtMost(source.height)
+        val cropWidth = (cropRight - cropLeft).coerceAtLeast(1)
+        val cropHeight = (cropBottom - cropTop).coerceAtLeast(1)
+        val workingSource = Bitmap.createBitmap(source, cropLeft, cropTop, cropWidth, cropHeight)
+        val workingMask = Bitmap.createBitmap(fullMask, cropLeft, cropTop, cropWidth, cropHeight)
+
+        // Preserve the crop aspect ratio so the local scene geometry is not distorted.
         // a square distorts scene geometry and makes LaMa's reconstruction look wrong.
-        val fitScale = min(modelSize.toFloat() / source.width, modelSize.toFloat() / source.height)
-        val fitWidth = (source.width * fitScale).roundToInt().coerceIn(1, modelSize)
-        val fitHeight = (source.height * fitScale).roundToInt().coerceIn(1, modelSize)
+        val fitScale = min(modelSize.toFloat() / workingSource.width, modelSize.toFloat() / workingSource.height)
+        val fitWidth = (workingSource.width * fitScale).roundToInt().coerceIn(1, modelSize)
+        val fitHeight = (workingSource.height * fitScale).roundToInt().coerceIn(1, modelSize)
         val offsetX = (modelSize - fitWidth) / 2
         val offsetY = (modelSize - fitHeight) / 2
         val contentRect = Rect(offsetX, offsetY, offsetX + fitWidth, offsetY + fitHeight)
         val image512 = Bitmap.createBitmap(modelSize, modelSize, Bitmap.Config.ARGB_8888)
         Canvas(image512).apply {
             drawColor(AndroidColor.BLACK)
-            drawBitmap(source, null, contentRect, Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG))
+            drawBitmap(workingSource, null, contentRect, Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG))
         }
         val scaledMask = Bitmap.createBitmap(modelSize, modelSize, Bitmap.Config.ARGB_8888)
-        Canvas(scaledMask).drawBitmap(fullMask, null, contentRect, Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG))
+        Canvas(scaledMask).drawBitmap(workingMask, null, contentRect, Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG))
         // Feather only a few source pixels around the boundary. Downsampling to 1/32
         // creates a broad transition (about 32 source pixels), which mixes reconstructed
         // colours into untouched surroundings and looks like a dark/burnt halo. A 1/4 mask
         // gives a narrow ~4-pixel transition while keeping the model's inference mask crisp.
-        val featherWidth = (source.width / 4).coerceAtLeast(3)
-        val featherHeight = (source.height / 4).coerceAtLeast(3)
-        val lowResolutionMask = Bitmap.createScaledBitmap(fullMask, featherWidth, featherHeight, true)
-        val compositeMask = Bitmap.createScaledBitmap(lowResolutionMask, source.width, source.height, true)
+        val featherWidth = (workingSource.width / 4).coerceAtLeast(3)
+        val featherHeight = (workingSource.height / 4).coerceAtLeast(3)
+        val lowResolutionMask = Bitmap.createScaledBitmap(workingMask, featherWidth, featherHeight, true)
+        val compositeMask = Bitmap.createScaledBitmap(lowResolutionMask, workingSource.width, workingSource.height, true)
         if (lowResolutionMask !== compositeMask) lowResolutionMask.recycle()
         var session: OrtSession? = null
         var imageTensor: OnnxTensor? = null
@@ -165,15 +196,15 @@ internal object LamaInpainter {
                 val repairedFull = Bitmap.createScaledBitmap(repairedContent, source.width, source.height, true)
                 repairedContent.recycle()
                 val result = source.copy(Bitmap.Config.ARGB_8888, true)
-                val sourceRow = IntArray(source.width)
-                val maskRow = IntArray(source.width)
-                val resultRow = IntArray(source.width)
-                val repairedRow = IntArray(source.width)
-                for (y in 0 until source.height) {
-                    source.getPixels(sourceRow, 0, source.width, 0, y, source.width, 1)
-                    compositeMask.getPixels(maskRow, 0, source.width, 0, y, source.width, 1)
-                    repairedFull.getPixels(repairedRow, 0, source.width, 0, y, source.width, 1)
-                    for (x in 0 until source.width) {
+                val sourceRow = IntArray(workingSource.width)
+                val maskRow = IntArray(workingSource.width)
+                val resultRow = IntArray(workingSource.width)
+                val repairedRow = IntArray(workingSource.width)
+                for (y in 0 until workingSource.height) {
+                    workingSource.getPixels(sourceRow, 0, workingSource.width, 0, y, workingSource.width, 1)
+                    compositeMask.getPixels(maskRow, 0, workingSource.width, 0, y, workingSource.width, 1)
+                    repairedFull.getPixels(repairedRow, 0, workingSource.width, 0, y, workingSource.width, 1)
+                    for (x in 0 until workingSource.width) {
                         val alpha = AndroidColor.alpha(maskRow[x]) / 255f
                         if (alpha <= 0f) {
                             resultRow[x] = sourceRow[x]
@@ -186,7 +217,7 @@ internal object LamaInpainter {
                             resultRow[x] = AndroidColor.rgb(r, g, b)
                         }
                     }
-                    result.setPixels(resultRow, 0, source.width, 0, y, source.width, 1)
+                    result.setPixels(resultRow, 0, workingSource.width, cropLeft, cropTop + y, workingSource.width, 1)
                 }
                 repaired512.recycle()
                 repairedFull.recycle()
@@ -201,6 +232,8 @@ internal object LamaInpainter {
             compositeMask.recycle()
             scaledMask.recycle()
             image512.recycle()
+            workingSource.recycle()
+            workingMask.recycle()
         }
     }
 }

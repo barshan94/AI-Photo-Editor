@@ -1702,6 +1702,7 @@ EditorImageAction("⇩", "Export", previewBitmap != null && !isExporting && sele
                                     } else if (cropLabel != "Original") {
                                         Modifier.pointerInput(cropLabel, previewWidthPx, previewHeightPx) {
                                             var edge = ""
+                                            var resizedFrame = false
                                             var fixedLeft = 0f; var fixedTop = 0f; var fixedRight = 1f; var fixedBottom = 1f
                                             detectDragGestures(
                                                 onDragStart = { position ->
@@ -1717,10 +1718,14 @@ EditorImageAction("⇩", "Export", previewBitmap != null && !isExporting && sele
                                                             .filter { it.second <= 0.07f }.minByOrNull { it.second }?.first.orEmpty()
                                                     }
                                                 },
-                                                onDragEnd = { edge = "" }, onDragCancel = { edge = "" }
+                                                onDragEnd = {
+                                                    if (resizedFrame && cropLabel != "Free") cropLabel = "Free"
+                                                    edge = ""
+                                                }, onDragCancel = { edge = "" }
                                             ) { change, _ ->
                                                 change.consume()
                                                 val point = previewNormalizedPosition(change.position) ?: return@detectDragGestures
+                                                if (edge.isNotEmpty()) resizedFrame = true
                                                 when (edge) {
                                                     "left" -> { val left = point.x.coerceIn(0f, fixedRight - 0.2f); freeCropWidth = (fixedRight - left).coerceIn(0.2f, 1f); cropOffsetX = if (freeCropWidth >= 0.999f) 0f else (2f * left / (1f - freeCropWidth) - 1f).coerceIn(-1f, 1f) }
                                                     "right" -> { val right = point.x.coerceIn(fixedLeft + 0.2f, 1f); freeCropWidth = (right - fixedLeft).coerceIn(0.2f, 1f); cropOffsetX = if (freeCropWidth >= 0.999f) 0f else (2f * fixedLeft / (1f - freeCropWidth) - 1f).coerceIn(-1f, 1f) }

@@ -1,0 +1,67 @@
+name: Publish Permanent Build 446 Release
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/publish-build-446-release.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  publish:
+    name: Publish tested Build 446 APK
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download the exact tested Build 446 artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ai-photo-editor-debug-apk
+          path: downloaded-artifact
+          repository: barshan94/AI-Photo-Editor
+          run-id: 40954732292
+          github-token: ${{ github.token }}
+
+      - name: Verify and prepare APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK_PATH="$(find downloaded-artifact -type f -name 'app-debug.apk' -print -quit)"
+          if [ -z "$APK_PATH" ]; then
+            echo "Expected app-debug.apk was not found in Build 446 artifact." >&2
+            find downloaded-artifact -maxdepth 3 -type f -print
+            exit 1
+          fi
+          mkdir -p release-assets
+          cp "$APK_PATH" release-assets/AI-Photo-Editor-Build-446.apk
+          sha256sum release-assets/AI-Photo-Editor-Build-446.apk
+          test -s release-assets/AI-Photo-Editor-Build-446.apk
+
+      - name: Create or update permanent GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG="v1.0.0-build446"
+          TITLE="AI Photo Editor — Final Build 446"
+          NOTES="$(cat <<'EOF'
+          Final tested Android APK for AI Photo Editor.
+
+          - Build: GitHub Actions #446
+          - Tested APK: debug build, approximately 57.2 MiB
+          - Source commit: ba411f86888aa0c2df0982beda459f56061efb4a
+          - SHA-256 (artifact metadata): 4a79a22b7e392a109073ad80d46909d905701cb115afaa3b938dcc963597d28a
+
+          This release preserves the exact debug APK artifact the project owner tested on their phone. The source project is archived; no further development is planned.
+          EOF
+          )"
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --title "$TITLE" --notes "$NOTES"
+          else
+            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --title "$TITLE" --notes "$NOTES"
+          fi
+          gh release upload "$TAG" release-assets/AI-Photo-Editor-Build-446.apk --repo "$GITHUB_REPOSITORY" --clobber

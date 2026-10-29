@@ -192,7 +192,7 @@ internal object LamaInpainter {
                 val repaired512 = Bitmap.createBitmap(modelSize, modelSize, Bitmap.Config.ARGB_8888)
                 repaired512.setPixels(repairedPixels, 0, modelSize, 0, 0, modelSize, modelSize)
                 val repairedContent = Bitmap.createBitmap(repaired512, offsetX, offsetY, fitWidth, fitHeight)
-                val repairedFull = Bitmap.createScaledBitmap(repairedContent, source.width, source.height, true)
+                val repairedFull = Bitmap.createScaledBitmap(repairedContent, workingSource.width, workingSource.height, true)
                 repairedContent.recycle()
                 val result = source.copy(Bitmap.Config.ARGB_8888, true)
                 val sourceRow = IntArray(workingSource.width)

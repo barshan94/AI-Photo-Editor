@@ -47,12 +47,26 @@ internal object LamaInpainter {
         }
         val maskCanvas = Canvas(fullMask)
         if (selectionMask != null && !selectionMask.isRecycled) {
-            maskCanvas.drawBitmap(
-                selectionMask,
-                null,
-                Rect(0, 0, source.width, source.height),
-                Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
-            )
+            // Selection masks may be opaque black-and-white images. Reading only their
+            // alpha channel incorrectly treats an opaque black background as selected,
+            // which makes the inpainting model erase huge areas and leaves black/burnt edges.
+            val normalizedSelection = Bitmap.createScaledBitmap(selectionMask, source.width, source.height, true)
+            val selectionPixels = IntArray(source.width * source.height)
+            normalizedSelection.getPixels(selectionPixels, 0, source.width, 0, 0, source.width, source.height)
+            for (i in selectionPixels.indices) {
+                val pixel = selectionPixels[i]
+                val luminance = (AndroidColor.red(pixel) * 299 +
+                    AndroidColor.green(pixel) * 587 +
+                    AndroidColor.blue(pixel) * 114) / 1000
+                val alpha = AndroidColor.alpha(pixel)
+                val selectedAlpha = if (luminance >= 128) alpha else 0
+                selectionPixels[i] = AndroidColor.argb(selectedAlpha, 255, 255, 255)
+            }
+            val normalizedMask = Bitmap.createBitmap(source.width, source.height, Bitmap.Config.ARGB_8888)
+            normalizedMask.setPixels(selectionPixels, 0, source.width, 0, 0, source.width, source.height)
+            maskCanvas.drawBitmap(normalizedMask, 0f, 0f, Paint(Paint.ANTI_ALIAS_FLAG))
+            normalizedMask.recycle()
+            if (normalizedSelection !== selectionMask) normalizedSelection.recycle()
         }
         for (stroke in normalizedStrokes) {
             if (stroke.isEmpty()) continue
@@ -88,8 +102,10 @@ internal object LamaInpainter {
         Canvas(scaledMask).drawBitmap(fullMask, null, contentRect, Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG))
         // Keep the inference mask crisp, but feather the final composite edge so the repaired
         // region does not look like a pasted rectangle or leave a hard brush outline.
-        val featherWidth = (source.width / 8).coerceAtLeast(1)
-        val featherHeight = (source.height / 8).coerceAtLeast(1)
+        // A very small downsample (1/8) spreads mask opacity too far and causes a
+        // washed-out/burnt halo. Keep feathering narrow so only the repair boundary blends.
+        val featherWidth = (source.width / 32).coerceAtLeast(3)
+        val featherHeight = (source.height / 32).coerceAtLeast(3)
         val lowResolutionMask = Bitmap.createScaledBitmap(fullMask, featherWidth, featherHeight, true)
         val compositeMask = Bitmap.createScaledBitmap(lowResolutionMask, source.width, source.height, true)
         if (lowResolutionMask !== compositeMask) lowResolutionMask.recycle()
@@ -157,7 +173,7 @@ internal object LamaInpainter {
                     source.getPixels(sourceRow, 0, source.width, 0, y, source.width, 1)
                     compositeMask.getPixels(maskRow, 0, source.width, 0, y, source.width, 1)
                     repairedFull.getPixels(repairedRow, 0, source.width, 0, y, source.width, 1)
-                        for (x in 0 until source.width) {
+                    for (x in 0 until source.width) {
                         val alpha = AndroidColor.alpha(maskRow[x]) / 255f
                         if (alpha <= 0f) {
                             resultRow[x] = sourceRow[x]

@@ -253,6 +253,10 @@ private fun PhotoEditorHome() {
     var removalBrushSize by remember { mutableFloatStateOf(recoveryPrefs.getFloat("removal_brush_size", 24f)) }
     var automaticRemovalMask by remember { mutableStateOf<Bitmap?>(null) }
     var isSelectingRemovalTarget by remember { mutableStateOf(false) }
+    LaunchedEffect(activePhoto?.uri) {
+        automaticRemovalMask?.let { if (!it.isRecycled) it.recycle() }
+        automaticRemovalMask = null
+    }
     val removalStrokes = remember {
         mutableStateListOf<List<Offset>>().apply {
             val saved = recoveryPrefs.getString("removal_strokes", "").orEmpty()

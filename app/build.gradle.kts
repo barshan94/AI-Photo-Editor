@@ -20,6 +20,9 @@ android {
     }
     buildTypes {
         release {
+            // CI uses the stable debug keystore for a signed, installable test release.
+            // Replace this with a private production signing key before public distribution.
+            signingConfig = signingConfigs.getByName("debug")
             // Shrink unused bytecode and resources in distributable builds.
             // AI models in app/src/main/assets are retained and their behavior is unchanged.
             isMinifyEnabled = true

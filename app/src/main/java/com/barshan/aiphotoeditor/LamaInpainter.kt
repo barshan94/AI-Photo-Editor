@@ -32,7 +32,7 @@ internal object LamaInpainter {
         selectionMask: Bitmap? = null
     ): Result = withContext(Dispatchers.Default) {
         require(normalizedStrokes.any { it.isNotEmpty() } || selectionMask != null) {
-            "Select a person or paint over the object you want to remove first."
+            "Paint over the object you want to remove first."
         }
         require(!source.isRecycled && source.width > 0 && source.height > 0) { "Choose a valid photo first." }
 
@@ -106,7 +106,10 @@ internal object LamaInpainter {
         require(boundsFound) { "No object area was marked. Paint over the object first." }
         val markedWidth = maskBounds.width().coerceAtLeast(1)
         val markedHeight = maskBounds.height().coerceAtLeast(1)
-        val contextPadding = max(max(markedWidth, markedHeight) / 2, max(source.width, source.height) / 20)
+        // Give LaMa a wider ring of real scene context so it can infer perspective,
+        // texture direction, and repeating background patterns instead of filling a
+        // tight patch that can look like a soft blur.
+        val contextPadding = max(max(markedWidth, markedHeight), max(source.width, source.height) / 8)
         val cropLeft = (maskBounds.left - contextPadding).coerceAtLeast(0)
         val cropTop = (maskBounds.top - contextPadding).coerceAtLeast(0)
         val cropRight = (maskBounds.right + contextPadding).coerceAtMost(source.width)

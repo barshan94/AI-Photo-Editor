@@ -2396,7 +2396,7 @@ EditorImageAction("⇩", "Export", previewBitmap != null && !isExporting && sele
                             Text("CROP RATIO", color = BrightText, fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 5.dp))
                             Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                 listOf("Original", "Free", "Square", "Portrait 4:5", "Story 9:16", "Landscape 16:9").forEach { crop ->
-                                    Button(onClick = { recordEditChange(); cropLabel = crop; cropOffsetX = 0f; cropOffsetY = 0f; selectedStyle = "Custom"; showEnhanced = true; compareBeforeAfter = false },
+                                    Button(onClick = { recordEditChange(); resetPreviewZoom(); cropLabel = crop; cropOffsetX = 0f; cropOffsetY = 0f; selectedStyle = "Custom"; showEnhanced = true; compareBeforeAfter = false },
                                         shape = RoundedCornerShape(10.dp),
                                         colors = ButtonDefaults.buttonColors(containerColor = if (cropLabel == crop) Mint else Color(0xFF293333), contentColor = if (cropLabel == crop) Ink else BrightText),
                                         contentPadding = PaddingValues(horizontal = 9.dp, vertical = 3.dp)) { Text(crop, fontSize = 10.sp) }

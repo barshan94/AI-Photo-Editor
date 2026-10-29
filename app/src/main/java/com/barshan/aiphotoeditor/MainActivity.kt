@@ -258,7 +258,6 @@ private fun PhotoEditorHome() {
     var removalBrushMode by remember { mutableStateOf(recoveryPrefs.getBoolean("removal_brush_mode", false)) }
     var removalBrushSize by remember { mutableFloatStateOf(recoveryPrefs.getFloat("removal_brush_size", 24f)) }
     var automaticRemovalMask by remember { mutableStateOf<Bitmap?>(null) }
-    var isSelectingRemovalTarget by remember { mutableStateOf(false) }
     LaunchedEffect(activePhoto?.uri) {
         automaticRemovalMask?.let { if (!it.isRecycled) it.recycle() }
         automaticRemovalMask = null
@@ -641,13 +640,15 @@ private fun PhotoEditorHome() {
         val image = previewBitmap ?: return null
         val boxWidth = previewWidthPx.toFloat().coerceAtLeast(1f)
         val boxHeight = previewHeightPx.toFloat().coerceAtLeast(1f)
-        val fit = maxOf(boxWidth / image.width.toFloat(), boxHeight / image.height.toFloat())
+        val untransformedX = (position.x - previewOffsetX - boxWidth / 2f) / previewScale + boxWidth / 2f
+        val untransformedY = (position.y - previewOffsetY - boxHeight / 2f) / previewScale + boxHeight / 2f
+        val fit = minOf(boxWidth / image.width.toFloat(), boxHeight / image.height.toFloat())
         val shownWidth = image.width * fit
         val shownHeight = image.height * fit
         val left = (boxWidth - shownWidth) / 2f
         val top = (boxHeight - shownHeight) / 2f
-        if (position.x < left || position.x > left + shownWidth || position.y < top || position.y > top + shownHeight) return null
-        return Offset(((position.x - left) / shownWidth).coerceIn(0f, 1f), ((position.y - top) / shownHeight).coerceIn(0f, 1f))
+        if (untransformedX < left || untransformedX > left + shownWidth || untransformedY < top || untransformedY > top + shownHeight) return null
+        return Offset(((untransformedX - left) / shownWidth).coerceIn(0f, 1f), ((untransformedY - top) / shownHeight).coerceIn(0f, 1f))
     }
 
     suspend fun scoreEditedBitmap(bitmap: Bitmap): PhotoQualityScoring.Score =
@@ -1432,7 +1433,7 @@ private fun PhotoEditorHome() {
         operationProgress = 3
         operationStage = "Preparing object removal"
         statusMessage = "Removing the marked object on this device…"
-        scope.launch {
+        activeExportJob = scope.launch {
             var original: Bitmap? = null
             var repaired: Bitmap? = null
             try {
@@ -1478,6 +1479,7 @@ private fun PhotoEditorHome() {
                 repaired?.let { if (!it.isRecycled) it.recycle() }
                 original?.let { if (!it.isRecycled) it.recycle() }
                 isExporting = false
+                activeExportJob = null
             }
         }
     }
@@ -1556,7 +1558,15 @@ private fun PhotoEditorHome() {
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
 
-                                    EditorImageAction("↶", "Undo", undoHistory.isNotEmpty() && !isExporting) { undoEdit() }
+                                    EditorImageAction("↶", "Undo", (undoHistory.isNotEmpty() || removalStrokes.isNotEmpty() || currentRemovalStroke.isNotEmpty()) && !isExporting) {
+                                        if (currentRemovalStroke.isNotEmpty()) {
+                                            currentRemovalStroke = emptyList()
+                                            statusMessage = "Current brush stroke undone."
+                                        } else if (removalStrokes.isNotEmpty()) {
+                                            removalStrokes.removeAt(removalStrokes.lastIndex)
+                                            statusMessage = "Last removal brush stroke undone."
+                                        } else undoEdit()
+                                    }
                                     EditorImageAction("↷", "Redo", redoHistory.isNotEmpty() && !isExporting) { redoEdit() }
                                     EditorImageAction("⟲", "Reset", activePhoto != null && !isExporting) {
                                         recordEditChange()
@@ -1723,7 +1733,12 @@ EditorImageAction("⇩", "Export", previewBitmap != null && !isExporting && sele
                                 }
                             }
                             if (removalBrushMode || removalStrokes.isNotEmpty() || currentRemovalStroke.isNotEmpty()) {
-                                androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxSize()) {
+                                androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxSize().graphicsLayer {
+                                    scaleX = previewScale
+                                    scaleY = previewScale
+                                    translationX = previewOffsetX
+                                    translationY = previewOffsetY
+                                }) {
                                     val image = previewBitmap
                                     if (image != null && image.width > 0 && image.height > 0) {
                                         val fit = minOf(size.width / image.width.toFloat(), size.height / image.height.toFloat())
@@ -1744,6 +1759,24 @@ EditorImageAction("⇩", "Export", previewBitmap != null && !isExporting && sele
                                                 drawPath(path, Color.Red.copy(alpha = 0.72f), style = Stroke(width = strokeWidth, cap = StrokeCap.Round, join = StrokeJoin.Round))
                                             }
                                         }
+                                    }
+                                }
+                            }
+                            if (removalBrushMode) {
+                                Row(modifier = Modifier.align(Alignment.TopEnd).padding(6.dp), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                                    IconButton(onClick = {
+                                        previewScale = (previewScale / 1.25f).coerceIn(1f, 5f)
+                                        if (previewScale <= 1.001f) { previewOffsetX = 0f; previewOffsetY = 0f }
+                                    }, modifier = Modifier.size(34.dp).background(Ink.copy(alpha = 0.85f), RoundedCornerShape(10.dp))) {
+                                        Text("−", color = BrightText, fontSize = 22.sp)
+                                    }
+                                    IconButton(onClick = { previewScale = (previewScale * 1.25f).coerceIn(1f, 5f) },
+                                        modifier = Modifier.size(34.dp).background(Ink.copy(alpha = 0.85f), RoundedCornerShape(10.dp))) {
+                                        Text("+", color = BrightText, fontSize = 22.sp)
+                                    }
+                                    IconButton(onClick = { resetPreviewZoom() },
+                                        modifier = Modifier.size(34.dp).background(Ink.copy(alpha = 0.85f), RoundedCornerShape(10.dp))) {
+                                        Text("1:1", color = BrightText, fontSize = 10.sp)
                                     }
                                 }
                             }
@@ -1822,17 +1855,17 @@ EditorImageAction("⇩", "Export", previewBitmap != null && !isExporting && sele
                                                 progress = { operationProgress.coerceIn(0, 100) / 100f },
                                                 modifier = Modifier.weight(1f), color = Mint
                                             )
-                                            if (isUpscalingOperation) {
+                                            if (isExporting) {
                                                 IconButton(
                                                     onClick = {
-                                                        statusMessage = "Cancelling AI upscale…"
+                                                        statusMessage = if (isUpscalingOperation) "Cancelling AI upscale…" else "Cancelling current operation…"
                                                         activeExportJob?.cancel()
                                                     },
                                                     modifier = Modifier.size(30.dp)
                                                 ) {
                                                     Icon(
                                                         imageVector = Icons.Rounded.Close,
-                                                        contentDescription = "Cancel AI upscaling",
+                                                        contentDescription = "Cancel current operation",
                                                         tint = Color(0xFFFF8B8B),
                                                         modifier = Modifier.size(20.dp)
                                                     )
@@ -2130,44 +2163,6 @@ EditorImageAction("⇩", "Export", previewBitmap != null && !isExporting && sele
                                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = BrightText)
                                     ) { Text("Clear mask") }
                                 }
-                                Button(
-                                    onClick = {
-                                        val bitmap = previewBitmap
-                                        if (bitmap == null || bitmap.isRecycled || isSelectingRemovalTarget || isExporting) {
-                                            statusMessage = "Open a photo preview first."
-                                        } else {
-                                            isSelectingRemovalTarget = true
-                                            statusMessage = "Finding the person in this photo…"
-                                            scope.launch {
-                                                try {
-                                                    val segmentation = MulticlassSegmentationEngine.segment(context, bitmap)
-                                                    val maskPixels = IntArray(bitmap.width * bitmap.height)
-                                                    for (y in 0 until bitmap.height) {
-                                                        val sy = y * segmentation.height / bitmap.height
-                                                        for (x in 0 until bitmap.width) {
-                                                            val sx = x * segmentation.width / bitmap.width
-                                                            val category = segmentation.classAt(sx, sy)
-                                                            maskPixels[y * bitmap.width + x] =
-                                                                if (category in MulticlassSegmentationEngine.HAIR..MulticlassSegmentationEngine.CLOTHES) android.graphics.Color.WHITE else android.graphics.Color.TRANSPARENT
-                                                        }
-                                                    }
-                                                    val mask = Bitmap.createBitmap(bitmap.width, bitmap.height, Bitmap.Config.ARGB_8888)
-                                                    mask.setPixels(maskPixels, 0, bitmap.width, 0, 0, bitmap.width, bitmap.height)
-                                                    automaticRemovalMask?.let { if (!it.isRecycled) it.recycle() }
-                                                    automaticRemovalMask = mask
-                                                    statusMessage = "Person selected. Tap Remove marked area to remove it, or paint over another object."
-                                                } catch (error: Exception) {
-                                                    statusMessage = "Could not select a person in this photo. You can still mark the object manually."
-                                                } finally {
-                                                    isSelectingRemovalTarget = false
-                                                }
-                                            }
-                                        }
-                                    },
-                                    enabled = activePhoto != null && !isExporting && !isSelectingRemovalTarget,
-                                    modifier = Modifier.fillMaxWidth().padding(top = 5.dp),
-                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = BrightText)
-                                ) { Text(if (isSelectingRemovalTarget) "Selecting…" else "Select person", fontSize = 11.sp) }
                                 if (removalBrushMode || removalStrokes.isNotEmpty() || automaticRemovalMask != null) {
                                     Text("REMOVAL BRUSH SIZE  " + removalBrushSize.toInt(), color = SoftText, fontSize = 11.sp)
                                     Slider(value = removalBrushSize, onValueChange = { removalBrushSize = it }, valueRange = 10f..60f)
@@ -2178,6 +2173,21 @@ EditorImageAction("⇩", "Export", previewBitmap != null && !isExporting && sele
                                         modifier = Modifier.fillMaxWidth(),
                                         colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Ink)
                                     ) { Text(if (isExporting) "Removing object…" else "Remove marked area") }
+                                    if (isExporting) {
+                                        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                            LinearProgressIndicator(progress = { operationProgress.coerceIn(0, 100) / 100f },
+                                                modifier = Modifier.weight(1f), color = Mint)
+                                            IconButton(onClick = {
+                                                statusMessage = "Cancelling object removal…"
+                                                activeExportJob?.cancel()
+                                            }, modifier = Modifier.size(30.dp)) {
+                                                Icon(Icons.Rounded.Close, contentDescription = "Cancel object removal",
+                                                    tint = Color(0xFFFF8B8B), modifier = Modifier.size(20.dp))
+                                            }
+                                        }
+                                        Text("$operationProgress% · $operationStage", color = SoftText, fontSize = 10.sp)
+                                    }
                                 }
                                 }
         

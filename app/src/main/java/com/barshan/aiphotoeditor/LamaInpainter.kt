@@ -28,10 +28,9 @@ internal object LamaInpainter {
         context: Context,
         source: Bitmap,
         normalizedStrokes: List<List<Offset>>,
-        brushRadius: Float,
-        selectionMask: Bitmap? = null
+        brushRadius: Float
     ): Result = withContext(Dispatchers.Default) {
-        require(normalizedStrokes.any { it.isNotEmpty() } || selectionMask != null) {
+        require(normalizedStrokes.any { it.isNotEmpty() }) {
             "Paint over the object you want to remove first."
         }
         require(!source.isRecycled && source.width > 0 && source.height > 0) { "Choose a valid photo first." }
@@ -46,28 +45,6 @@ internal object LamaInpainter {
             strokeWidth = max(2f, brushRadius * 2f * source.width / modelSize)
         }
         val maskCanvas = Canvas(fullMask)
-        if (selectionMask != null && !selectionMask.isRecycled) {
-            // Selection masks may be opaque black-and-white images. Reading only their
-            // alpha channel incorrectly treats an opaque black background as selected,
-            // which makes the inpainting model erase huge areas and leaves black/burnt edges.
-            val normalizedSelection = Bitmap.createScaledBitmap(selectionMask, source.width, source.height, true)
-            val selectionPixels = IntArray(source.width * source.height)
-            normalizedSelection.getPixels(selectionPixels, 0, source.width, 0, 0, source.width, source.height)
-            for (i in selectionPixels.indices) {
-                val pixel = selectionPixels[i]
-                val luminance = (AndroidColor.red(pixel) * 299 +
-                    AndroidColor.green(pixel) * 587 +
-                    AndroidColor.blue(pixel) * 114) / 1000
-                val alpha = AndroidColor.alpha(pixel)
-                val selectedAlpha = if (luminance >= 128) alpha else 0
-                selectionPixels[i] = AndroidColor.argb(selectedAlpha, 255, 255, 255)
-            }
-            val normalizedMask = Bitmap.createBitmap(source.width, source.height, Bitmap.Config.ARGB_8888)
-            normalizedMask.setPixels(selectionPixels, 0, source.width, 0, 0, source.width, source.height)
-            maskCanvas.drawBitmap(normalizedMask, 0f, 0f, Paint(Paint.ANTI_ALIAS_FLAG))
-            normalizedMask.recycle()
-            if (normalizedSelection !== selectionMask) normalizedSelection.recycle()
-        }
         for (stroke in normalizedStrokes) {
             if (stroke.isEmpty()) continue
             if (stroke.size == 1) {

@@ -42,6 +42,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AddPhotoAlternate
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.ImageSearch
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.AlertDialog
@@ -51,6 +52,8 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -96,6 +99,7 @@ import com.google.mlkit.vision.label.ImageLabeling
 import com.google.mlkit.vision.label.defaults.ImageLabelerOptions
 import coil.compose.AsyncImage
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -205,6 +209,8 @@ private fun PhotoEditorHome() {
     var isAnalyzing by remember { mutableStateOf(false) }
     var analysisProgress by remember { mutableIntStateOf(0) }
     var isExporting by remember { mutableStateOf(false) }
+    var activeExportJob by remember { mutableStateOf<Job?>(null) }
+    var isUpscalingOperation by remember { mutableStateOf(false) }
     var lastExportedUri by remember { mutableStateOf<Uri?>(null) }
     var exportProgress by remember { mutableIntStateOf(0) }
     var operationProgress by remember { mutableIntStateOf(0) }
@@ -1320,10 +1326,11 @@ private fun PhotoEditorHome() {
     fun exportOne(photo: PhotoItem, settings: EditSettings, useAiPortrait: Boolean = false, useAiUpscale: Boolean = false) {
         if (isExporting) return
         isExporting = true
+        isUpscalingOperation = useAiUpscale
         operationProgress = 2
         operationStage = if (useAiUpscale) "Reading original photo for AI upscale" else "Reading original photo"
         statusMessage = "Preparing export…"
-        scope.launch {
+        activeExportJob = scope.launch {
             var original: Bitmap? = null
             var enhanced: Bitmap? = null
             var upscaleInput: Bitmap? = null
@@ -1408,6 +1415,8 @@ private fun PhotoEditorHome() {
                 upscaleInput?.let { if (!it.isRecycled) it.recycle() }
                 original?.let { if (!it.isRecycled) it.recycle() }
                 isExporting = false
+                isUpscalingOperation = false
+                activeExportJob = null
             }
         }
     }
@@ -2030,13 +2039,37 @@ EditorImageAction("⇩", "Export", previewBitmap != null && !isExporting && sele
                                     }
                                 }
                                 if (isExporting && activePhoto != null && activeAiSubpanel == "Enhance") {
-                                    if (operationStage.contains("Reading original", ignoreCase = true) || operationStage.contains("Loading", ignoreCase = true) || operationStage.contains("Applying current", ignoreCase = true) || operationStage.contains("Preparing current", ignoreCase = true) || operationStage.contains("Detecting", ignoreCase = true)) {
-                                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth().padding(top = 5.dp), color = Mint)
-                                    } else {
-                                        LinearProgressIndicator(
-                                            progress = { operationProgress.coerceIn(0, 100) / 100f },
-                                            modifier = Modifier.fillMaxWidth().padding(top = 5.dp), color = Mint
-                                        )
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth().padding(top = 5.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        Box(modifier = Modifier.weight(1f)) {
+                                            if (operationStage.contains("Reading original", ignoreCase = true) || operationStage.contains("Loading", ignoreCase = true) || operationStage.contains("Applying current", ignoreCase = true) || operationStage.contains("Preparing current", ignoreCase = true) || operationStage.contains("Detecting", ignoreCase = true)) {
+                                                LinearProgressIndicator(modifier = Modifier.fillMaxWidth(), color = Mint)
+                                            } else {
+                                                LinearProgressIndicator(
+                                                    progress = { operationProgress.coerceIn(0, 100) / 100f },
+                                                    modifier = Modifier.fillMaxWidth(), color = Mint
+                                                )
+                                            }
+                                        }
+                                        if (isUpscalingOperation) {
+                                            IconButton(
+                                                onClick = {
+                                                    statusMessage = "Cancelling AI upscale…"
+                                                    activeExportJob?.cancel()
+                                                },
+                                                modifier = Modifier.size(30.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Rounded.Close,
+                                                    contentDescription = "Cancel AI upscaling",
+                                                    tint = Color(0xFFFF8B8B),
+                                                    modifier = Modifier.size(20.dp)
+                                                )
+                                            }
+                                        }
                                     }
                                     Text("$operationProgress% · $operationStage", color = SoftText, fontSize = 10.sp, lineHeight = 14.sp,
                                         modifier = Modifier.padding(top = 3.dp))

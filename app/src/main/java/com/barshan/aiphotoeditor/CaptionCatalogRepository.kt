@@ -80,10 +80,13 @@ object CaptionCatalogRepository {
 
             val prefs = appContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             val previousVersion = prefs.getInt("remote_caption_version", 0)
-            if (version > previousVersion && cleaned.isNotEmpty()) {
+            val cleanedText = cleaned.joinToString("\n")
+            val previousText = prefs.getString("remote_caption_entries", "").orEmpty()
+            // Content changes must refresh even when a publisher forgets to bump the version.
+            if (cleaned.isNotEmpty() && (version > previousVersion || cleanedText != previousText)) {
                 val saved = prefs.edit()
-                    .putInt("remote_caption_version", version)
-                    .putString("remote_caption_entries", cleaned.joinToString("\n"))
+                    .putInt("remote_caption_version", maxOf(version, previousVersion))
+                    .putString("remote_caption_entries", cleanedText)
                     .putLong("remote_caption_updated_ms", System.currentTimeMillis())
                     .commit()
                 if (!saved) return@withContext cached

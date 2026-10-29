@@ -15,6 +15,7 @@ Run these checks after changing the local image reconstruction pipeline.
 
 - Test a smooth wall, sky, or tabletop where tile boundaries are easiest to see.
 - Inspect at 100% zoom for horizontal/vertical grid lines and checkerboard texture.
+- The official TensorFlow ESRGAN TFLite model receives float RGB values in the 0–255 range and returns values in the same range; do not normalize inputs to 0–1 or multiply outputs by 255.
 - Overlapping ESRGAN tile predictions must be combined using edge feather weights rather than equal-weight averaging plus a post-hoc blur.
 - Compare fine texture and edges against the input; do not hide seams by globally blurring the result.
 - Test a portrait and a landscape photo, including an input that must be resized for memory.

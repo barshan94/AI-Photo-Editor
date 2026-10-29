@@ -193,8 +193,6 @@ internal object AiUpscaler {
                 }
                 top += stepY
             }
-            // Feather only the actual 50%-overlap tile joins.
-            softenTileSeams(outputPixels, outWidth, outHeight, outputTileWidth / 2, outputTileHeight / 2)
             onProgress(93, "Rebuilding the high-resolution image")
             val result = Bitmap.createBitmap(outWidth, outHeight, Bitmap.Config.ARGB_8888)
             result.setPixels(outputPixels, 0, outWidth, 0, 0, outWidth, outHeight)

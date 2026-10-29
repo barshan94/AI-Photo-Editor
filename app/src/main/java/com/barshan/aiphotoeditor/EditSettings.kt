@@ -7,6 +7,9 @@ data class EditSettings(
     val saturation: Float = 1.06f,
     val warmth: Float = 0f,
     val cropRatio: Float? = null,
+    /** Optional independent crop width/height fractions for free-size cropping (0..1). */
+    val freeCropWidthFraction: Float? = null,
+    val freeCropHeightFraction: Float? = null,
     /** -1..1 positions the crop window within the available image bounds. */
     val cropOffsetX: Float = 0f,
     val cropOffsetY: Float = 0f,

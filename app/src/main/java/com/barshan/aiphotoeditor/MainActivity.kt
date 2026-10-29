@@ -1265,7 +1265,7 @@ private fun PhotoEditorHome() {
     }
 
     // Debounced live preview: controls update the image without an Apply button.
-    LaunchedEffect(activePhoto?.uri, brightness, contrast, saturation, warmth, backgroundBlur, backgroundEnhancement, subjectBrightness, darkerAreaLift, skinSmoothing, makeupIntensity, cropLabel, cropOffsetX, cropOffsetY, rotationDegrees, straightenDegrees, mirrorHorizontal, mirrorVertical, perspectiveTopLeftX, perspectiveTopLeftY, perspectiveTopRightX, perspectiveTopRightY, perspectiveBottomRightX, perspectiveBottomRightY, perspectiveBottomLeftX, perspectiveBottomLeftY, selectedStyle) {
+    LaunchedEffect(activePhoto?.uri, brightness, contrast, saturation, warmth, backgroundBlur, backgroundEnhancement, subjectBrightness, darkerAreaLift, skinSmoothing, makeupIntensity, cropLabel, cropOffsetX, cropOffsetY, freeCropWidth, freeCropHeight, rotationDegrees, straightenDegrees, mirrorHorizontal, mirrorVertical, perspectiveTopLeftX, perspectiveTopLeftY, perspectiveTopRightX, perspectiveTopRightY, perspectiveBottomRightX, perspectiveBottomRightY, perspectiveBottomLeftX, perspectiveBottomLeftY, selectedStyle) {
         if (selectedStyle == "Object Removal") return@LaunchedEffect
         val photo = activePhoto
         if (photo != null) {

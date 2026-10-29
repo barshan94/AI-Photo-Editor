@@ -1163,6 +1163,20 @@ private fun PhotoEditorHome() {
         photoAnalysisResult = result
         statusMessage = "AI Edit applied using scene and lighting analysis."
     }
+    fun applyMyStyle() {
+        activeAiTool = "My style"
+        if (learnedProfile.acceptedEdits > 0) {
+            recordEditChange()
+            applyEditSnapshot(learnedProfile.toSettings())
+            selectedStyle = "Personal"
+            showEnhanced = true
+            compareBeforeAfter = false
+            statusMessage = "Applied your personal edit suggestion. Review it before exporting."
+        } else {
+            statusMessage = "Export an edited copy you like first; then your personal suggestion will be available."
+        }
+    }
+
     // Run AI scene analysis only after the user chooses a look and taps Edit.
     fun runAiEdit() {
         val photo = activePhoto ?: return
@@ -1945,39 +1959,33 @@ private fun PhotoEditorHome() {
                                 if (activeAiSubpanel == "Enhance") {
                                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                                         Button(
-                                            onClick = { activeAiTool = "Upscale" },
+                                            onClick = {
+                                                activePhoto?.let { photo ->
+                                                    if (!isExporting) exportOne(photo, currentSettings(), useAiUpscale = true)
+                                                }
+                                            },
+                                            enabled = activePhoto != null && !isExporting,
                                             modifier = Modifier.weight(1f).heightIn(min = 38.dp),
                                             shape = RoundedCornerShape(8.dp),
-                                            colors = ButtonDefaults.buttonColors(containerColor = if (activeAiTool == "Upscale") Mint else Color(0xFF293333), contentColor = if (activeAiTool == "Upscale") Ink else BrightText),
+                                            colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Ink),
                                             contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp)
-                                        ) { Text("AI Upscale", fontSize = 11.sp) }
+                                        ) { Text(if (isExporting && activePhoto != null) "Upscaling…" else "AI Upscale", fontSize = 11.sp) }
                                         Button(
-                                            onClick = { activeAiTool = "My style" },
+                                            onClick = { applyMyStyle() },
                                             modifier = Modifier.weight(1f).heightIn(min = 38.dp)
                                                 .pointerInput(Unit) {
                                                     detectTapGestures(
-                                                        onTap = { activeAiTool = "My style" },
+                                                        onTap = { applyMyStyle() },
                                                         onLongPress = { activeAiTool = "My style"; showResetLearning = true }
                                                     )
                                                 },
                                             shape = RoundedCornerShape(8.dp),
-                                            colors = ButtonDefaults.buttonColors(containerColor = if (activeAiTool == "My style") Mint else Color(0xFF293333), contentColor = if (activeAiTool == "My style") Ink else BrightText),
+                                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = BrightText),
                                             contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp)
                                         ) { Text("My style", fontSize = 11.sp) }
                                     }
                                 }
-                                if (activeAiSubpanel == "Enhance" && activeAiTool == "Upscale") {
-                                Button(
-                                    onClick = {
-                                        val photo = activePhoto
-                                        if (photo != null) exportOne(photo, currentSettings(), useAiUpscale = true)
-                                        else statusMessage = "Open a photo first to use AI Upscale."
-                                    },
-                                    enabled = activePhoto != null && !isExporting,
-                                    modifier = Modifier.fillMaxWidth(),
-                                    colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Ink)
-                                ) { Text(if (isExporting && operationStage.contains("tile", ignoreCase = true)) "Upscaling…" else if (isExporting) "Processing photo…" else "Run AI Upscale 4×") }
-                                if (isExporting && activePhoto != null) {
+                                if (isExporting && activePhoto != null && activeAiSubpanel == "Enhance") {
                                     if (operationStage.contains("Reading original", ignoreCase = true) || operationStage.contains("Loading", ignoreCase = true) || operationStage.contains("Applying current", ignoreCase = true) || operationStage.contains("Preparing current", ignoreCase = true) || operationStage.contains("Detecting", ignoreCase = true)) {
                                         LinearProgressIndicator(modifier = Modifier.fillMaxWidth().padding(top = 5.dp), color = Mint)
                                     } else {
@@ -1988,7 +1996,6 @@ private fun PhotoEditorHome() {
                                     }
                                     Text("$operationProgress% · $operationStage", color = SoftText, fontSize = 10.sp, lineHeight = 14.sp,
                                         modifier = Modifier.padding(top = 3.dp))
-                                }
                                 }
                                 if (activeAiSubpanel == "Remove") {
                                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -2024,53 +2031,18 @@ private fun PhotoEditorHome() {
                                     ) { Text(if (isExporting) "Removing object…" else "Remove marked area") }
                                 }
                                 }
-                                if (activeAiSubpanel == "Enhance" && activeAiTool == "My style") {
-                                Text("PERSONAL EDIT LEARNING · PRIVATE ON THIS DEVICE", color = Mint, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    Button(
-                                        onClick = {
-                                            if (learnedProfile.acceptedEdits > 0) {
-                                                recordEditChange()
-                                                val learned = learnedProfile.toSettings()
-                                                brightness = learned.brightness
-                                                contrast = learned.contrast
-                                                saturation = learned.saturation
-                                                warmth = learned.warmth
-                                                backgroundBlur = learned.backgroundBlur
-                                                backgroundEnhancement = learned.backgroundEnhancement
-                                                subjectBrightness = learned.subjectBrightness
-                                                darkerAreaLift = learned.darkerAreaLift
-                                                skinSmoothing = learned.skinSmoothing
-                                                makeupIntensity = learned.makeupIntensity
-                                                selectedStyle = "Personal"
-                                                showEnhanced = true
-                                                compareBeforeAfter = false
-                                                statusMessage = "Applied your personal edit suggestion. Review it before exporting."
-                                            } else {
-                                                statusMessage = "Export an edited copy you like first; then your personal suggestion will be available."
-                                            }
-                                        },
-                                        modifier = Modifier.weight(1f),
-                                        enabled = learnedProfile.acceptedEdits > 0,
-                                        colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Ink),
-                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 5.dp)
-                                    ) { Text("Use my style", fontSize = 10.sp) }
-                                    if (showResetLearning) {
-                                        Button(
-                                            onClick = {
-                                                PersonalEditLearning.reset(context)
-                                                learnedProfile = PersonalEditLearning.load(context)
-                                                showResetLearning = false
-                                                statusMessage = "Personal editing preferences reset on this device."
-                                            },
-                                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = BrightText),
-                                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 5.dp)
-                                        ) { Text("Reset learning", fontSize = 10.sp) }
-                                    }
-                                }
-                                }
-                            }
-                        }
+                                if (activeAiSubpanel == "Enhance" && showResetLearning) {
+                            Button(
+                                onClick = {
+                                    PersonalEditLearning.reset(context)
+                                    learnedProfile = PersonalEditLearning.load(context)
+                                    showResetLearning = false
+                                    statusMessage = "Personal editing preferences reset on this device."
+                                },
+                                modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = BrightText),
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 5.dp)
+                            ) { Text("Reset learning", fontSize = 10.sp) }
                         }
                         if (activeEditorPanel == "AI Edit" && (activeAiSubpanel == "Background" || activeAiSubpanel == "Subject")) {
                         Card(

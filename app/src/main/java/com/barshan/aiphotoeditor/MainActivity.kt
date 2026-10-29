@@ -13,6 +13,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.rememberTransformableState
@@ -94,6 +96,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.input.pointer.pointerInput
+import kotlin.math.sqrt
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.label.ImageLabeling
 import com.google.mlkit.vision.label.defaults.ImageLabelerOptions
@@ -1641,13 +1644,70 @@ EditorImageAction("⇩", "Export", previewBitmap != null && !isExporting && sele
                                 .then(
                                     if (removalBrushMode) {
                                         Modifier.pointerInput(removalBrushMode, previewWidthPx, previewHeightPx, previewBitmap?.width, previewBitmap?.height) {
+                                            awaitEachGesture {
+                                                val down = awaitFirstDown(requireUnconsumed = false)
+                                                currentRemovalStroke = previewNormalizedPosition(down.position)?.let { listOf(it) } ?: emptyList()
+                                                var multiTouch = false
+                                                do {
+                                                    val event = awaitPointerEvent()
+                                                    val pressed = event.changes.filter { it.pressed }
+                                                    if (pressed.size >= 2) {
+                                                        multiTouch = true
+                                                        currentRemovalStroke = emptyList()
+                                                        val previous = event.changes.filter { it.previousPressed }
+                                                        if (previous.size >= 2) {
+                                                            val oldX = previous.map { it.previousPosition.x }.average().toFloat()
+                                                            val oldY = previous.map { it.previousPosition.y }.average().toFloat()
+                                                            val newX = pressed.map { it.position.x }.average().toFloat()
+                                                            val newY = pressed.map { it.position.y }.average().toFloat()
+                                                            val oldDistance = previous.map { p -> sqrt((p.previousPosition.x - oldX) * (p.previousPosition.x - oldX) + (p.previousPosition.y - oldY) * (p.previousPosition.y - oldY)) }.average().toFloat().coerceAtLeast(1f)
+                                                            val newDistance = pressed.map { p -> sqrt((p.position.x - newX) * (p.position.x - newX) + (p.position.y - newY) * (p.position.y - newY)) }.average().toFloat()
+                                                            previewScale = (previewScale * newDistance / oldDistance).coerceIn(1f, 5f)
+                                                            if (previewScale <= 1.001f) { previewOffsetX = 0f; previewOffsetY = 0f }
+                                                            else { previewOffsetX += newX - oldX; previewOffsetY += newY - oldY }
+                                                        }
+                                                        event.changes.forEach { it.consume() }
+                                                    } else if (!multiTouch && pressed.isNotEmpty()) {
+                                                        val change = pressed.first()
+                                                        previewNormalizedPosition(change.position)?.let { point ->
+                                                            currentRemovalStroke = if (currentRemovalStroke.isEmpty()) listOf(point) else currentRemovalStroke + point
+                                                        }
+                                                        change.consume()
+                                                    }
+                                                } while (event.changes.any { it.pressed })
+                                                if (!multiTouch && currentRemovalStroke.isNotEmpty()) removalStrokes.add(currentRemovalStroke)
+                                                currentRemovalStroke = emptyList()
+                                            }
+                                        }
+                                    } else if (cropLabel == "Free") {
+                                        Modifier.pointerInput(cropLabel, previewWidthPx, previewHeightPx) {
+                                            var edge = ""
+                                            var fixedLeft = 0f; var fixedTop = 0f; var fixedRight = 1f; var fixedBottom = 1f
                                             detectDragGestures(
-                                                onDragStart = { position -> previewNormalizedPosition(position)?.let { currentRemovalStroke = listOf(it) } },
-                                                onDragEnd = { if (currentRemovalStroke.isNotEmpty()) removalStrokes.add(currentRemovalStroke); currentRemovalStroke = emptyList() },
-                                                onDragCancel = { currentRemovalStroke = emptyList() }
+                                                onDragStart = { position ->
+                                                    recordEditChange()
+                                                    val point = previewNormalizedPosition(position)
+                                                    if (point != null) {
+                                                        fixedLeft = ((1f - freeCropWidth) * ((cropOffsetX + 1f) / 2f)).coerceIn(0f, 1f)
+                                                        fixedTop = ((1f - freeCropHeight) * ((cropOffsetY + 1f) / 2f)).coerceIn(0f, 1f)
+                                                        fixedRight = (fixedLeft + freeCropWidth).coerceIn(0f, 1f)
+                                                        fixedBottom = (fixedTop + freeCropHeight).coerceIn(0f, 1f)
+                                                        edge = listOf("left" to kotlin.math.abs(point.x - fixedLeft), "right" to kotlin.math.abs(point.x - fixedRight),
+                                                            "top" to kotlin.math.abs(point.y - fixedTop), "bottom" to kotlin.math.abs(point.y - fixedBottom))
+                                                            .filter { it.second <= 0.07f }.minByOrNull { it.second }?.first.orEmpty()
+                                                    }
+                                                },
+                                                onDragEnd = { edge = "" }, onDragCancel = { edge = "" }
                                             ) { change, _ ->
                                                 change.consume()
-                                                previewNormalizedPosition(change.position)?.let { currentRemovalStroke = currentRemovalStroke + it }
+                                                val point = previewNormalizedPosition(change.position) ?: return@detectDragGestures
+                                                when (edge) {
+                                                    "left" -> { val left = point.x.coerceIn(0f, fixedRight - 0.2f); freeCropWidth = (fixedRight - left).coerceIn(0.2f, 1f); cropOffsetX = if (freeCropWidth >= 0.999f) 0f else (2f * left / (1f - freeCropWidth) - 1f).coerceIn(-1f, 1f) }
+                                                    "right" -> { val right = point.x.coerceIn(fixedLeft + 0.2f, 1f); freeCropWidth = (right - fixedLeft).coerceIn(0.2f, 1f); cropOffsetX = if (freeCropWidth >= 0.999f) 0f else (2f * fixedLeft / (1f - freeCropWidth) - 1f).coerceIn(-1f, 1f) }
+                                                    "top" -> { val top = point.y.coerceIn(0f, fixedBottom - 0.2f); freeCropHeight = (fixedBottom - top).coerceIn(0.2f, 1f); cropOffsetY = if (freeCropHeight >= 0.999f) 0f else (2f * top / (1f - freeCropHeight) - 1f).coerceIn(-1f, 1f) }
+                                                    "bottom" -> { val bottom = point.y.coerceIn(fixedTop + 0.2f, 1f); freeCropHeight = (bottom - fixedTop).coerceIn(0.2f, 1f); cropOffsetY = if (freeCropHeight >= 0.999f) 0f else (2f * fixedTop / (1f - freeCropHeight) - 1f).coerceIn(-1f, 1f) }
+                                                }
+                                                selectedStyle = "Custom"; showEnhanced = true
                                             }
                                         }
                                     } else if (cropLabel != "Original") {
@@ -1762,21 +1822,32 @@ EditorImageAction("⇩", "Export", previewBitmap != null && !isExporting && sele
                                     }
                                 }
                             }
-                            if (removalBrushMode) {
-                                Row(modifier = Modifier.align(Alignment.TopEnd).padding(6.dp), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                                    IconButton(onClick = {
-                                        previewScale = (previewScale / 1.25f).coerceIn(1f, 5f)
-                                        if (previewScale <= 1.001f) { previewOffsetX = 0f; previewOffsetY = 0f }
-                                    }, modifier = Modifier.size(34.dp).background(Ink.copy(alpha = 0.85f), RoundedCornerShape(10.dp))) {
-                                        Text("−", color = BrightText, fontSize = 22.sp)
-                                    }
-                                    IconButton(onClick = { previewScale = (previewScale * 1.25f).coerceIn(1f, 5f) },
-                                        modifier = Modifier.size(34.dp).background(Ink.copy(alpha = 0.85f), RoundedCornerShape(10.dp))) {
-                                        Text("+", color = BrightText, fontSize = 22.sp)
-                                    }
-                                    IconButton(onClick = { resetPreviewZoom() },
-                                        modifier = Modifier.size(34.dp).background(Ink.copy(alpha = 0.85f), RoundedCornerShape(10.dp))) {
-                                        Text("1:1", color = BrightText, fontSize = 10.sp)
+                            if (cropLabel == "Free" && !compareBeforeAfter) {
+                                androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxSize()) {
+                                    val image = previewBitmap
+                                    if (image != null && image.width > 0 && image.height > 0) {
+                                        val fit = minOf(size.width / image.width.toFloat(), size.height / image.height.toFloat())
+                                        val shownWidth = image.width * fit; val shownHeight = image.height * fit
+                                        val imageLeft = (size.width - shownWidth) / 2f; val imageTop = (size.height - shownHeight) / 2f
+                                        val left = ((1f - freeCropWidth) * ((cropOffsetX + 1f) / 2f)).coerceIn(0f, 1f)
+                                        val top = ((1f - freeCropHeight) * ((cropOffsetY + 1f) / 2f)).coerceIn(0f, 1f)
+                                        val right = (left + freeCropWidth).coerceAtMost(1f); val bottom = (top + freeCropHeight).coerceAtMost(1f)
+                                        val x1 = imageLeft + left * shownWidth; val y1 = imageTop + top * shownHeight
+                                        val x2 = imageLeft + right * shownWidth; val y2 = imageTop + bottom * shownHeight
+                                        val shade = Color.Black.copy(alpha = 0.52f)
+                                        drawRect(shade, Offset(imageLeft, imageTop), androidx.compose.ui.geometry.Size(shownWidth, (y1 - imageTop).coerceAtLeast(0f)))
+                                        drawRect(shade, Offset(imageLeft, y2), androidx.compose.ui.geometry.Size(shownWidth, (imageTop + shownHeight - y2).coerceAtLeast(0f)))
+                                        drawRect(shade, Offset(imageLeft, y1), androidx.compose.ui.geometry.Size((x1 - imageLeft).coerceAtLeast(0f), (y2 - y1).coerceAtLeast(0f)))
+                                        drawRect(shade, Offset(x2, y1), androidx.compose.ui.geometry.Size((imageLeft + shownWidth - x2).coerceAtLeast(0f), (y2 - y1).coerceAtLeast(0f)))
+                                        drawLine(Color.White, Offset(x1, y1), Offset(x2, y1), strokeWidth = 2.dp.toPx())
+                                        drawLine(Color.White, Offset(x2, y1), Offset(x2, y2), strokeWidth = 2.dp.toPx())
+                                        drawLine(Color.White, Offset(x2, y2), Offset(x1, y2), strokeWidth = 2.dp.toPx())
+                                        drawLine(Color.White, Offset(x1, y2), Offset(x1, y1), strokeWidth = 2.dp.toPx())
+                                        val handle = 7.dp.toPx()
+                                        listOf(Offset(x1, (y1 + y2) / 2f), Offset(x2, (y1 + y2) / 2f), Offset((x1 + x2) / 2f, y1), Offset((x1 + x2) / 2f, y2)).forEach {
+                                            drawCircle(Color.White, handle, it)
+                                            drawCircle(Color(0xFF182020), handle * 0.55f, it)
+                                        }
                                     }
                                 }
                             }
@@ -2332,21 +2403,8 @@ EditorImageAction("⇩", "Export", previewBitmap != null && !isExporting && sele
                                 }
                             }
                             if (cropLabel == "Free") {
-                                Text("CROP WIDTH  ${(freeCropWidth * 100).toInt()}%", color = SoftText, fontSize = 10.sp, modifier = Modifier.padding(top = 5.dp))
-                                Slider(
-                                    value = freeCropWidth,
-                                    onValueChange = { freeCropWidth = it; selectedStyle = "Custom"; showEnhanced = true },
-                                    onValueChangeFinished = { recordEditChange() },
-                                    valueRange = 0.2f..1f
-                                )
-                                Text("CROP HEIGHT  ${(freeCropHeight * 100).toInt()}%", color = SoftText, fontSize = 10.sp)
-                                Slider(
-                                    value = freeCropHeight,
-                                    onValueChange = { freeCropHeight = it; selectedStyle = "Custom"; showEnhanced = true },
-                                    onValueChangeFinished = { recordEditChange() },
-                                    valueRange = 0.2f..1f
-                                )
-                                Text("Adjust width and height independently, then drag the photo to position the crop.", color = SoftText, fontSize = 10.sp)
+                                Text("FREE CROP · Drag any frame edge to choose what stays inside. The dimmed area will be removed.",
+                                    color = SoftText, fontSize = 10.sp, modifier = Modifier.padding(top = 5.dp))
                             }
                             }
                             if (activeCropSubpanel == "Perspective") {

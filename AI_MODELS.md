@@ -2,11 +2,11 @@
 
 ## On-device models
 
-- **MediaPipe Selfie Multiclass (256×256)** — downloaded during the Android Gradle build from Google's public model endpoint. Its classes are background, hair, body skin, face skin, clothes, and accessories. Used by MulticlassSegmentationEngine for portrait/background separation and a distinct skin mask.
+- **MediaPipe Selfie Multiclass (256×256)** — downloaded on first portrait/skin-mask use from Google's public model endpoint into private app storage. Its classes are background, hair, body skin, face skin, clothes, and accessories. Used by MulticlassSegmentationEngine for portrait/background separation and a distinct skin mask.
 - **ESRGAN TensorFlow Lite** — downloaded from TensorFlow's official TFLite example model URL. AiUpscaler runs 50×50 RGB tiles and stitches the model's 4× output. To limit memory use, input is resized to at most 1024 pixels on the long edge / 1 megapixel before 4× inference.
-- **LaMa ONNX int8, fixed 512×512** — downloaded from the public g-ronimo/lama model repository. LamaInpainter accepts a user-painted mask, runs local inpainting, then composites the repaired region over the source. The model repository declares Apache-2.0 licensing.
+- **LaMa ONNX int8, fixed 512×512** — downloaded on first object-removal use from the public g-ronimo/lama model repository into private app storage. LamaInpainter accepts a user-painted mask, runs local inpainting, then composites the repaired region over the source. The model repository declares Apache-2.0 licensing.
 
-The model files are fetched as Gradle preBuild dependencies and packaged in the APK. Building therefore requires internet access and produces a much larger APK than the original editor.
+ESRGAN remains bundled in the APK. The larger LaMa and MediaPipe models are downloaded once on first use and kept in the app's private storage. The two downloads require an internet connection; subsequent inference uses the local files. Photos remain on-device and are never uploaded.
 
 ## Where to use them
 
@@ -22,4 +22,4 @@ The model files are fetched as Gradle preBuild dependencies and packaged in the 
 - Portrait segmentation can miss fine hair, fingers, occluded skin, or unusual poses. Inspect the preview before exporting.
 - LaMa uses a fixed 512×512 inference canvas, so reconstructed areas may be softer than the original at full resolution. Mark the full object and its shadow for the best result.
 - ESRGAN creates a 4× result from the memory-bounded input. When the input is reduced for memory safety, it is not a true 4× enlargement of the full original-resolution source.
-- Photos are processed on-device; the model download happens during the build, not by uploading photos for inference.
+- Photos are processed on-device. First-time LaMa object removal and multiclass portrait/skin segmentation require downloading their model files; the files are cached privately for later offline use. No photo is uploaded for inference.

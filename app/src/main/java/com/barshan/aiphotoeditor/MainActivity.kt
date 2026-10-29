@@ -2044,6 +2044,9 @@ private fun PhotoEditorHome() {
                                 contentPadding = PaddingValues(horizontal = 8.dp, vertical = 5.dp)
                             ) { Text("Reset learning", fontSize = 10.sp) }
                         }
+                        }
+                        }
+                        }
                         if (activeEditorPanel == "AI Edit" && (activeAiSubpanel == "Background" || activeAiSubpanel == "Subject")) {
                         Card(
                             modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),

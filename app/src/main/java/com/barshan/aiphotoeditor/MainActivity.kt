@@ -363,16 +363,20 @@ private fun PhotoEditorHome() {
 
     fun applyCaptionSuggestions(labels: List<Pair<String, Float>>, ratio: Float) {
         captionAspectRatio = ratio
-        val generated = CaptionSuggestionEngine.fromLabels(labels, ratio, captionTheme)
-        val libraryMatches = CaptionLibrary.recommend(generated.detectedLabels, captionTheme, limit = 5)
+        val effectiveTheme = if (captionTheme in setOf("Durga Puja", "Bijoya Dashami")) "Festival" else captionTheme
+        val generated = CaptionSuggestionEngine.fromLabels(labels, ratio, effectiveTheme)
+        val libraryMatches = CaptionLibrary.recommend(generated.detectedLabels, effectiveTheme, limit = 5)
         val detected = generated.detectedLabels.joinToString(" ").lowercase()
+        val festivalCategories = setOf("Festival", "Durga Puja", "Bijoya Dashami")
         val remoteMatches = remoteCaptionEntries.filter { entry ->
             entry.category.equals(captionTheme, ignoreCase = true) ||
+                (captionTheme == "Festival" && entry.category in festivalCategories) ||
+                (captionTheme in setOf("Durga Puja", "Bijoya Dashami") && entry.category == "Festival") ||
                 (captionTheme == "Auto" && entry.category.equals("Aesthetic", ignoreCase = true)) ||
                 entry.keywords.any { keyword ->
                     keyword.length > 2 && detected.isNotBlank() && detected.contains(keyword, ignoreCase = true)
                 }
-        }.take(5)
+        }.take(12)
         val captionPairs = (generated.english.zip(generated.bengali) +
             libraryMatches.map { it.text to it.bengali } +
             remoteMatches.mapIndexed { index, entry ->
@@ -508,18 +512,9 @@ private fun PhotoEditorHome() {
     }
 
     fun suggestMoreCaptions() {
-        val existing = captionSuggestions
-        val count = minOf(existing?.english?.size ?: 0, existing?.bengali?.size ?: 0)
-        if (existing == null || count < 2) {
-            suggestCaptions()
-            return
-        }
-        val nextIndex = (captionIndex + 1).mod(count)
-        captionIndex = nextIndex
-        captionEnglish = existing.english[nextIndex]
-        captionBengali = existing.bengali[nextIndex]
-        statusMessage = "Showing caption suggestion " + (nextIndex + 1) + " of " + count +
-            ". Tap Suggest more again to cycle through alternatives."
+        // Generate fresh options for the current photo and theme instead of cycling
+        // through a single recovered caption from an earlier session.
+        suggestCaptions(previewBitmap)
     }
 
     // Restore technical scores for photos recovered after process death.
@@ -543,6 +538,18 @@ private fun PhotoEditorHome() {
             }
         }
         if (photosNeedingScores.isNotEmpty()) statusMessage = "Recovered your previous photo selection and edit settings."
+    }
+
+    // Refresh text packs on launch too. WorkManager remains a backup, not the only update path.
+    LaunchedEffect(Unit) {
+        val refreshed = CaptionCatalogRepository.refresh(context)
+        if (refreshed.isNotEmpty()) {
+            remoteCaptionEntries = refreshed
+            if (activeEditorPanel == "Caption" && previewBitmap != null && !previewBitmap!!.isRecycled) {
+                suggestCaptions(previewBitmap)
+            }
+        }
+        aiEditRules = AiEditRulesRepository.refresh(context)
     }
 
     // Durable session checkpoint: every editable value and caption is written whenever it changes.
@@ -1941,7 +1948,7 @@ EditorImageAction("⇩", "Export", previewBitmap != null && !isExporting && sele
                     ) { Text(if (isGeneratingCaptions) "Suggesting…" else "Suggest more", fontSize = 11.sp) }
                     Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                         horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                        listOf("Auto", "Portrait", "Friends", "Festival", "Celebration", "Romantic", "Funny", "Devotional", "Travel", "Family", "Aesthetic").forEach { theme ->
+                        listOf("Auto", "Portrait", "Friends", "Festival", "Durga Puja", "Bijoya Dashami", "Celebration", "Romantic", "Funny", "Devotional", "Travel", "Family", "Aesthetic").forEach { theme ->
                             Button(onClick = {
                                 captionTheme = theme
                                 val existing = captionSuggestions

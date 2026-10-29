@@ -2533,6 +2533,11 @@ private fun PhotoEditorHome() {
             }
 
             if (activePhoto == null && selectedPhotos.isNotEmpty()) {
+                // Keep numerous batch controls in a compact, independently scrollable area.
+                Column(
+                    modifier = Modifier.fillMaxWidth().heightIn(max = 190.dp)
+                        .verticalScroll(rememberScrollState())
+                ) {
                 Row(modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 4.dp),
                     verticalAlignment = Alignment.CenterVertically) {
                     Text("BATCH PRESET", color = BrightText, fontSize = 11.sp, fontWeight = FontWeight.Bold)
@@ -2769,6 +2774,7 @@ private fun PhotoEditorHome() {
                 if (batchSummary != null) {
                     Text(batchSummary!!, color = Mint, fontSize = 10.sp, lineHeight = 14.sp,
                         modifier = Modifier.fillMaxWidth().padding(top = 5.dp))
+                }
                 }
             }
 
@@ -3138,13 +3144,18 @@ private fun PhotoEditorHome() {
                                         modifier = Modifier.align(Alignment.TopStart).padding(4.dp)
                                             .background(Mint, RoundedCornerShape(5.dp)).padding(horizontal = 5.dp, vertical = 3.dp))
                                 }
-                                if (activePhoto?.uri == photo.uri) {
-                                    androidx.compose.material3.Icon(
-                                        imageVector = Icons.Rounded.CheckCircle,
-                                        contentDescription = "Editing this photo",
-                                        tint = Mint,
-                                        modifier = Modifier.align(Alignment.TopEnd).padding(4.dp).size(18.dp)
-                                    )
+                                Box(
+                                    modifier = Modifier.align(Alignment.TopEnd).padding(3.dp)
+                                        .size(21.dp).clip(RoundedCornerShape(50))
+                                        .background(Color(0xD9101313))
+                                        .clickable {
+                                            selectedPhotos.removeAll { it.uri == photo.uri }
+                                            statusMessage = "Photo removed from selection. The original file was not deleted."
+                                        },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text("×", color = BrightText, fontSize = 16.sp,
+                                        fontWeight = FontWeight.Bold, lineHeight = 18.sp)
                                 }
                             }
                             val photoRank = rankByUri[photo.uri] ?: 0

@@ -1308,7 +1308,7 @@ private fun PhotoEditorHome() {
                 original = withContext(Dispatchers.IO) {
                     AutoEnhancer.decodeForEditing(
                         context.contentResolver, photo.uri,
-                        maxDimension = if (useAiUpscale) 1024 else Int.MAX_VALUE
+                        maxDimension = if (useAiUpscale) 1536 else Int.MAX_VALUE
                     )
                 }
                 operationProgress = 12

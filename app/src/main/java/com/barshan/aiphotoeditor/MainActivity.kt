@@ -213,7 +213,7 @@ private fun PhotoEditorHome() {
     var operationProgress by remember { mutableIntStateOf(0) }
     var operationStage by remember { mutableStateOf("Ready") }
     var batchPreset by remember { mutableStateOf("Current edits") }
-    var batchAiLook by remember { mutableStateOf("Balanced") }
+    var batchAiLook by remember { mutableStateOf("Natural") }
     var batchSummary by remember { mutableStateOf<String?>(null) }
     var batchPreviewImages by remember { mutableStateOf<Map<Uri, ByteArray>>(emptyMap()) }
     var batchPreviewScores by remember { mutableStateOf<Map<Uri, PhotoQualityScoring.Score>>(emptyMap()) }

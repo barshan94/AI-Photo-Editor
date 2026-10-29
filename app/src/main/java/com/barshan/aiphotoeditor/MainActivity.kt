@@ -251,6 +251,8 @@ private fun PhotoEditorHome() {
     var makeupIntensity by remember { mutableFloatStateOf(recoveryPrefs.getFloat("makeup_intensity", 0f)) }
     var removalBrushMode by remember { mutableStateOf(recoveryPrefs.getBoolean("removal_brush_mode", false)) }
     var removalBrushSize by remember { mutableFloatStateOf(recoveryPrefs.getFloat("removal_brush_size", 24f)) }
+    var automaticRemovalMask by remember { mutableStateOf<Bitmap?>(null) }
+    var isSelectingRemovalTarget by remember { mutableStateOf(false) }
     val removalStrokes = remember {
         mutableStateListOf<List<Offset>>().apply {
             val saved = recoveryPrefs.getString("removal_strokes", "").orEmpty()
@@ -1399,8 +1401,8 @@ private fun PhotoEditorHome() {
     fun removeMarkedObject(photo: PhotoItem) {
         if (isExporting) return
         val strokes = removalStrokes.toList()
-        if (strokes.none { it.isNotEmpty() }) {
-            statusMessage = "Tap Mark object, then paint over the unwanted object or person in the preview."
+        if (strokes.none { it.isNotEmpty() } && automaticRemovalMask == null) {
+            statusMessage = "Select a person or paint over the unwanted object in the preview."
             return
         }
         isExporting = true
@@ -1420,7 +1422,7 @@ private fun PhotoEditorHome() {
                 }
                 operationProgress = 20
                 operationStage = "Reconstructing the marked area"
-                val result = LamaInpainter.inpaint(context, original!!, strokes, removalBrushSize)
+                val result = LamaInpainter.inpaint(context, original!!, strokes, removalBrushSize, automaticRemovalMask)
                 repaired = result.bitmap
                 editedScore = scoreEditedBitmap(repaired!!)
                 operationProgress = 92
@@ -2041,13 +2043,57 @@ EditorImageAction("⇩", "Export", previewBitmap != null && !isExporting && sele
                                         colors = ButtonDefaults.buttonColors(containerColor = if (removalBrushMode) Color(0xFFFF6B6B) else Color(0xFF293333), contentColor = if (removalBrushMode) Ink else BrightText)
                                     ) { Text(if (removalBrushMode) "Finish marking" else "Mark object") }
                                     Button(
-                                        onClick = { removalStrokes.clear(); currentRemovalStroke = emptyList(); statusMessage = "Object mask cleared." },
-                                        enabled = removalStrokes.isNotEmpty() && !isExporting,
+                                        onClick = {
+                                            removalStrokes.clear()
+                                            currentRemovalStroke = emptyList()
+                                            automaticRemovalMask?.let { if (!it.isRecycled) it.recycle() }
+                                            automaticRemovalMask = null
+                                            statusMessage = "Object selection cleared."
+                                        },
+                                        enabled = (removalStrokes.isNotEmpty() || automaticRemovalMask != null) && !isExporting,
                                         modifier = Modifier.weight(1f),
                                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = BrightText)
                                     ) { Text("Clear mask") }
                                 }
-                                if (removalBrushMode || removalStrokes.isNotEmpty()) {
+                                Button(
+                                    onClick = {
+                                        val bitmap = previewBitmap
+                                        if (bitmap == null || bitmap.isRecycled || isSelectingRemovalTarget || isExporting) {
+                                            statusMessage = "Open a photo preview first."
+                                        } else {
+                                            isSelectingRemovalTarget = true
+                                            statusMessage = "Finding the person in this photo…"
+                                            scope.launch {
+                                                try {
+                                                    val segmentation = MulticlassSegmentationEngine.segment(context, bitmap)
+                                                    val maskPixels = IntArray(bitmap.width * bitmap.height)
+                                                    for (y in 0 until bitmap.height) {
+                                                        val sy = y * segmentation.height / bitmap.height
+                                                        for (x in 0 until bitmap.width) {
+                                                            val sx = x * segmentation.width / bitmap.width
+                                                            val category = segmentation.classAt(sx, sy)
+                                                            maskPixels[y * bitmap.width + x] =
+                                                                if (category in MulticlassSegmentationEngine.HAIR..MulticlassSegmentationEngine.CLOTHES) android.graphics.Color.WHITE else android.graphics.Color.TRANSPARENT
+                                                        }
+                                                    }
+                                                    val mask = Bitmap.createBitmap(bitmap.width, bitmap.height, Bitmap.Config.ARGB_8888)
+                                                    mask.setPixels(maskPixels, 0, bitmap.width, 0, 0, bitmap.width, bitmap.height)
+                                                    automaticRemovalMask?.let { if (!it.isRecycled) it.recycle() }
+                                                    automaticRemovalMask = mask
+                                                    statusMessage = "Person selected. Tap Remove marked area to remove it, or paint over another object."
+                                                } catch (error: Exception) {
+                                                    statusMessage = "Could not select a person in this photo. You can still mark the object manually."
+                                                } finally {
+                                                    isSelectingRemovalTarget = false
+                                                }
+                                            }
+                                        }
+                                    },
+                                    enabled = activePhoto != null && !isExporting && !isSelectingRemovalTarget,
+                                    modifier = Modifier.fillMaxWidth().padding(top = 5.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = BrightText)
+                                ) { Text(if (isSelectingRemovalTarget) "Selecting…" else "Select person", fontSize = 11.sp) }
+                                if (removalBrushMode || removalStrokes.isNotEmpty() || automaticRemovalMask != null) {
                                     Text("REMOVAL BRUSH SIZE  " + removalBrushSize.toInt(), color = SoftText, fontSize = 11.sp)
                                     Slider(value = removalBrushSize, onValueChange = { removalBrushSize = it }, valueRange = 10f..60f)
                                     Text("Paint over the whole object, including its shadow. Red strokes mark the area to remove; the app reconstructs it from surrounding content.", color = SoftText, fontSize = 10.sp, lineHeight = 14.sp)

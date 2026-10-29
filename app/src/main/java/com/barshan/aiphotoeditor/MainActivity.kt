@@ -670,15 +670,11 @@ private fun PhotoEditorHome() {
         contrast = contrast,
         saturation = saturation,
         warmth = warmth,
-        cropRatio = when (cropLabel) {
-            "Square" -> 1f
-            "Portrait 4:5" -> 4f / 5f
-            "Story 9:16" -> 9f / 16f
-            "Landscape 16:9" -> 16f / 9f
-            else -> null
-        },
-        freeCropWidthFraction = if (cropLabel == "Free") freeCropWidth else null,
-        freeCropHeightFraction = if (cropLabel == "Free") freeCropHeight else null,
+        // Use one draggable crop frame for every crop preset. The selected preset
+        // initializes its dimensions; dragging an edge can then refine the framing.
+        cropRatio = null,
+        freeCropWidthFraction = if (cropLabel != "Original") freeCropWidth else null,
+        freeCropHeightFraction = if (cropLabel != "Original") freeCropHeight else null,
         cropOffsetX = cropOffsetX,
         cropOffsetY = cropOffsetY,
         rotationDegrees = rotationDegrees,
@@ -1703,7 +1699,7 @@ EditorImageAction("⇩", "Export", previewBitmap != null && !isExporting && sele
                                                 currentRemovalStroke = emptyList()
                                             }
                                         }
-                                    } else if (cropLabel == "Free") {
+                                    } else if (cropLabel != "Original") {
                                         Modifier.pointerInput(cropLabel, previewWidthPx, previewHeightPx) {
                                             var edge = ""
                                             var fixedLeft = 0f; var fixedTop = 0f; var fixedRight = 1f; var fixedBottom = 1f
@@ -1846,7 +1842,7 @@ EditorImageAction("⇩", "Export", previewBitmap != null && !isExporting && sele
                                     }
                                 }
                             }
-                            if (cropLabel == "Free" && !compareBeforeAfter) {
+                            if (cropLabel != "Original" && !compareBeforeAfter) {
                                 androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxSize()) {
                                     val image = previewBitmap
                                     if (image != null && image.width > 0 && image.height > 0) {
@@ -2444,14 +2440,44 @@ EditorImageAction("⇩", "Export", previewBitmap != null && !isExporting && sele
                             Text("CROP RATIO", color = BrightText, fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 5.dp))
                             Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                 listOf("Original", "Free", "Square", "Portrait 4:5", "Story 9:16", "Landscape 16:9").forEach { crop ->
-                                    Button(onClick = { recordEditChange(); resetPreviewZoom(); cropLabel = crop; cropOffsetX = 0f; cropOffsetY = 0f; selectedStyle = "Custom"; showEnhanced = true; compareBeforeAfter = false },
+                                    Button(onClick = {
+                                        recordEditChange()
+                                        resetPreviewZoom()
+                                        cropLabel = crop
+                                        cropOffsetX = 0f
+                                        cropOffsetY = 0f
+                                        val presetRatio = when (crop) {
+                                            "Square" -> 1f
+                                            "Portrait 4:5" -> 4f / 5f
+                                            "Story 9:16" -> 9f / 16f
+                                            "Landscape 16:9" -> 16f / 9f
+                                            else -> null
+                                        }
+                                        if (crop == "Original") {
+                                            freeCropWidth = 1f
+                                            freeCropHeight = 1f
+                                        } else if (presetRatio != null) {
+                                            val image = previewBitmap
+                                            val imageRatio = if (image != null && image.height > 0) image.width.toFloat() / image.height.toFloat() else presetRatio
+                                            val widthFraction = minOf(0.9f, 0.9f * presetRatio / imageRatio.coerceAtLeast(0.01f))
+                                            val heightFraction = (widthFraction * imageRatio / presetRatio).coerceIn(0.2f, 0.9f)
+                                            freeCropWidth = widthFraction.coerceIn(0.2f, 0.9f)
+                                            freeCropHeight = heightFraction
+                                        } else {
+                                            freeCropWidth = 0.85f
+                                            freeCropHeight = 0.85f
+                                        }
+                                        selectedStyle = "Custom"
+                                        showEnhanced = true
+                                        compareBeforeAfter = false
+                                    },
                                         shape = RoundedCornerShape(10.dp),
                                         colors = ButtonDefaults.buttonColors(containerColor = if (cropLabel == crop) Mint else Color(0xFF293333), contentColor = if (cropLabel == crop) Ink else BrightText),
                                         contentPadding = PaddingValues(horizontal = 9.dp, vertical = 3.dp)) { Text(crop, fontSize = 10.sp) }
                                 }
                             }
-                            if (cropLabel == "Free") {
-                                Text("FREE CROP · Drag any frame edge to choose what stays inside. The dimmed area will be removed.",
+                            if (cropLabel != "Original") {
+                                Text("CROP FRAME · Drag any edge to adjust the framing. The dimmed area will be removed.",
                                     color = SoftText, fontSize = 10.sp, modifier = Modifier.padding(top = 5.dp))
                             }
                             }

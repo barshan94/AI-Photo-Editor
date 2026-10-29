@@ -125,9 +125,29 @@ Every advanced tool must have a real inference path, clear progress/error states
 
 ## Build and install
 
-Pushes to `main` run GitHub Actions. Open **Actions**, select the latest successful **Android APK** run, and download the `ai-photo-editor-debug-apk` artifact. Extract the ZIP and install `app-debug.apk`.
+<details>
+<summary><strong>Recommended download — tested optimized APK (Build #446, 57.2 MB)</strong></summary>
 
-The beta uses package `com.barshan.aiphotoeditor.beta`, labelled **FRAME AI Beta**, so it can sit alongside the earlier prototype. CI caches its debug signing key to allow later beta APKs to update in place.
+**Use this build first.** Build #446 is the optimized debug APK that has been installed and tested on a physical Android phone. All app features were checked and confirmed working by the project owner.
+
+- **Download page:** [Android APK — Build #446](https://github.com/barshan94/AI-Photo-Editor/actions/runs/40954732292)
+- **Artifact:** `ai-photo-editor-debug-apk`
+- **APK inside ZIP:** `app-debug.apk`
+- **Build branch:** `experiment/under-100mb-model-downloads`
+- **Source commit:** `ba411f86888aa0c2df0982beda459f56061efb4a`
+- **Artifact SHA-256:** `4a79a22b7e392a109073ad80d46909d905701cb115afaa3b938dcc963597d28a`
+
+Open the download page, find **Artifacts**, download `ai-photo-editor-debug-apk`, extract the ZIP, then install `app-debug.apk`.
+
+**Important:** GitHub Actions artifacts are temporary. This Build #446 artifact is scheduled to expire on **November 12, 2026**. A permanent GitHub Release asset should be published before then so this exact tested APK remains downloadable.
+
+</details>
+
+### Standard CI builds
+
+Other successful Android APK workflow runs are development builds and are not the primary download recommendation. For the tested optimized version, use Build #446 above.
+
+The recommended beta uses package `com.barshan.aiphotoeditor.beta`, labelled **FRAME AI Beta**, so it can sit alongside the earlier prototype. CI caches its debug signing key to allow later beta APKs to update in place.
 
 ## Stack
 

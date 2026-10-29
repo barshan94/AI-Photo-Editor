@@ -283,6 +283,7 @@ private fun PhotoEditorHome() {
     var cropLabel by remember { mutableStateOf(recoveryPrefs.getString("crop_label", "Original") ?: "Original") }
     var cropOffsetX by remember { mutableFloatStateOf(recoveryPrefs.getFloat("crop_offset_x", 0f)) }
     var cropOffsetY by remember { mutableFloatStateOf(recoveryPrefs.getFloat("crop_offset_y", 0f)) }
+    var freeCropRatio by remember { mutableFloatStateOf(recoveryPrefs.getFloat("free_crop_ratio", 1f)) }
     var rotationDegrees by remember { mutableFloatStateOf(recoveryPrefs.getFloat("rotation_degrees", 0f)) }
     var straightenDegrees by remember { mutableFloatStateOf(recoveryPrefs.getFloat("straighten_degrees", 0f)) }
     var mirrorHorizontal by remember { mutableStateOf(recoveryPrefs.getBoolean("mirror_horizontal", false)) }
@@ -561,6 +562,7 @@ private fun PhotoEditorHome() {
             .putFloat("subject_brightness", subjectBrightness).putFloat("darker_area_lift", darkerAreaLift)
             .putFloat("skin_smoothing", skinSmoothing).putFloat("makeup_intensity", makeupIntensity)
             .putString("crop_label", cropLabel).putFloat("crop_offset_x", cropOffsetX)
+            .putFloat("free_crop_ratio", freeCropRatio)
             .putFloat("crop_offset_y", cropOffsetY).putFloat("rotation_degrees", rotationDegrees)
             .putFloat("straighten_degrees", straightenDegrees).putBoolean("mirror_horizontal", mirrorHorizontal)
             .putBoolean("mirror_vertical", mirrorVertical)
@@ -652,6 +654,7 @@ private fun PhotoEditorHome() {
             "Portrait 4:5" -> 4f / 5f
             "Story 9:16" -> 9f / 16f
             "Landscape 16:9" -> 16f / 9f
+            "Free" -> freeCropRatio.coerceIn(0.25f, 4f)
             else -> null
         },
         cropOffsetX = cropOffsetX,
@@ -1171,7 +1174,12 @@ private fun PhotoEditorHome() {
             compareBeforeAfter = false
             statusMessage = "Applied your personal edit suggestion based on ${learnedProfile.preferredEditType}. Review it before exporting."
         } else {
-            statusMessage = "Export an edited copy you like first; then your personal suggestion will be available."
+            recordEditChange()
+            applyEditSnapshot(currentSettings().copy(contrast = 1.07f, saturation = 1.06f))
+            selectedStyle = "Personal"
+            showEnhanced = true
+            compareBeforeAfter = false
+            statusMessage = "Applied a natural starting style. Export an edit you like to teach My Style your preferences."
         }
     }
 
@@ -1403,8 +1411,12 @@ private fun PhotoEditorHome() {
             var original: Bitmap? = null
             var repaired: Bitmap? = null
             try {
-                original = withContext(Dispatchers.IO) {
-                    AutoEnhancer.decodeForEditing(context.contentResolver, photo.uri, maxDimension = 2400)
+                original = if (selectedStyle == "Object Removal" && previewBitmap != null && !previewBitmap!!.isRecycled) {
+                    Bitmap.createBitmap(previewBitmap!!)
+                } else {
+                    withContext(Dispatchers.IO) {
+                        AutoEnhancer.decodeForEditing(context.contentResolver, photo.uri, maxDimension = 2400)
+                    }
                 }
                 operationProgress = 20
                 operationStage = "Reconstructing the marked area"
@@ -1977,7 +1989,10 @@ EditorImageAction("⇩", "Export", previewBitmap != null && !isExporting && sele
                                             contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp)
                                         ) { Text(if (isExporting && activePhoto != null) "Upscaling…" else "AI Upscale", fontSize = 11.sp) }
                                         Button(
-                                            onClick = {},
+                                            onClick = {
+                                                if (showResetLearning) showDeleteLearningConfirmation = true
+                                                else applyMyStyle()
+                                            },
                                             modifier = Modifier.weight(1f).heightIn(min = 38.dp)
                                                 .combinedClickable(
                                                     onClick = {
@@ -2178,12 +2193,22 @@ EditorImageAction("⇩", "Export", previewBitmap != null && !isExporting && sele
                             if (activeCropSubpanel == "Crop") {
                             Text("CROP RATIO", color = BrightText, fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 5.dp))
                             Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                listOf("Original", "Square", "Portrait 4:5", "Story 9:16", "Landscape 16:9").forEach { crop ->
+                                listOf("Original", "Free", "Square", "Portrait 4:5", "Story 9:16", "Landscape 16:9").forEach { crop ->
                                     Button(onClick = { recordEditChange(); cropLabel = crop; cropOffsetX = 0f; cropOffsetY = 0f; selectedStyle = "Custom"; showEnhanced = true; compareBeforeAfter = false },
                                         shape = RoundedCornerShape(10.dp),
                                         colors = ButtonDefaults.buttonColors(containerColor = if (cropLabel == crop) Mint else Color(0xFF293333), contentColor = if (cropLabel == crop) Ink else BrightText),
                                         contentPadding = PaddingValues(horizontal = 9.dp, vertical = 3.dp)) { Text(crop, fontSize = 10.sp) }
                                 }
+                            }
+                            if (cropLabel == "Free") {
+                                Text("FREE CROP WIDTH / HEIGHT  ${String.format(java.util.Locale.US, "%.2f", freeCropRatio)}", color = SoftText, fontSize = 10.sp, modifier = Modifier.padding(top = 5.dp))
+                                Slider(
+                                    value = freeCropRatio,
+                                    onValueChange = { freeCropRatio = it; selectedStyle = "Custom"; showEnhanced = true },
+                                    onValueChangeFinished = { recordEditChange() },
+                                    valueRange = 0.25f..4f
+                                )
+                                Text("Drag the photo to position the crop, then adjust this ratio freely.", color = SoftText, fontSize = 10.sp)
                             }
                             }
                             if (activeCropSubpanel == "Perspective") {
@@ -2272,36 +2297,21 @@ EditorImageAction("⇩", "Export", previewBitmap != null && !isExporting && sele
                         }
                         Spacer(modifier = Modifier.height(4.dp))
                         if (activeEditorPanel == "AI Edit" && activeAiSubpanel == "Enhance") {
-                            Button(
-                                onClick = { showSingleAiLookOptions = !showSingleAiLookOptions },
-                                enabled = activePhoto != null && !isRunningPhotoAnalysis && !isExporting,
-                                modifier = Modifier.fillMaxWidth().padding(bottom = 5.dp),
-                                shape = RoundedCornerShape(10.dp),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = if (showSingleAiLookOptions) Color(0xFF293333) else Mint,
-                                    contentColor = if (showSingleAiLookOptions) Mint else Ink
-                                ),
-                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 5.dp)
-                            ) {
-                                androidx.compose.material3.Icon(Icons.Rounded.ImageSearch, contentDescription = null)
-                                Text(if (isRunningPhotoAnalysis) "  Analysing photo…" else "  AI Edit", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                            }
-                            if (showSingleAiLookOptions) {
-                                Row(modifier = Modifier.fillMaxWidth().padding(bottom = 5.dp),
-                                    horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                                    listOf("Balanced", "Saturated", "Cool").forEach { look ->
-                                        Button(
-                                            onClick = { aiEditLook = look; showSingleAiLookOptions = false; runAiEdit() },
-                                            modifier = Modifier.weight(1f).heightIn(min = 36.dp),
-                                            shape = RoundedCornerShape(9.dp),
-                                            colors = ButtonDefaults.buttonColors(
-                                                containerColor = if (aiEditLook == look) Mint else Color(0xFF293333),
-                                                contentColor = if (aiEditLook == look) Ink else BrightText
-                                            ),
-                                            contentPadding = PaddingValues(horizontal = 3.dp, vertical = 4.dp)
-                                        ) { Text(look, fontSize = 10.sp, maxLines = 1) }
-                                    }
-                                }
+                            Row(modifier = Modifier.fillMaxWidth().padding(top = 2.dp, bottom = 5.dp),
+                                horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                                listOf("Balanced", "Saturated", "Cool").forEach { look ->
+                                                                        Button(
+                                                                            onClick = { aiEditLook = look; runAiEdit() },
+                                                                            modifier = Modifier.weight(1f).heightIn(min = 36.dp),
+                                                                            shape = RoundedCornerShape(9.dp),
+                                                                            colors = ButtonDefaults.buttonColors(
+                                                                                containerColor = if (aiEditLook == look) Mint else Color(0xFF293333),
+                                                                                contentColor = if (aiEditLook == look) Ink else BrightText
+                                                                            ),
+                                                                            contentPadding = PaddingValues(horizontal = 3.dp, vertical = 4.dp)
+                                                                        ) { Text(look, fontSize = 10.sp, maxLines = 1) }
+                                                                    }
+                                                                }
                             }
                         }
                         if (activeEditorPanel == "Universal Edit") {

@@ -673,6 +673,7 @@ private fun PhotoEditorHome() {
         // Use one draggable crop frame for every crop preset. The selected preset
         // initializes its dimensions; dragging an edge can then refine the framing.
         cropRatio = null,
+        cropLabel = cropLabel,
         freeCropWidthFraction = if (cropLabel != "Original") freeCropWidth else null,
         freeCropHeightFraction = if (cropLabel != "Original") freeCropHeight else null,
         cropOffsetX = cropOffsetX,
@@ -717,6 +718,8 @@ private fun PhotoEditorHome() {
         darkerAreaLift = settings.darkerAreaLift
         skinSmoothing = settings.skinSmoothing
         makeupIntensity = settings.makeupIntensity
+        freeCropWidth = settings.freeCropWidthFraction ?: 1f
+        freeCropHeight = settings.freeCropHeightFraction ?: 1f
         cropOffsetX = settings.cropOffsetX
         cropOffsetY = settings.cropOffsetY
         rotationDegrees = settings.rotationDegrees
@@ -731,11 +734,14 @@ private fun PhotoEditorHome() {
         perspectiveBottomRightY = settings.perspectiveBottomRightY
         perspectiveBottomLeftX = settings.perspectiveBottomLeftX
         perspectiveBottomLeftY = settings.perspectiveBottomLeftY
-        cropLabel = when (settings.cropRatio) {
-            1f -> "Square"
-            0.8f -> "Portrait 4:5"
-            0.5625f -> "Story 9:16"
-            1.7777778f -> "Landscape 16:9"
+        cropLabel = when {
+            settings.cropLabel != "Original" -> settings.cropLabel
+            settings.cropRatio == 1f -> "Square"
+            settings.cropRatio == 0.8f -> "Portrait 4:5"
+            settings.cropRatio == 0.5625f -> "Story 9:16"
+            settings.cropRatio == 1.7777778f -> "Landscape 16:9"
+            settings.freeCropWidthFraction != null && settings.freeCropHeightFraction != null &&
+                (settings.freeCropWidthFraction < 0.999f || settings.freeCropHeightFraction < 0.999f) -> "Free"
             else -> "Original"
         }
         selectedStyle = "Custom"
@@ -1706,6 +1712,7 @@ EditorImageAction("⇩", "Export", previewBitmap != null && !isExporting && sele
                                             var fixedLeft = 0f; var fixedTop = 0f; var fixedRight = 1f; var fixedBottom = 1f
                                             detectDragGestures(
                                                 onDragStart = { position ->
+                                                    resizedFrame = false
                                                     recordEditChange()
                                                     val point = previewNormalizedPosition(position)
                                                     if (point != null) {
@@ -1715,7 +1722,7 @@ EditorImageAction("⇩", "Export", previewBitmap != null && !isExporting && sele
                                                         fixedBottom = (fixedTop + freeCropHeight).coerceIn(0f, 1f)
                                                         edge = listOf("left" to kotlin.math.abs(point.x - fixedLeft), "right" to kotlin.math.abs(point.x - fixedRight),
                                                             "top" to kotlin.math.abs(point.y - fixedTop), "bottom" to kotlin.math.abs(point.y - fixedBottom))
-                                                            .filter { it.second <= 0.07f }.minByOrNull { it.second }?.first.orEmpty()
+                                                            .filter { it.second <= 0.12f }.minByOrNull { it.second }?.first.orEmpty()
                                                     }
                                                 },
                                                 onDragEnd = {

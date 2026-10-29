@@ -1449,8 +1449,10 @@ private fun PhotoEditorHome() {
                 repaired = result.bitmap
                 editedScore = scoreEditedBitmap(repaired!!)
                 operationProgress = 92
-                operationStage = "Saving repaired copy"
-                withContext(Dispatchers.IO) { AutoEnhancer.saveJpeg(context.contentResolver, repaired!!) }
+                operationStage = "Updating edited preview"
+                // Object removal is a non-destructive editing operation: never write a file here.
+                // Keep the repaired bitmap in memory so the user can make additional passes and
+                // only persist the final result when they explicitly Export or Share.
                 previewBitmap?.let { if (!it.isRecycled) it.recycle() }
                 previewBitmap = repaired
                 repaired = null
@@ -1458,9 +1460,13 @@ private fun PhotoEditorHome() {
                 showEnhanced = true
                 compareBeforeAfter = false
                 removalBrushMode = false
-                // Keep the mask so the user can run another repair pass on the same area.
-                // The next pass uses the repaired preview as its source instead of the original.
-                statusMessage = "Object updated. You can refine the same area again without repainting."
+                // Remove the visible brush overlay and reset the old mask. The next pass should
+                // start from the newly repaired preview and use fresh marks, not stale coordinates.
+                removalStrokes.clear()
+                currentRemovalStroke = emptyList()
+                automaticRemovalMask?.let { if (!it.isRecycled) it.recycle() }
+                automaticRemovalMask = null
+                statusMessage = "Preview updated. Mark another area or Export/Share when finished."
             } catch (error: CancellationException) {
                 statusMessage = "Object removal cancelled. Original photo remains untouched."
                 throw error

@@ -47,8 +47,8 @@ object AiEditRulesRepository {
                 setRequestProperty("User-Agent", "AI-Photo-Editor-Android")
             }
             if (connection.responseCode !in 200..299) return@withContext cached
-            val body = connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
-            if (body.length > 16_000) return@withContext cached
+            val body = readBoundedText(connection.inputStream, 16_000)
+                ?: return@withContext cached
             val parsed = parse(body) ?: return@withContext cached
             if (parsed.version <= cached.version) return@withContext cached
             appContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
@@ -60,6 +60,20 @@ object AiEditRulesRepository {
             cached
         } finally {
             connection?.disconnect()
+        }
+    }
+
+    private fun readBoundedText(input: java.io.InputStream, maxChars: Int): String? {
+        input.bufferedReader(Charsets.UTF_8).use { reader ->
+            val output = StringBuilder()
+            val buffer = CharArray(2048)
+            while (true) {
+                val count = reader.read(buffer)
+                if (count < 0) break
+                if (output.length + count > maxChars) return null
+                output.append(buffer, 0, count)
+            }
+            return output.toString()
         }
     }
 

@@ -1,5 +1,7 @@
 # FRAME / AI — Android Photo Editor
 
+> **Project status: Archived.** Development is concluded. Build #446 is the project owner's tested, recommended version; no further development is planned.
+
 A native Android photo editor focused on batch workflows. It runs locally on the device; no website, account, backend, or Vercel deployment is required.
 
 > **Recommended Android download:** [Optimized APK — Build #446 (57.2 MB)](https://github.com/barshan94/AI-Photo-Editor/actions/runs/40954732292)  

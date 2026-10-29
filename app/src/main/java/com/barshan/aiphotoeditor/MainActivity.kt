@@ -152,7 +152,8 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // Launch the editor immediately. Optional caption refresh runs asynchronously in the UI scope.
+        // Queue silent background updates; WorkManager waits for unmetered connectivity.
+        TrendPackUpdateScheduler.schedule(applicationContext)
         setContent {
             MaterialTheme(colorScheme = darkColorScheme(
                 primary = Mint, onPrimary = Ink, background = Ink,
@@ -184,13 +185,6 @@ private fun PhotoEditorHome() {
     }
     var aiEditRules by remember {
         mutableStateOf(AiEditRulesRepository.readCachedRules(context))
-    }
-    LaunchedEffect(Unit) {
-        // Refresh both rule sets on launch. Cached/local behavior remains available offline.
-        remoteCaptionEntries = CaptionCatalogRepository.refresh(context)
-    }
-    LaunchedEffect(Unit) {
-        aiEditRules = AiEditRulesRepository.refresh(context)
     }
     val recoveryPrefs = remember {
         context.getSharedPreferences("frame_ai_recovery", android.content.Context.MODE_PRIVATE)

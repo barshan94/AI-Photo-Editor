@@ -260,11 +260,6 @@ private fun PhotoEditorHome() {
     var makeupIntensity by remember { mutableFloatStateOf(recoveryPrefs.getFloat("makeup_intensity", 0f)) }
     var removalBrushMode by remember { mutableStateOf(recoveryPrefs.getBoolean("removal_brush_mode", false)) }
     var removalBrushSize by remember { mutableFloatStateOf(recoveryPrefs.getFloat("removal_brush_size", 24f)) }
-    var automaticRemovalMask by remember { mutableStateOf<Bitmap?>(null) }
-    LaunchedEffect(activePhoto?.uri) {
-        automaticRemovalMask?.let { if (!it.isRecycled) it.recycle() }
-        automaticRemovalMask = null
-    }
     val removalStrokes = remember {
         mutableStateListOf<List<Offset>>().apply {
             val saved = recoveryPrefs.getString("removal_strokes", "").orEmpty()
@@ -1428,8 +1423,8 @@ private fun PhotoEditorHome() {
     fun removeMarkedObject(photo: PhotoItem) {
         if (isExporting) return
         val strokes = removalStrokes.toList()
-        if (strokes.none { it.isNotEmpty() } && automaticRemovalMask == null) {
-            statusMessage = "Select a person or paint over the unwanted object in the preview."
+        if (strokes.none { it.isNotEmpty() }) {
+            statusMessage = "Paint over the unwanted object in the preview first."
             return
         }
         isExporting = true
@@ -1449,7 +1444,7 @@ private fun PhotoEditorHome() {
                 }
                 operationProgress = 20
                 operationStage = "Reconstructing the marked area"
-                val result = LamaInpainter.inpaint(context, original!!, strokes, removalBrushSize, automaticRemovalMask)
+                val result = LamaInpainter.inpaint(context, original!!, strokes, removalBrushSize)
                 repaired = result.bitmap
                 editedScore = scoreEditedBitmap(repaired!!)
                 operationProgress = 92
@@ -1468,8 +1463,6 @@ private fun PhotoEditorHome() {
                 // start from the newly repaired preview and use fresh marks, not stale coordinates.
                 removalStrokes.clear()
                 currentRemovalStroke = emptyList()
-                automaticRemovalMask?.let { if (!it.isRecycled) it.recycle() }
-                automaticRemovalMask = null
                 statusMessage = "Preview updated. Mark another area or Export/Share when finished."
             } catch (error: CancellationException) {
                 statusMessage = "Object removal cancelled. Original photo remains untouched."
@@ -2225,22 +2218,20 @@ EditorImageAction("⇩", "Export", previewBitmap != null && !isExporting && sele
                                         onClick = {
                                             removalStrokes.clear()
                                             currentRemovalStroke = emptyList()
-                                            automaticRemovalMask?.let { if (!it.isRecycled) it.recycle() }
-                                            automaticRemovalMask = null
                                             statusMessage = "Object selection cleared."
                                         },
-                                        enabled = (removalStrokes.isNotEmpty() || automaticRemovalMask != null) && !isExporting,
+                                        enabled = removalStrokes.isNotEmpty() && !isExporting,
                                         modifier = Modifier.weight(1f),
                                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = BrightText)
                                     ) { Text("Clear mask") }
                                 }
-                                if (removalBrushMode || removalStrokes.isNotEmpty() || automaticRemovalMask != null) {
+                                if (removalBrushMode || removalStrokes.isNotEmpty()) {
                                     Text("REMOVAL BRUSH SIZE  " + removalBrushSize.toInt(), color = SoftText, fontSize = 11.sp)
                                     Slider(value = removalBrushSize, onValueChange = { removalBrushSize = it }, valueRange = 10f..60f)
                                     Text("Paint over the whole object, including its shadow. Red strokes mark the area to remove; the app reconstructs it from surrounding content.", color = SoftText, fontSize = 10.sp, lineHeight = 14.sp)
                                     Button(
                                         onClick = { activePhoto?.let { removeMarkedObject(it) } },
-                                        enabled = activePhoto != null && (removalStrokes.isNotEmpty() || automaticRemovalMask != null) && !isExporting,
+                                        enabled = activePhoto != null && removalStrokes.isNotEmpty() && !isExporting,
                                         modifier = Modifier.fillMaxWidth(),
                                         colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Ink)
                                     ) { Text(if (isExporting) "Removing object…" else "Remove marked area") }

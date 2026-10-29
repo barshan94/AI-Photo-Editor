@@ -2003,29 +2003,29 @@ EditorImageAction("⇩", "Export", previewBitmap != null && !isExporting && sele
                                             colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Ink),
                                             contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp)
                                         ) { Text(if (isExporting && activePhoto != null) "Upscaling…" else "AI Upscale", fontSize = 11.sp) }
-                                        Button(
-                                            onClick = {
-                                                if (showResetLearning) showDeleteLearningConfirmation = true
-                                                else applyMyStyle()
-                                            },
+                                        Box(
                                             modifier = Modifier.weight(1f).heightIn(min = 38.dp)
+                                                .clip(RoundedCornerShape(8.dp))
+                                                .background(Color(0xFF293333))
                                                 .combinedClickable(
                                                     onClick = {
-                                                        if (showResetLearning) {
-                                                            showDeleteLearningConfirmation = true
-                                                        } else {
-                                                            applyMyStyle()
-                                                        }
+                                                        if (showResetLearning) showDeleteLearningConfirmation = true
+                                                        else applyMyStyle()
                                                     },
                                                     onLongClick = {
                                                         activeAiTool = "My style"
                                                         showResetLearning = true
+                                                        statusMessage = "Tap Delete learning to remove the saved personal style."
                                                     }
-                                                ),
-                                            shape = RoundedCornerShape(8.dp),
-                                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF293333), contentColor = BrightText),
-                                            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp)
-                                        ) { Text(if (showResetLearning) "Delete learning" else "My style", fontSize = 11.sp, maxLines = 1) }
+                                                )
+                                                .padding(horizontal = 6.dp, vertical = 4.dp),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Text(
+                                                if (showResetLearning) "Delete learning" else "My style",
+                                                color = BrightText, fontSize = 11.sp, maxLines = 1
+                                            )
+                                        }
                                     }
                                 }
                                 if (isExporting && activePhoto != null && activeAiSubpanel == "Enhance") {

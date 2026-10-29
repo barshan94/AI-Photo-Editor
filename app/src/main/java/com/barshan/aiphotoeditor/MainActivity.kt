@@ -289,7 +289,8 @@ private fun PhotoEditorHome() {
     var cropLabel by remember { mutableStateOf(recoveryPrefs.getString("crop_label", "Original") ?: "Original") }
     var cropOffsetX by remember { mutableFloatStateOf(recoveryPrefs.getFloat("crop_offset_x", 0f)) }
     var cropOffsetY by remember { mutableFloatStateOf(recoveryPrefs.getFloat("crop_offset_y", 0f)) }
-    var freeCropRatio by remember { mutableFloatStateOf(recoveryPrefs.getFloat("free_crop_ratio", 1f)) }
+    var freeCropWidth by remember { mutableFloatStateOf(recoveryPrefs.getFloat("free_crop_width", 0.85f)) }
+    var freeCropHeight by remember { mutableFloatStateOf(recoveryPrefs.getFloat("free_crop_height", 0.85f)) }
     var rotationDegrees by remember { mutableFloatStateOf(recoveryPrefs.getFloat("rotation_degrees", 0f)) }
     var straightenDegrees by remember { mutableFloatStateOf(recoveryPrefs.getFloat("straighten_degrees", 0f)) }
     var mirrorHorizontal by remember { mutableStateOf(recoveryPrefs.getBoolean("mirror_horizontal", false)) }
@@ -550,7 +551,7 @@ private fun PhotoEditorHome() {
         selectedPhotos.map { it.uri.toString() }, activePhoto?.uri?.toString(),
         brightness, contrast, saturation, warmth, backgroundBlur, backgroundEnhancement,
         subjectBrightness, darkerAreaLift, skinSmoothing, makeupIntensity,
-        cropLabel, cropOffsetX, cropOffsetY, freeCropRatio, rotationDegrees, straightenDegrees,
+        cropLabel, cropOffsetX, cropOffsetY, freeCropWidth, freeCropHeight, rotationDegrees, straightenDegrees,
         mirrorHorizontal, mirrorVertical, selectedStyle, showEnhanced, showCropGuides,
         showPerspectiveControls, removalBrushMode, removalBrushSize,
         perspectiveTopLeftX, perspectiveTopLeftY, perspectiveTopRightX, perspectiveTopRightY,
@@ -568,7 +569,7 @@ private fun PhotoEditorHome() {
             .putFloat("subject_brightness", subjectBrightness).putFloat("darker_area_lift", darkerAreaLift)
             .putFloat("skin_smoothing", skinSmoothing).putFloat("makeup_intensity", makeupIntensity)
             .putString("crop_label", cropLabel).putFloat("crop_offset_x", cropOffsetX)
-            .putFloat("free_crop_ratio", freeCropRatio)
+            .putFloat("free_crop_width", freeCropWidth).putFloat("free_crop_height", freeCropHeight)
             .putFloat("crop_offset_y", cropOffsetY).putFloat("rotation_degrees", rotationDegrees)
             .putFloat("straighten_degrees", straightenDegrees).putBoolean("mirror_horizontal", mirrorHorizontal)
             .putBoolean("mirror_vertical", mirrorVertical)
@@ -660,9 +661,10 @@ private fun PhotoEditorHome() {
             "Portrait 4:5" -> 4f / 5f
             "Story 9:16" -> 9f / 16f
             "Landscape 16:9" -> 16f / 9f
-            "Free" -> freeCropRatio.coerceIn(0.25f, 4f)
             else -> null
         },
+        freeCropWidthFraction = if (cropLabel == "Free") freeCropWidth else null,
+        freeCropHeightFraction = if (cropLabel == "Free") freeCropHeight else null,
         cropOffsetX = cropOffsetX,
         cropOffsetY = cropOffsetY,
         rotationDegrees = rotationDegrees,
@@ -2251,14 +2253,21 @@ EditorImageAction("⇩", "Export", previewBitmap != null && !isExporting && sele
                                 }
                             }
                             if (cropLabel == "Free") {
-                                Text("FREE CROP WIDTH / HEIGHT  ${String.format(java.util.Locale.US, "%.2f", freeCropRatio)}", color = SoftText, fontSize = 10.sp, modifier = Modifier.padding(top = 5.dp))
+                                Text("CROP WIDTH  ${(freeCropWidth * 100).toInt()}%", color = SoftText, fontSize = 10.sp, modifier = Modifier.padding(top = 5.dp))
                                 Slider(
-                                    value = freeCropRatio,
-                                    onValueChange = { freeCropRatio = it; selectedStyle = "Custom"; showEnhanced = true },
+                                    value = freeCropWidth,
+                                    onValueChange = { freeCropWidth = it; selectedStyle = "Custom"; showEnhanced = true },
                                     onValueChangeFinished = { recordEditChange() },
-                                    valueRange = 0.25f..4f
+                                    valueRange = 0.2f..1f
                                 )
-                                Text("Drag the photo to position the crop, then adjust this ratio freely.", color = SoftText, fontSize = 10.sp)
+                                Text("CROP HEIGHT  ${(freeCropHeight * 100).toInt()}%", color = SoftText, fontSize = 10.sp)
+                                Slider(
+                                    value = freeCropHeight,
+                                    onValueChange = { freeCropHeight = it; selectedStyle = "Custom"; showEnhanced = true },
+                                    onValueChangeFinished = { recordEditChange() },
+                                    valueRange = 0.2f..1f
+                                )
+                                Text("Adjust width and height independently, then drag the photo to position the crop.", color = SoftText, fontSize = 10.sp)
                             }
                             }
                             if (activeCropSubpanel == "Perspective") {

@@ -94,18 +94,20 @@ internal object AiUpscaler {
                     }
                     input.clear()
                     for (pixel in inputPixels) {
-                        input.putFloat(((pixel shr 16) and 0xFF).toFloat())
-                        input.putFloat(((pixel shr 8) and 0xFF).toFloat())
-                        input.putFloat((pixel and 0xFF).toFloat())
+                        // ESRGAN's float model expects RGB values normalized to 0..1.
+                        input.putFloat(((pixel shr 16) and 0xFF) / 255f)
+                        input.putFloat(((pixel shr 8) and 0xFF) / 255f)
+                        input.putFloat((pixel and 0xFF) / 255f)
                     }
                     input.rewind()
                     output.clear()
                     interpreter.run(input, output)
                     output.rewind()
                     for (i in tileOutput.indices) {
-                        val red = output.float.toInt().coerceIn(0, 255)
-                        val green = output.float.toInt().coerceIn(0, 255)
-                        val blue = output.float.toInt().coerceIn(0, 255)
+                        // ESRGAN returns normalized float RGB values. Convert back to 8-bit channels.
+                        val red = (output.float * 255f).toInt().coerceIn(0, 255)
+                        val green = (output.float * 255f).toInt().coerceIn(0, 255)
+                        val blue = (output.float * 255f).toInt().coerceIn(0, 255)
                         tileOutput[i] = (0xFF shl 24) or (red shl 16) or (green shl 8) or blue
                     }
                     for (oy in 0 until outputTileHeight) {

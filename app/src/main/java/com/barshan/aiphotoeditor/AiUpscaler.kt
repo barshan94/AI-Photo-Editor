@@ -93,7 +93,7 @@ internal object AiUpscaler {
             val stepY = maxOf(1, tileSize / 2)
             val totalTiles = ((inputBitmap.width + stepX - 1) / stepX) *
                 ((inputBitmap.height + stepY - 1) / stepY)
-            val outputWeights = ByteArray(outWidth * outHeight)
+            val outputWeights = FloatArray(outWidth * outHeight)
             var completedTiles = 0
             var top = 0
             while (top < inputBitmap.height) {
@@ -150,25 +150,39 @@ internal object AiUpscaler {
                         val count = min(outputTileWidth, outWidth - dstX)
                         if (count > 0) {
                             val sourceOffset = oy * outputTileWidth
+                            val overlapY = maxOf(1, stepY * scaleY)
+                            val hasTileAbove = top > 0
+                            val hasTileBelow = top + tileSize < inputBitmap.height
+                            val wy = when {
+                                hasTileAbove && oy < overlapY -> (oy + 1f) / (overlapY + 1f)
+                                hasTileBelow && oy >= outputTileHeight - overlapY -> (outputTileHeight - oy).toFloat() / (overlapY + 1f)
+                                else -> 1f
+                            }.coerceIn(0.02f, 1f)
+                            val overlapX = maxOf(1, stepX * scaleX)
+                            val hasTileLeft = left > 0
+                            val hasTileRight = left + tileWidth < inputBitmap.width
                             for (ox in 0 until count) {
                                 val destinationIndex = dstY * outWidth + dstX + ox
+                                val wx = when {
+                                    hasTileLeft && ox < overlapX -> (ox + 1f) / (overlapX + 1f)
+                                    hasTileRight && ox >= outputTileWidth - overlapX -> (outputTileWidth - ox).toFloat() / (overlapX + 1f)
+                                    else -> 1f
+                                }.coerceIn(0.02f, 1f)
+                                val weight = wx * wy
                                 val nextPixel = tileOutput[sourceOffset + ox]
-                                val previousWeight = outputWeights[destinationIndex].toInt() and 0xFF
-                                if (previousWeight == 0) {
+                                val previousWeight = outputWeights[destinationIndex]
+                                if (previousWeight <= 0f) {
                                     outputPixels[destinationIndex] = nextPixel
+                                    outputWeights[destinationIndex] = weight
                                 } else {
                                     val previousPixel = outputPixels[destinationIndex]
-                                    val combinedWeight = previousWeight + 1
-                                    val red = ((((previousPixel shr 16) and 0xFF) * previousWeight) +
-                                        ((nextPixel shr 16) and 0xFF)) / combinedWeight
-                                    val green = ((((previousPixel shr 8) and 0xFF) * previousWeight) +
-                                        ((nextPixel shr 8) and 0xFF)) / combinedWeight
-                                    val blue = (((previousPixel and 0xFF) * previousWeight) +
-                                        (nextPixel and 0xFF)) / combinedWeight
-                                    outputPixels[destinationIndex] = (0xFF shl 24) or
-                                        (red shl 16) or (green shl 8) or blue
+                                    val combinedWeight = previousWeight + weight
+                                    val red = (((((previousPixel shr 16) and 255) * previousWeight) + (((nextPixel shr 16) and 255) * weight)) / combinedWeight).toInt().coerceIn(0, 255)
+                                    val green = (((((previousPixel shr 8) and 255) * previousWeight) + (((nextPixel shr 8) and 255) * weight)) / combinedWeight).toInt().coerceIn(0, 255)
+                                    val blue = ((((previousPixel and 255) * previousWeight) + ((nextPixel and 255) * weight)) / combinedWeight).toInt().coerceIn(0, 255)
+                                    outputPixels[destinationIndex] = (0xFF shl 24) or (red shl 16) or (green shl 8) or blue
+                                    outputWeights[destinationIndex] = combinedWeight
                                 }
-                                outputWeights[destinationIndex] = (previousWeight + 1).coerceAtMost(255).toByte()
                             }
                         }
                     }
@@ -192,52 +206,4 @@ internal object AiUpscaler {
         }
     }
 
-    /**
-     * Tile inference can create visible grid lines. Feather a narrow band across each join
-     * rather than altering the rest of the reconstructed image.
-     */
-    private fun softenTileSeams(pixels: IntArray, width: Int, height: Int, tileWidth: Int, tileHeight: Int) {
-        val radius = 4
-        var seamX = tileWidth
-        while (seamX < width) {
-            for (y in 0 until height) {
-                val left = pixels[y * width + (seamX - radius - 1).coerceAtLeast(0)]
-                val right = pixels[y * width + (seamX + radius).coerceAtMost(width - 1)]
-                val start = (seamX - radius).coerceAtLeast(0)
-                val end = (seamX + radius).coerceAtMost(width)
-                for (x in start until end) {
-                    val t = (x - start).toFloat() / (end - start).coerceAtLeast(1)
-                    val index = y * width + x
-                    pixels[index] = blendToward(pixels[index], left, right, t)
-                }
-            }
-            seamX += tileWidth
-        }
-        var seamY = tileHeight
-        while (seamY < height) {
-            for (x in 0 until width) {
-                val top = pixels[(seamY - radius - 1).coerceAtLeast(0) * width + x]
-                val bottom = pixels[(seamY + radius).coerceAtMost(height - 1) * width + x]
-                val start = (seamY - radius).coerceAtLeast(0)
-                val end = (seamY + radius).coerceAtMost(height)
-                for (y in start until end) {
-                    val t = (y - start).toFloat() / (end - start).coerceAtLeast(1)
-                    val index = y * width + x
-                    pixels[index] = blendToward(pixels[index], top, bottom, t)
-                }
-            }
-            seamY += tileHeight
-        }
-    }
-
-    private fun blendToward(pixel: Int, first: Int, second: Int, fraction: Float): Int {
-        val amount = 0.22f
-        val targetR = (((first shr 16) and 255) * (1f - fraction) + ((second shr 16) and 255) * fraction).toInt()
-        val targetG = (((first shr 8) and 255) * (1f - fraction) + ((second shr 8) and 255) * fraction).toInt()
-        val targetB = ((first and 255) * (1f - fraction) + (second and 255) * fraction).toInt()
-        val red = (((pixel shr 16) and 255) * (1f - amount) + targetR * amount).toInt().coerceIn(0, 255)
-        val green = (((pixel shr 8) and 255) * (1f - amount) + targetG * amount).toInt().coerceIn(0, 255)
-        val blue = ((pixel and 255) * (1f - amount) + targetB * amount).toInt().coerceIn(0, 255)
-        return (0xFF shl 24) or (red shl 16) or (green shl 8) or blue
-    }
 }

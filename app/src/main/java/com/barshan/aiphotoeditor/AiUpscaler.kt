@@ -9,12 +9,13 @@ import org.tensorflow.lite.Interpreter
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import kotlin.math.min
+import kotlin.math.roundToInt
 
 /**
  * Runs the official TensorFlow Lite ESRGAN model locally.
  *
- * The published model expects normalized RGB float values in 0..1 and returns normalized RGB
- * values. Overlapping tiles reduce seams; the input is bounded to keep 4x output safe.
+ * The official TensorFlow ESRGAN TFLite model expects RGB float values in 0..255 and returns
+ * RGB float values in 0..255. Overlapping tiles reduce seams; input is bounded for phone memory.
  */
 internal object AiUpscaler {
     data class Result(val bitmap: Bitmap, val inputWasResizedForMemory: Boolean)
@@ -59,9 +60,12 @@ internal object AiUpscaler {
                 outputShape[0] == 1 && outputShape[3] == 3) {
                 "The upscaling engine has an unsupported input/output shape."
             }
-            require(inputTensor.dataType() in setOf(DataType.FLOAT32, DataType.UINT8) &&
-                outputTensor.dataType() in setOf(DataType.FLOAT32, DataType.UINT8)) {
-                "The installed upscaling model uses an unsupported pixel format."
+            // This app downloads Google's official ESRGAN.tflite model. Its tensors are float32
+            // and use the image's 0..255 RGB range (not normalized 0..1). Reject other exports
+            // rather than silently interpreting quantized bytes with the wrong scale.
+            require(inputTensor.dataType() == DataType.FLOAT32 &&
+                outputTensor.dataType() == DataType.FLOAT32) {
+                "The installed ESRGAN model has an unexpected tensor format. Reinstall the official model."
             }
             val tileSize = inputShape[1]
             val tileWidth = inputShape[2]
@@ -80,10 +84,8 @@ internal object AiUpscaler {
             }
 
             val inputPixels = IntArray(tileSize * tileWidth)
-            val inputBytesPerChannel = if (inputTensor.dataType() == DataType.FLOAT32) 4 else 1
-            val outputBytesPerChannel = if (outputTensor.dataType() == DataType.FLOAT32) 4 else 1
-            val input = ByteBuffer.allocateDirect(tileSize * tileWidth * 3 * inputBytesPerChannel).order(ByteOrder.nativeOrder())
-            val output = ByteBuffer.allocateDirect(outputTileHeight * outputTileWidth * 3 * outputBytesPerChannel).order(ByteOrder.nativeOrder())
+            val input = ByteBuffer.allocateDirect(tileSize * tileWidth * 3 * 4).order(ByteOrder.nativeOrder())
+            val output = ByteBuffer.allocateDirect(outputTileHeight * outputTileWidth * 3 * 4).order(ByteOrder.nativeOrder())
             val tileOutput = IntArray(outputTileHeight * outputTileWidth)
             val outputPixels = IntArray(outWidth * outHeight)
 
@@ -111,36 +113,21 @@ internal object AiUpscaler {
                         val red = (pixel shr 16) and 0xFF
                         val green = (pixel shr 8) and 0xFF
                         val blue = pixel and 0xFF
-                        if (inputTensor.dataType() == DataType.FLOAT32) {
-                            // The published float model expects normalized RGB values in 0..1.
-                            input.putFloat(red / 255f)
-                            input.putFloat(green / 255f)
-                            input.putFloat(blue / 255f)
-                        } else {
-                            // Also support byte-encoded exports of the same RGB model.
-                            input.put(red.toByte())
-                            input.put(green.toByte())
-                            input.put(blue.toByte())
-                        }
+                        // Match TensorFlow's official ESRGAN example: float RGB in 0..255.
+                        input.putFloat(red.toFloat())
+                        input.putFloat(green.toFloat())
+                        input.putFloat(blue.toFloat())
                     }
                     input.rewind()
                     output.clear()
                     interpreter.run(input, output)
                     output.rewind()
                     for (i in tileOutput.indices) {
-                        val red: Int
-                        val green: Int
-                        val blue: Int
-                        if (outputTensor.dataType() == DataType.FLOAT32) {
-                            // Float ESRGAN output is normalized RGB; convert back to 8-bit.
-                            red = (output.float * 255f).toInt().coerceIn(0, 255)
-                            green = (output.float * 255f).toInt().coerceIn(0, 255)
-                            blue = (output.float * 255f).toInt().coerceIn(0, 255)
-                        } else {
-                            red = output.get().toInt() and 0xFF
-                            green = output.get().toInt() and 0xFF
-                            blue = output.get().toInt() and 0xFF
-                        }
+                        // ESRGAN already returns RGB in 0..255; multiplying by 255 creates
+                        // clipping, blocky colors, and severe artifacts.
+                        val red = output.float.roundToInt().coerceIn(0, 255)
+                        val green = output.float.roundToInt().coerceIn(0, 255)
+                        val blue = output.float.roundToInt().coerceIn(0, 255)
                         tileOutput[i] = (0xFF shl 24) or (red shl 16) or (green shl 8) or blue
                     }
                     for (oy in 0 until outputTileHeight) {
